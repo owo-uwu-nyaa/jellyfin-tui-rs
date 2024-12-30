@@ -1,0 +1,19 @@
+[package]
+name = "jellyfin-tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
+color-eyre = "0.6.3"
+config = { version = "0.15.4", default-features = false, features = ["toml"] }
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+dirs = "5.0.1"
+futures-util = "0.3.31"
+jellyfin = {git = "https://github.com/owo-uwu-nyaa/jellyfin-rs.git"}
+mpv = "0.2.3"
+ratatui = "0.29.0"
+serde = { version = "1.0.217", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["macros"] }
+toml = "0.8.19"
+tracing = "0.1.41"
