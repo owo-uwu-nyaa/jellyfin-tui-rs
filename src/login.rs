@@ -242,7 +242,7 @@ pub async fn login(
         };
     };
     if info_chainged {
-        std::fs::create_dir_all(&config.login_file.parent().ok_or_eyre("login info path has no parent")?).context("creating login info parent dir")?;
+        std::fs::create_dir_all(config.login_file.parent().ok_or_eyre("login info path has no parent")?).context("creating login info parent dir")?;
         std::fs::write(
             &config.login_file,
             toml::to_string_pretty(&login_info).context("serializing login info")?,

@@ -1,28 +1,51 @@
 mod login;
 
-use std::path::PathBuf;
+use std::{io::stdout, path::PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::{Context, OptionExt, Result};
-use crossterm::event::EventStream;
-use ratatui::DefaultTerminal;
+use crossterm::{
+    event::{DisableBracketedPaste, EnableBracketedPaste, EventStream},
+    execute,
+};
 use serde::Deserialize;
+
+struct OnDrop<F: FnOnce()> {
+    f: Option<F>,
+}
+impl<F: FnOnce()> OnDrop<F> {
+    fn new(f: F) -> Self {
+        Self { f: Some(f) }
+    }
+}
+
+impl<F: FnOnce()> Drop for OnDrop<F> {
+    fn drop(&mut self) {
+        self.f.take().unwrap()()
+    }
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let res = run().await;
-    ratatui::restore();
-    res
-}
-
-async fn run() -> Result<()> {
-    let (mut term, config) = init()?;
+    color_eyre::install()?;
+    let mut term = ratatui::init();
+    let _ = OnDrop::new(ratatui::restore);
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed");
+        hook(panic)
+    }));
+    execute!(stdout(), EnableBracketedPaste).context("enabling bracket paste")?;
+    let _ = OnDrop::new(|| {
+        execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed")
+    });
+    let config = init()?;
     let mut events = EventStream::new();
-    if let Some(client) = login::login(&mut term, &config, &mut events).await? {}
-
+    if let Some(_client) = login::login(&mut term, &config, &mut events).await? {}
     println!("Hello, world!");
     Ok(())
 }
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -34,8 +57,7 @@ struct Config {
     pub login_file: PathBuf,
 }
 
-fn init() -> Result<(DefaultTerminal, Config)> {
-    color_eyre::install()?;
+fn init() -> Result<Config> {
     let mut config_dir = dirs::config_dir().ok_or_eyre("Couldn't determine user config dir")?;
     config_dir.push("jellyfin-tui-rs");
     let args = Args::try_parse()?;
@@ -62,6 +84,5 @@ fn init() -> Result<(DefaultTerminal, Config)> {
         .try_deserialize()
         .context("collecting config")?;
 
-    let term = ratatui::try_init()?;
-    Ok((term, config))
+    Ok(config)
 }
