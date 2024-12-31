@@ -8,42 +8,33 @@ use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste, EventStream},
     execute,
 };
+use ratatui::DefaultTerminal;
 use serde::Deserialize;
 
-struct OnDrop<F: FnOnce()> {
-    f: Option<F>,
-}
-impl<F: FnOnce()> OnDrop<F> {
-    fn new(f: F) -> Self {
-        Self { f: Some(f) }
-    }
-}
-
-impl<F: FnOnce()> Drop for OnDrop<F> {
-    fn drop(&mut self) {
-        self.f.take().unwrap()()
-    }
+async fn run(term: &mut DefaultTerminal) -> Result<()> {
+    let config = init()?;
+    let mut events = EventStream::new();
+    if let Some(_client) = login::login(term, &config, &mut events).await? {}
+    println!("Hello, world!");
+    Ok(())
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     let mut term = ratatui::init();
-    let _ = OnDrop::new(ratatui::restore);
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
         execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed");
         hook(panic)
     }));
-    execute!(stdout(), EnableBracketedPaste).context("enabling bracket paste")?;
-    let _ = OnDrop::new(|| {
-        execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed")
-    });
-    let config = init()?;
-    let mut events = EventStream::new();
-    if let Some(_client) = login::login(&mut term, &config, &mut events).await? {}
-    println!("Hello, world!");
-    Ok(())
+    execute!(stdout(), EnableBracketedPaste)
+        .context("enabling bracket paste")
+        .expect("failed to enable bracket paste");
+    let res = run(&mut term).await;
+    execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed");
+    ratatui::restore();
+    res
 }
 
 #[derive(Parser, Debug)]

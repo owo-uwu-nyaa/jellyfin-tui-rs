@@ -1,4 +1,9 @@
-use std::pin::pin;
+use std::{
+    fs::{create_dir_all, OpenOptions},
+    io::Write,
+    os::unix::fs::OpenOptionsExt,
+    pin::pin,
+};
 
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -46,7 +51,10 @@ async fn get_login_info(
         .wrap(Wrap::default());
     let normal_block = Block::bordered();
     let current_block = Block::bordered().border_type(ratatui::widgets::BorderType::Double);
-    let outer_block = Block::bordered().border_type(BorderType::Rounded).padding(Padding::uniform(4)).title("Enter Jellyfin Server / Login Information");
+    let outer_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .padding(Padding::uniform(4))
+        .title("Enter Jellyfin Server / Login Information");
     loop {
         term.draw(|frame| {
             let server = Paragraph::new(info.server_url.as_str()).block(
@@ -54,23 +62,33 @@ async fn get_login_info(
                     current_block.clone()
                 } else {
                     normal_block.clone()
-                }.title("Jellyfin URL"),
+                }
+                .title("Jellyfin URL"),
             );
             let username = Paragraph::new(info.username.as_str()).block(
                 if let LoginSelection::Username = selection {
                     current_block.clone()
                 } else {
                     normal_block.clone()
-                }.title("Username"),
+                }
+                .title("Username"),
             );
             let password = Paragraph::new(
-                Text::from("<hidden>").style(Style::default().add_modifier(Modifier::HIDDEN)),
+                Text::from(if info.password.is_empty() {
+                    ""
+                } else {
+                    "<hidden>"
+                })
+                .style(Style::default().add_modifier(Modifier::HIDDEN)),
             )
-            .block(if let LoginSelection::Password = selection {
-                current_block.clone()
-            } else {
-                normal_block.clone()
-            }.title("Password"));
+            .block(
+                if let LoginSelection::Password = selection {
+                    current_block.clone()
+                } else {
+                    normal_block.clone()
+                }
+                .title("Password"),
+            );
 
             let button =
                 Paragraph::new("Connect").block(if let LoginSelection::Retry = selection {
@@ -204,8 +222,11 @@ pub async fn login(
     let mut info_chainged = false;
     let client = loop {
         if let Some(e) = error.take() {
-            if !get_login_info(term, &mut login_info, &mut info_chainged, e, events).await.context("getting login information")?{
-                return Ok(None)
+            if !get_login_info(term, &mut login_info, &mut info_chainged, e, events)
+                .await
+                .context("getting login information")?
+            {
+                return Ok(None);
             }
         }
         term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
@@ -242,12 +263,26 @@ pub async fn login(
         };
     };
     if info_chainged {
-        std::fs::create_dir_all(config.login_file.parent().ok_or_eyre("login info path has no parent")?).context("creating login info parent dir")?;
-        std::fs::write(
-            &config.login_file,
-            toml::to_string_pretty(&login_info).context("serializing login info")?,
+        create_dir_all(
+            config
+                .login_file
+                .parent()
+                .ok_or_eyre("login info path has no parent")?,
         )
-        .context("writing out new login info")?;
+        .context("creating login info parent dir")?;
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o0600)
+            .open(&config.login_file)
+            .context("opening login info")?
+            .write_all(
+                toml::to_string_pretty(&login_info)
+                    .context("serializing login info")?
+                    .as_bytes(),
+            )
+            .context("writing out new login info")?;
     }
     Ok(Some(client))
 }
