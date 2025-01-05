@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     fs::{create_dir_all, OpenOptions},
     io::Write,
     os::unix::fs::OpenOptionsExt,
@@ -8,7 +9,7 @@ use std::{
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
-use jellyfin::JellyfinClient;
+use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
@@ -17,6 +18,8 @@ use ratatui::{
     DefaultTerminal,
 };
 use serde::{Deserialize, Serialize};
+use tracing::{error, instrument};
+use url::Url;
 
 use crate::Config;
 
@@ -34,6 +37,7 @@ enum LoginSelection {
     Retry,
 }
 
+#[instrument(skip_all)]
 async fn get_login_info(
     term: &mut DefaultTerminal,
     info: &mut LoginInfo,
@@ -192,11 +196,12 @@ async fn get_login_info(
     }
 }
 
+#[instrument(skip(term, events))]
 pub async fn login(
     term: &mut DefaultTerminal,
     config: &Config,
     events: &mut EventStream,
-) -> Result<Option<JellyfinClient>> {
+) -> Result<Option<JellyfinClient<Auth>>> {
     let mut login_info: LoginInfo;
     let mut error: Option<Report>;
     let connect_msg = Paragraph::new("Connecting to Server")
@@ -220,8 +225,21 @@ pub async fn login(
         }
     }
     let mut info_chainged = false;
-    let client = loop {
+    let device_name: Cow<'static, str> = whoami::fallible::hostname()
+        .ok()
+        .map(|v| v.into())
+        .unwrap_or_else(|| "unknown".into());
+    let mut client = JellyfinClient::<NoAuth>::new(
+        "http://test",
+        ClientInfo {
+            name: "jellyfin-tui-rs".into(),
+            version: "0.1".into(),
+        },
+        device_name,
+    )?;
+    let client = 'connect: loop {
         if let Some(e) = error.take() {
+            error!("Error logging in: {e:?}");
             if !get_login_info(term, &mut login_info, &mut info_chainged, e, events)
                 .await
                 .context("getting login information")?
@@ -232,35 +250,47 @@ pub async fn login(
         term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
             .context("rendering ui")?;
 
-        let mut auth_request = pin!(JellyfinClient::new_auth_name(
-            &login_info.server_url,
-            &login_info.username,
-            &login_info.password,
-        ));
-        tokio::select! {
-            event = events.next() => {
-                match event {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code: KeyCode::Char('q'),
-                        modifiers: _,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    })))
-                        | None => return Ok(None),
-                    Some(Ok(_)) => {
-                        term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
-                            .context("rendering ui")?;
+        match Url::parse(&login_info.server_url).context("parsing server base url") {
+            Ok(url) => {
+                *client.get_base_url_mut() = url;
+            }
+            Err(e) => {
+                error = Some(e);
+                continue;
+            }
+        }
+        let mut auth_request =
+            pin!(client.auth_user_name(&login_info.username, &login_info.password));
+        loop {
+            tokio::select! {
+                event = events.next() => {
+                    match event {
+                        Some(Ok(Event::Key(KeyEvent {
+                            code: KeyCode::Char('q'),
+                            modifiers: _,
+                            kind: KeyEventKind::Press,
+                            state: _,
+                        })))
+                            | None => return Ok(None),
+                        Some(Ok(_)) => {
+                            term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
+                                .context("rendering ui")?;
+                        }
+                        Some(Err(e)) => return Err(e).context("Error getting key events from terminal"),
                     }
-                    Some(Err(e)) => return Err(e).context("Error getting key events from terminal"),
                 }
-            }
-            request = &mut auth_request => {
-                match request.context("logging in") {
-                    Ok(client) => break client,
-                    Err(e) => error = Some(e),
+                request = &mut auth_request => {
+                    match request {
+                        Ok(client) => break 'connect client,
+                        Err((c,e)) => {
+                            client = c;
+                            error = Some(Report::new(e).wrap_err("logging in"));
+                            break
+                        },
+                    }
                 }
-            }
-        };
+            };
+        }
     };
     if info_chainged {
         create_dir_all(

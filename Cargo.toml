@@ -10,10 +10,21 @@ config = { version = "0.15.4", default-features = false, features = ["toml"] }
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 dirs = "5.0.1"
 futures-util = "0.3.31"
-jellyfin = {git = "https://github.com/owo-uwu-nyaa/jellyfin-rs.git"}
-mpv = "0.2.3"
+jellyfin = { path = "jellyfin-rs", features = ["native-tls", "sha2-openssl"]}
 ratatui = "0.29.0"
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["macros"] }
 toml = "0.8.19"
+url = "2.5.4"
+whoami = { version = "1.5.2", default-features = false }
 tracing = "0.1.41"
+tracing-error = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+ratatui-image = { version = "4.2.0", features = ["crossterm"] }
+image = { version = "0.25.5", default-features = false, features = ["webp"] }
+rayon = "1.10.0"
+reqwest = { version = "0.12.12", default-features = false, features = ["http2"] }
+bytes = "1.9.0"
+libmpv = { version = "2.0.1", default-features = false }
+libmpv-sys = "3.1.0"
+parking_lot = "0.12.3"
