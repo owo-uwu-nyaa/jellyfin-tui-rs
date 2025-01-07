@@ -55,6 +55,7 @@ async fn run(mut term: DefaultTerminal, config: Config) -> Result<()> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+    std::env::set_var("LC_NUMERIC", "C");
     color_eyre::install().expect("installing color eyre format handler");
     let mut logfile = dirs::runtime_dir().ok_or_eyre("unable to determine runtime dit")?;
     logfile.push("jellyfin-tui-rs.log");
