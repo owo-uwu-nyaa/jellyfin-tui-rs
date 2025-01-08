@@ -111,11 +111,7 @@ where
         let slice = slice::from_raw_parts_mut(buf, nbytes as _);
         ((*data).read_fn)(&mut *(*data).cookie, slice)
     });
-    if let Ok(ret) = ret {
-        ret
-    } else {
-        -1
-    }
+    ret.unwrap_or(-1)
 }
 
 unsafe extern "C" fn seek_wrapper<T, U>(cookie: *mut ctype::c_void, offset: i64) -> i64
@@ -165,7 +161,7 @@ where
 {
     let data = Box::from_raw(cookie as *mut ProtocolData<T, U>);
 
-    panic::catch_unwind(|| ((*data).close_fn)(Box::from_raw((*data).cookie)));
+    panic::catch_unwind(|| (data.close_fn)(Box::from_raw(data.cookie)));
 }
 
 struct ProtocolData<T, U> {
@@ -187,8 +183,8 @@ pub struct ProtocolContext<'parent, T: RefUnwindSafe, U: RefUnwindSafe> {
     _does_not_outlive: PhantomData<&'parent Mpv>,
 }
 
-unsafe impl<'parent, T: RefUnwindSafe, U: RefUnwindSafe> Send for ProtocolContext<'parent, T, U> {}
-unsafe impl<'parent, T: RefUnwindSafe, U: RefUnwindSafe> Sync for ProtocolContext<'parent, T, U> {}
+unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Send for ProtocolContext<'_, T, U> {}
+unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Sync for ProtocolContext<'_, T, U> {}
 
 impl<'parent, T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContext<'parent, T, U> {
     fn new(

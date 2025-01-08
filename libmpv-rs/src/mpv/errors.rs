@@ -60,7 +60,7 @@ impl From<crate::MpvError> for Error {
     }
 }
 
-impl From<TryFromIntError> for Error{
+impl From<TryFromIntError> for Error {
     fn from(value: TryFromIntError) -> Self {
         Error::IntConversion(value)
     }

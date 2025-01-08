@@ -67,9 +67,13 @@ fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
     }
 }
 
-/// This trait describes which types are allowed to be passed to getter mpv APIs.
+/**
+ * This trait describes which types are allowed to be passed to getter mpv APIs.
+ *
+ * # Safety
+ * The result of get_format must match the pointer consumed through get_from_c_void.
+ *  */
 pub unsafe trait GetData: Sized {
-    #[doc(hidden)]
     fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(mut fun: F) -> Result<Self> {
         let mut val = MaybeUninit::uninit();
         let _ = fun(val.as_mut_ptr() as *mut _)?;
@@ -78,7 +82,12 @@ pub unsafe trait GetData: Sized {
     fn get_format() -> Format;
 }
 
-/// This trait describes which types are allowed to be passed to setter mpv APIs.
+/**
+ * This trait describes which types are allowed to be passed to setter mpv APIs.
+ *
+ * # Safety
+ * The result of get_format must match the pointer provided through call_as_c_void.
+ *  */
 pub unsafe trait SetData: Sized {
     fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
         mut self,
@@ -316,14 +325,14 @@ unsafe impl SetData for String {
 /// Wrapper around an `&str` returned by mpv, that properly deallocates it with mpv's allocator.
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct MpvStr<'a>(&'a str);
-impl<'a> Deref for MpvStr<'a> {
+impl Deref for MpvStr<'_> {
     type Target = str;
 
     fn deref(&self) -> &str {
         self.0
     }
 }
-impl<'a> Drop for MpvStr<'a> {
+impl Drop for MpvStr<'_> {
     fn drop(&mut self) {
         unsafe { libmpv_sys::mpv_free(self.0.as_ptr() as *mut u8 as _) };
     }
@@ -344,7 +353,7 @@ unsafe impl<'a> GetData for MpvStr<'a> {
     }
 }
 
-unsafe impl<'a> SetData for &'a str {
+unsafe impl SetData for &'_ str {
     fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(self, mut fun: F) -> Result<T> {
         let string = CString::new(self)?;
         fun((&mut string.as_ptr()) as *mut *const ctype::c_char as *mut _)
@@ -355,7 +364,7 @@ unsafe impl<'a> SetData for &'a str {
     }
 }
 
-unsafe impl<'a, K: AsRef<str>, V: AsRef<str>> SetData for &'a [(K, V)] {
+unsafe impl<K: AsRef<str>, V: AsRef<str>> SetData for &'_ [(K, V)] {
     fn get_format() -> Format {
         Format::Map
     }
@@ -390,7 +399,7 @@ unsafe impl<'a, K: AsRef<str>, V: AsRef<str>> SetData for &'a [(K, V)] {
     }
 }
 
-unsafe impl<'a, K: AsRef<str>, V: AsRef<str>, const N: usize> SetData for &'a [(K, V); N] {
+unsafe impl<K: AsRef<str>, V: AsRef<str>, const N: usize> SetData for &'_ [(K, V); N] {
     fn get_format() -> Format {
         Format::Map
     }
@@ -404,7 +413,7 @@ unsafe impl<'a, K: AsRef<str>, V: AsRef<str>, const N: usize> SetData for &'a [(
             },
             format: mpv_format::String,
         });
-        let key_list = map_array(&keys, |name|name.as_ptr().cast_mut());
+        let key_list = map_array(&keys, |name| name.as_ptr().cast_mut());
         let node_list = mpv_node_list {
             num: self.len().try_into()?,
             values: value_nodes.as_ptr().cast_mut(),
@@ -436,9 +445,9 @@ fn try_map_array<I, O, E, const N: usize>(
             }
             Err(e) => {
                 if mem::needs_drop::<O>() {
-                    for i in 0..i {
-                        unsafe { out[i].assume_init_drop() };
-                    }
+                    out.iter_mut()
+                        .take(i)
+                        .for_each(|item| unsafe { item.assume_init_drop() });
                 }
                 return Err(e);
             }
@@ -556,9 +565,8 @@ impl Mpv {
         }
 
         initializer(MpvInitializer { ctx })?;
-        mpv_err((), unsafe { libmpv_sys::mpv_initialize(ctx) }).map_err(|err| {
+        mpv_err((), unsafe { libmpv_sys::mpv_initialize(ctx) }).inspect_err(|_| {
             unsafe { libmpv_sys::mpv_terminate_destroy(ctx) };
-            err
         })?;
         let waker = Box::new(Mutex::new(None));
 
@@ -581,10 +589,9 @@ impl Mpv {
     /// Load a configuration file. The path has to be absolute, and a file.
     pub fn load_config(&self, path: &str) -> Result<()> {
         let file = CString::new(path)?.into_raw();
-        let ret = mpv_err((), unsafe {
+        mpv_err((), unsafe {
             libmpv_sys::mpv_load_config_file(self.ctx.as_ptr(), file)
-        });
-        ret
+        })
     }
 
     /// Send a command to the `Mpv` instance. This uses `mpv_command_string` internally,
@@ -595,7 +602,7 @@ impl Mpv {
         let mut cmd = name.to_owned();
 
         for elem in args {
-            cmd.push_str(" ");
+            cmd.push(' ');
             cmd.push_str(elem);
         }
 

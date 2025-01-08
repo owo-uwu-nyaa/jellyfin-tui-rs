@@ -57,7 +57,7 @@ unsafe fn wake(waker_ptr: *const Mutex<Option<Waker>>) {
         if let Some(waker) = &*waker {
             waker.wake_by_ref();
         }
-    }else{
+    } else {
         abort()
     }
 }
@@ -204,16 +204,14 @@ impl Mpv {
         })
     }
 
-    pub async fn wait_event_async(&mut self) -> Result<Event>{
-        let waker = poll_fn(|cx|Poll::Ready(cx.waker().clone())).await;
+    pub async fn wait_event_async(&mut self) -> Result<Event> {
+        let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
         *self.waker.lock().unwrap() = Some(waker);
-        match self.wait_event(0.0){
+        match self.wait_event(0.0) {
             Some(v) => v,
-            None => pending().await
+            None => pending().await,
         }
-
     }
-
 
     /// Wait for `timeout` seconds for an `Event`. Passing `0` as `timeout` will poll.
     /// For more information, as always, see the mpv-sys docs of `mpv_wait_event`.
