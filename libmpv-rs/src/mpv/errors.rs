@@ -16,16 +16,16 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use std::{error, ffi::NulError, fmt, os::raw as ctype, rc::Rc, str::Utf8Error};
+use std::{error, ffi::NulError, fmt, num::TryFromIntError, os::raw as ctype, str::Utf8Error};
 
 #[allow(missing_docs)]
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     Loadfiles {
         index: usize,
-        error: Rc<Error>,
+        error: Box<Error>,
     },
     VersionMismatch {
         linked: ctype::c_ulong,
@@ -34,6 +34,7 @@ pub enum Error {
     InvalidUtf8,
     Null,
     Raw(crate::MpvError),
+    IntConversion(TryFromIntError),
 }
 
 impl fmt::Display for Error {
@@ -56,6 +57,12 @@ impl From<Utf8Error> for Error {
 impl From<crate::MpvError> for Error {
     fn from(other: crate::MpvError) -> Error {
         Error::Raw(other)
+    }
+}
+
+impl From<TryFromIntError> for Error{
+    fn from(value: TryFromIntError) -> Self {
+        Error::IntConversion(value)
     }
 }
 

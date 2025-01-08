@@ -20,12 +20,13 @@ use libmpv_sys::mpv_event;
 
 use crate::{mpv::mpv_err, *};
 
-use std::ffi::CString;
-use std::marker::PhantomData;
+use std::ffi::{c_void, CString};
+use std::future::{pending, poll_fn};
 use std::os::raw as ctype;
-use std::ptr::NonNull;
+use std::process::abort;
 use std::slice;
-use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::task::{Poll, Waker};
 
 /// An `Event`'s ID.
 pub use libmpv_sys::mpv_event_id as EventId;
@@ -50,24 +51,19 @@ pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_VIDEO_RECONFIG as VideoReconfig;
 }
 
-impl Mpv {
-    /// Create a context that can be used to wait for events and control which events are listened
-    /// for.
-    ///
-    /// # Panics
-    /// Panics if a context already exists
-    pub fn create_event_context(&self) -> EventContext {
-        match self
-            .events_guard
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        {
-            Ok(_) => EventContext {
-                ctx: self.ctx,
-                _does_not_outlive: PhantomData::<&Self>,
-            },
-            Err(_) => panic!("Event context already exists"),
+unsafe fn wake(waker_ptr: *const Mutex<Option<Waker>>) {
+    let waker = &*waker_ptr;
+    if let Ok(waker) = waker.lock() {
+        if let Some(waker) = &*waker {
+            waker.wake_by_ref();
         }
+    }else{
+        abort()
     }
+}
+
+pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
+    wake(cx.cast_const().cast());
 }
 
 #[derive(Debug)]
@@ -150,15 +146,7 @@ pub enum Event<'a> {
     Deprecated(mpv_event),
 }
 
-/// Context to listen to events.
-pub struct EventContext<'parent> {
-    ctx: NonNull<libmpv_sys::mpv_handle>,
-    _does_not_outlive: PhantomData<&'parent Mpv>,
-}
-
-unsafe impl<'parent> Send for EventContext<'parent> {}
-
-impl<'parent> EventContext<'parent> {
+impl Mpv {
     /// Enable an event.
     pub fn enable_event(&self, ev: events::EventId) -> Result<()> {
         mpv_err((), unsafe {
@@ -215,6 +203,17 @@ impl<'parent> EventContext<'parent> {
             libmpv_sys::mpv_unobserve_property(self.ctx.as_ptr(), id)
         })
     }
+
+    pub async fn wait_event_async(&mut self) -> Result<Event>{
+        let waker = poll_fn(|cx|Poll::Ready(cx.waker().clone())).await;
+        *self.waker.lock().unwrap() = Some(waker);
+        match self.wait_event(0.0){
+            Some(v) => v,
+            None => pending().await
+        }
+
+    }
+
 
     /// Wait for `timeout` seconds for an `Event`. Passing `0` as `timeout` will poll.
     /// For more information, as always, see the mpv-sys docs of `mpv_wait_event`.

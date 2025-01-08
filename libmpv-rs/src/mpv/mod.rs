@@ -16,8 +16,11 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use std::convert::TryInto;
+use std::ffi::NulError;
 use std::marker::PhantomData;
+use std::mem;
+use std::task::Waker;
+use std::{convert::TryInto, sync::Mutex};
 
 macro_rules! mpv_cstr_to_str {
     ($cstr: expr) => {
@@ -38,6 +41,9 @@ pub mod protocol;
 #[cfg(feature = "render")]
 pub mod render;
 
+use events::wake_callback;
+use libmpv_sys::{mpv_node, mpv_node_list};
+
 pub use self::errors::*;
 use super::*;
 
@@ -47,8 +53,11 @@ use std::{
     ops::Deref,
     os::raw as ctype,
     ptr::{self, NonNull},
-    sync::atomic::AtomicBool,
+    result::Result as StdResult,
 };
+
+#[cfg(feature = "protocols")]
+use std::sync::atomic::AtomicBool;
 
 fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
     if err == 0 {
@@ -71,7 +80,6 @@ pub unsafe trait GetData: Sized {
 
 /// This trait describes which types are allowed to be passed to setter mpv APIs.
 pub unsafe trait SetData: Sized {
-    #[doc(hidden)]
     fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
         mut self,
         mut fun: F,
@@ -347,6 +355,98 @@ unsafe impl<'a> SetData for &'a str {
     }
 }
 
+unsafe impl<'a, K: AsRef<str>, V: AsRef<str>> SetData for &'a [(K, V)] {
+    fn get_format() -> Format {
+        Format::Map
+    }
+
+    fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(self, mut fun: F) -> Result<T> {
+        let keys: StdResult<Vec<CString>, NulError> = self
+            .iter()
+            .map(|(key, _)| CString::new(key.as_ref()))
+            .collect();
+        let keys = keys?;
+        let values: StdResult<Vec<CString>, NulError> = self
+            .iter()
+            .map(|(_, val)| CString::new(val.as_ref()))
+            .collect();
+        let values = values?;
+        let value_nodes: Vec<_> = values
+            .iter()
+            .map(|value| mpv_node {
+                u: libmpv_sys::mpv_node__bindgen_ty_1 {
+                    string: value.as_ptr().cast_mut(),
+                },
+                format: mpv_format::String,
+            })
+            .collect();
+        let key_list: Vec<_> = keys.iter().map(|name| name.as_ptr().cast_mut()).collect();
+        let node_list = mpv_node_list {
+            num: self.len().try_into()?,
+            values: value_nodes.as_ptr().cast_mut(),
+            keys: key_list.as_ptr().cast_mut(),
+        };
+        fun((&node_list as *const mpv_node_list).cast_mut().cast())
+    }
+}
+
+unsafe impl<'a, K: AsRef<str>, V: AsRef<str>, const N: usize> SetData for &'a [(K, V); N] {
+    fn get_format() -> Format {
+        Format::Map
+    }
+
+    fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(self, mut fun: F) -> Result<T> {
+        let keys = try_map_array(self, |(key, _)| CString::new(key.as_ref()))?;
+        let values = try_map_array(self, |(_, val)| CString::new(val.as_ref()))?;
+        let value_nodes = map_array(&values, |value| mpv_node {
+            u: libmpv_sys::mpv_node__bindgen_ty_1 {
+                string: value.as_ptr().cast_mut(),
+            },
+            format: mpv_format::String,
+        });
+        let key_list = map_array(&keys, |name|name.as_ptr().cast_mut());
+        let node_list = mpv_node_list {
+            num: self.len().try_into()?,
+            values: value_nodes.as_ptr().cast_mut(),
+            keys: key_list.as_ptr().cast_mut(),
+        };
+        fun((&node_list as *const mpv_node_list).cast_mut().cast())
+    }
+}
+
+fn map_array<I, O, const N: usize>(input: &[I; N], mut f: impl FnMut(&I) -> O) -> [O; N] {
+    let mut out: [MaybeUninit<O>; N] = [const { MaybeUninit::uninit() }; N];
+
+    for i in 0..N {
+        out[i].write(f(&input[i]));
+    }
+    unsafe { mem::transmute_copy(&out) }
+}
+
+fn try_map_array<I, O, E, const N: usize>(
+    input: &[I; N],
+    mut f: impl FnMut(&I) -> StdResult<O, E>,
+) -> StdResult<[O; N], E> {
+    let mut out: [MaybeUninit<O>; N] = [const { MaybeUninit::uninit() }; N];
+
+    for i in 0..N {
+        match f(&input[i]) {
+            Ok(v) => {
+                out[i].write(v);
+            }
+            Err(e) => {
+                if mem::needs_drop::<O>() {
+                    for i in 0..i {
+                        unsafe { out[i].assume_init_drop() };
+                    }
+                }
+                return Err(e);
+            }
+        }
+    }
+    unsafe { mem::transmute_copy(&out) }
+}
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 /// Subset of `mpv_format` used by the public API.
 pub enum Format {
@@ -355,6 +455,7 @@ pub enum Format {
     Int64,
     Double,
     Node,
+    Map,
 }
 
 impl Format {
@@ -365,6 +466,7 @@ impl Format {
             Format::Int64 => mpv_format::Int64,
             Format::Double => mpv_format::Double,
             Format::Node => mpv_format::Node,
+            Format::Map => mpv_format::Map,
         }
     }
 }
@@ -412,7 +514,7 @@ impl MpvInitializer {
 pub struct Mpv {
     /// The handle to the mpv core
     pub ctx: NonNull<libmpv_sys::mpv_handle>,
-    events_guard: AtomicBool,
+    waker: Box<Mutex<Option<Waker>>>,
     #[cfg(feature = "protocols")]
     protocols_guard: AtomicBool,
 }
@@ -458,10 +560,19 @@ impl Mpv {
             unsafe { libmpv_sys::mpv_terminate_destroy(ctx) };
             err
         })?;
+        let waker = Box::new(Mutex::new(None));
+
+        unsafe {
+            libmpv_sys::mpv_set_wakeup_callback(
+                ctx,
+                Some(wake_callback),
+                (&*waker as *const Mutex<Option<Waker>>).cast_mut().cast(),
+            );
+        }
 
         Ok(Mpv {
             ctx: unsafe { NonNull::new_unchecked(ctx) },
-            events_guard: AtomicBool::new(false),
+            waker,
             #[cfg(feature = "protocols")]
             protocols_guard: AtomicBool::new(false),
         })
@@ -473,7 +584,6 @@ impl Mpv {
         let ret = mpv_err((), unsafe {
             libmpv_sys::mpv_load_config_file(self.ctx.as_ptr(), file)
         });
-        unsafe { CString::from_raw(file) };
         ret
     }
 
@@ -698,7 +808,7 @@ impl Mpv {
             if let Err(err) = ret {
                 return Err(Error::Loadfiles {
                     index: i,
-                    error: ::std::rc::Rc::new(err),
+                    error: Box::new(err),
                 });
             }
         }
