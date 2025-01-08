@@ -16,7 +16,7 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use std::ffi::NulError;
+use std::ffi::{c_char, c_int, NulError};
 use std::marker::PhantomData;
 use std::mem;
 use std::task::Waker;
@@ -185,6 +185,10 @@ impl Drop for MpvNode {
 }
 
 impl MpvNode {
+    pub(crate) fn new(val: libmpv_sys::mpv_node) -> Self {
+        MpvNode(val)
+    }
+
     pub fn value(&self) -> Result<MpvNodeValue<'_>> {
         let node = self.0;
         Ok(match node.format {
@@ -399,7 +403,7 @@ unsafe impl<K: AsRef<str>, V: AsRef<str>> SetData for &'_ [(K, V)] {
     }
 }
 
-unsafe impl<K: AsRef<str>, V: AsRef<str>, const N: usize> SetData for &'_ [(K, V); N] {
+unsafe impl<K: AsRef<[u8]>, V: AsRef<[u8]>, const N: usize> SetData for &'_ [(K, V); N] {
     fn get_format() -> Format {
         Format::Map
     }
@@ -594,21 +598,34 @@ impl Mpv {
         })
     }
 
-    /// Send a command to the `Mpv` instance. This uses `mpv_command_string` internally,
-    /// so that the syntax is the same as described in the [manual for the input.conf](https://mpv.io/manual/master/#list-of-input-commands).
-    ///
-    /// Note that you may have to escape strings with `""` when they contain spaces.
-    pub fn command(&self, name: &str, args: &[&str]) -> Result<()> {
-        let mut cmd = name.to_owned();
-
-        for elem in args {
-            cmd.push(' ');
-            cmd.push_str(elem);
+    #[inline]
+    fn prepare_command(
+        name: &str,
+        args: &[&str],
+        f: impl FnOnce(*mut *const c_char) -> c_int,
+    ) -> Result<()> {
+        let name = CString::new(name)?;
+        let args: StdResult<Vec<_>, NulError> = args.iter().map(|arg| CString::new(*arg)).collect();
+        let args = args?;
+        let mut arg_list = Vec::with_capacity(args.len() + 1);
+        arg_list.push(name.as_ptr());
+        for arg in args {
+            arg_list.push(arg.as_ptr());
         }
+        mpv_err((), f(arg_list.as_mut_ptr()))
+    }
 
-        let raw = CString::new(cmd)?;
-        mpv_err((), unsafe {
-            libmpv_sys::mpv_command_string(self.ctx.as_ptr(), raw.as_ptr())
+    /// Send a command to the `Mpv` instance.
+    pub fn command(&self, name: &str, args: &[&str]) -> Result<()> {
+        Self::prepare_command(name, args, |args| unsafe {
+            libmpv_sys::mpv_command(self.ctx.as_ptr(), args)
+        })
+    }
+
+    /// Send a command to the `Mpv` instance.
+    pub fn command_async(&self, name: &str, args: &[&str], reply_userdata: u64) -> Result<()> {
+        Self::prepare_command(name, args, |args| unsafe {
+            libmpv_sys::mpv_command_async(self.ctx.as_ptr(), reply_userdata, args)
         })
     }
 
@@ -632,6 +649,21 @@ impl Mpv {
             mpv_err((), unsafe {
                 libmpv_sys::mpv_get_property(self.ctx.as_ptr(), name.as_ptr(), format, ptr)
             })
+        })
+    }
+
+    /// Get the value of a property.
+    pub fn get_property_async<T: GetData>(&self, name: &str, reply_userdata: u64) -> Result<()> {
+        let name = CString::new(name)?;
+
+        let format = T::get_format().as_mpv_format() as _;
+        mpv_err((), unsafe {
+            libmpv_sys::mpv_get_property_async(
+                self.ctx.as_ptr(),
+                reply_userdata,
+                name.as_ptr(),
+                format,
+            )
         })
     }
 

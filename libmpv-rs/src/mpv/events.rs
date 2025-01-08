@@ -38,6 +38,7 @@ pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_FILE_LOADED as FileLoaded;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_GET_PROPERTY_REPLY as GetPropertyReply;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_HOOK as Hook;
+    pub use libmpv_sys::mpv_event_id_MPV_EVENT_IDLE as Idle;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_LOG_MESSAGE as LogMessage;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_NONE as None;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_PLAYBACK_RESTART as PlaybackRestart;
@@ -121,7 +122,10 @@ pub enum Event<'a> {
     /// Received when using set_property_async
     SetPropertyReply(u64),
     /// Received when using command_async
-    CommandReply(u64),
+    CommandReply {
+        reply_userdata: u64,
+        data: MpvNode,
+    },
     /// Event received when a new file is playing
     StartFile,
     /// Event received when the file being played currently has stopped, for an error or not
@@ -142,6 +146,7 @@ pub enum Event<'a> {
     },
     /// Received when the Event Queue is full
     QueueOverflow,
+    Idle,
     /// A deprecated event
     Deprecated(mpv_event),
 }
@@ -265,10 +270,17 @@ impl Mpv {
                 Event::SetPropertyReply(event.reply_userdata),
                 event.error,
             )),
-            mpv_event_id::CommandReply => Some(mpv_err(
-                Event::CommandReply(event.reply_userdata),
-                event.error,
-            )),
+            mpv_event_id::CommandReply => {
+                if event.error < 0 {
+                    Some(Err(event.error.into()))
+                } else {
+                    let data = unsafe { &*(event.data.cast::<libmpv_sys::mpv_event_command>()) };
+                    Some(Ok(Event::CommandReply {
+                        reply_userdata: event.reply_userdata,
+                        data: MpvNode::new(data.result),
+                    }))
+                }
+            }
             mpv_event_id::StartFile => Some(Ok(Event::StartFile)),
             mpv_event_id::EndFile => {
                 let end_file = unsafe { *(event.data as *mut libmpv_sys::mpv_event_end_file) };
@@ -321,6 +333,7 @@ impl Mpv {
                 }
             }
             mpv_event_id::QueueOverflow => Some(Ok(Event::QueueOverflow)),
+            mpv_event_id::Idle => Some(Ok(Event::Idle)),
             _ => Some(Ok(Event::Deprecated(event))),
         }
     }
