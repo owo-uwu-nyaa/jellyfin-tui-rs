@@ -25,7 +25,7 @@ image = { version = "0.25.5", default-features = false, features = ["webp"] }
 rayon = "1.10.0"
 reqwest = { version = "0.12.12", default-features = false, features = ["http2"] }
 bytes = "1.9.0"
-libmpv = { version = "2.0.1", default-features = false }
-libmpv-sys = "3.1.0"
+libmpv = { path = "libmpv-rs", default-features = false }
+libmpv-sys = { path = "libmpv-rs/libmpv-sys" }
 parking_lot = "0.12.3"
 tracing-core = { version = "0.1.33", default-features = false }
