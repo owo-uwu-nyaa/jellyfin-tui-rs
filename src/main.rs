@@ -1,5 +1,5 @@
-#![feature(int_roundings)]
 mod entry;
+mod cache;
 mod home_screen;
 mod image;
 mod login;
@@ -23,12 +23,13 @@ use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
 use serde::Deserialize;
+use sqlx::SqlitePool;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-async fn run(mut term: DefaultTerminal, config: Config) -> Result<()> {
+async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = EventStream::new();
     if let Some(client) = login::login(&mut term, &config, &mut events).await? {
@@ -38,6 +39,7 @@ async fn run(mut term: DefaultTerminal, config: Config) -> Result<()> {
             config,
             events,
             image_picker: picker,
+            cache,
         };
         let mut state = NextScreen::LoadHomeScreen;
         loop {
@@ -46,7 +48,9 @@ async fn run(mut term: DefaultTerminal, config: Config) -> Result<()> {
                 NextScreen::HomeScreen(data) => display_home_screen(&mut context, data).await?,
                 NextScreen::Quit => break,
                 NextScreen::ShowUserView { id: _, kind: _ } => todo!(),
-                NextScreen::PlayItem(_media_item) => todo!(),
+                NextScreen::PlayItem(media_item) => {
+                    play_video::play_item(&mut context, media_item).await?
+                }
             };
         }
     }
@@ -54,10 +58,33 @@ async fn run(mut term: DefaultTerminal, config: Config) -> Result<()> {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<()>) -> Result<()> {
+    let cache = cache::initialize_cache().await?;
+    let res = tokio::select! {
+        res = tokio::spawn(run_app(term, config, cache.clone())) => {
+            match res.context("joining main task"){
+                Ok(v)=>v,
+                Err(e)=>Err(e)
+            }
+        }
+        res = paniced => {
+            Err(
+                res.context("failed to receive panic notification")
+                   .err()
+                   .unwrap_or_else(||eyre!("thread pool task paniced"))
+            )
+        }
+    };
+    cache.close().await;
+    res
+}
+
+fn main() -> Result<()> {
     std::env::set_var("LC_NUMERIC", "C");
     color_eyre::install().expect("installing color eyre format handler");
-    let mut logfile = dirs::runtime_dir().ok_or_eyre("unable to determine runtime dit")?;
+    let mut logfile = dirs::runtime_dir()
+        .or_else(dirs::cache_dir)
+        .ok_or_eyre("unable to determine runtime or cache dir")?;
     logfile.push("jellyfin-tui-rs.log");
     let format = tracing_subscriber::fmt::format();
     let filter = tracing_subscriber::EnvFilter::builder()
@@ -103,18 +130,7 @@ async fn main() -> Result<()> {
         .context("enabling bracket paste")
         .expect("failed to enable bracket paste");
 
-    let res = tokio::select! {
-        res = run(term, config) => {
-            res
-        }
-        res = paniced => {
-            Err(
-                res.context("failed to receive panic notification")
-                   .err()
-                   .unwrap_or_else(||eyre!("thread pool task paniced"))
-            )
-        }
-    };
+    let res = run(term, config, paniced);
 
     execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed");
     ratatui::restore();
@@ -131,6 +147,7 @@ struct Args {
 struct Config {
     pub login_file: PathBuf,
     pub thread_pool_size: usize,
+    pub hwdec: String,
 }
 
 #[instrument]
@@ -153,7 +170,8 @@ fn init() -> Result<Config> {
                 .to_str()
                 .ok_or_eyre("non unicode char in config dir")?,
         )?
-        .set_default("thread_pool_size", 1)?;
+        .set_default("thread_pool_size", 1)?
+        .set_default("hwdec", "auto-safe")?;
     if let Ok(file) = std::fs::read_to_string(config_file) {
         config = config.add_source(config::File::from_str(&file, config::FileFormat::Toml));
     }
@@ -172,6 +190,7 @@ struct TuiContext {
     pub config: Config,
     pub events: EventStream,
     pub image_picker: Picker,
+    pub cache: SqlitePool,
 }
 
 enum NextScreen {

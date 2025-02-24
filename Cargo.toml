@@ -8,12 +8,12 @@ clap = { version = "4.5.23", features = ["derive"] }
 color-eyre = "0.6.3"
 config = { version = "0.15.4", default-features = false, features = ["toml"] }
 crossterm = { version = "0.28.1", features = ["event-stream"] }
-dirs = "5.0.1"
+dirs = "6.0.0"
 futures-util = "0.3.31"
 jellyfin = { path = "jellyfin-rs", features = ["native-tls", "sha2-openssl"]}
 ratatui = "0.29.0"
 serde = { version = "1.0.217", features = ["derive"] }
-tokio = { version = "1.42.0", features = ["macros"] }
+tokio = { version = "1.42.0", features = ["macros", "parking_lot", "rt", "time"] }
 toml = "0.8.19"
 url = "2.5.4"
 whoami = { version = "1.5.2", default-features = false }
@@ -23,9 +23,17 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 ratatui-image = { version = "4.2.0", features = ["crossterm"] }
 image = { version = "0.25.5", default-features = false, features = ["webp"] }
 rayon = "1.10.0"
-reqwest = { version = "0.12.12", default-features = false, features = ["http2"] }
 bytes = "1.9.0"
 libmpv = { path = "libmpv-rs", default-features = false }
 libmpv-sys = { path = "libmpv-rs/libmpv-sys" }
 parking_lot = "0.12.3"
 tracing-core = { version = "0.1.33", default-features = false }
+sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite-unbundled"] }
+log = "0.4.26"
+tokio-util = "0.7.13"
+
+[workspace]
+members = ["jellyfin-rs", "libmpv-rs", "libmpv-rs/libmpv-sys"]
+
+[features]
+use-bindgen = ["libmpv-sys/use-bindgen"]

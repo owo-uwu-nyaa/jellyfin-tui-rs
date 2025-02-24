@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into image_cache (item_id, image_type, tag, val) values (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "bdfbaf31d8610f1accb2767f65212832020430723f618fff128772ea0959fdf2"
+}

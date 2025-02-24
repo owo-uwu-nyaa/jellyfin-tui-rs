@@ -24,10 +24,6 @@ use std::{
     time::Duration,
 };
 
-#[cfg(all(not(test), not(feature = "protocols")))]
-compile_error!("The feature `protocols` needs to be enabled for this example`");
-
-#[cfg(feature = "protocols")]
 fn main() {
     use libmpv::{protocol::*, *};
 
@@ -50,11 +46,10 @@ fn main() {
         )
     };
 
-    let mpv = Mpv::new().unwrap();
+    let mpv = Mpv::new().unwrap().enable_protocol();
     mpv.set_property("volume", 25).unwrap();
 
-    let proto_ctx = mpv.create_protocol_context();
-    proto_ctx.register(protocol).unwrap();
+    mpv.register(protocol).unwrap();
 
     mpv.playlist_load_files(&[(&path, FileState::AppendPlay, None)])
         .unwrap();

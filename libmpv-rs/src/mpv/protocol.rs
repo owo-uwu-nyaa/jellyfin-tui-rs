@@ -20,36 +20,13 @@ use super::*;
 
 use std::alloc::{self, Layout};
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::mem;
 use std::os::raw as ctype;
 use std::panic;
 use std::panic::RefUnwindSafe;
 use std::ptr::{self, NonNull};
 use std::slice;
-use std::sync::{atomic::Ordering, Mutex};
-
-impl Mpv {
-    /// Create a context with which custom protocols can be registered.
-    ///
-    /// # Panics
-    /// Panics if a context already exists
-    pub fn create_protocol_context<T, U>(&self) -> ProtocolContext<T, U>
-    where
-        T: RefUnwindSafe,
-        U: RefUnwindSafe,
-    {
-        match self.protocols_guard.compare_exchange(
-            false,
-            true,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(_) => ProtocolContext::new(self.ctx, PhantomData::<&Self>),
-            Err(_) => panic!("A protocol context already exists"),
-        }
-    }
-}
+use std::sync::Mutex;
 
 /// Return a persistent `T` that is passed to all other `Stream*` functions, panic on errors.
 pub type StreamOpen<T, U> = fn(&mut U, &str) -> T;
@@ -175,40 +152,112 @@ struct ProtocolData<T, U> {
     size_fn: Option<StreamSize<T>>,
 }
 
-/// This context holds state relevant to custom protocols.
-/// It is created by calling `Mpv::create_protocol_context`.
-pub struct ProtocolContext<'parent, T: RefUnwindSafe, U: RefUnwindSafe> {
-    ctx: NonNull<libmpv_sys::mpv_handle>,
-    protocols: Mutex<Vec<Protocol<T, U>>>,
-    _does_not_outlive: PhantomData<&'parent Mpv>,
+pub trait ProtocolContextType: sealed::ProtocolContextType {
+    type Inlined;
 }
 
-unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Send for ProtocolContext<'_, T, U> {}
-unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Sync for ProtocolContext<'_, T, U> {}
+/// This context holds state relevant to custom protocols.
+/// It is created by calling `Mpv::create_protocol_context`.
+pub struct ProtocolContext<T: RefUnwindSafe, U: RefUnwindSafe> {
+    _drop: Arc<MpvDropHandle>,
+    ctx: NonNull<libmpv_sys::mpv_handle>,
+    protocols: Mutex<Vec<Protocol<T, U>>>,
+}
 
-impl<'parent, T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContext<'parent, T, U> {
-    fn new(
-        ctx: NonNull<libmpv_sys::mpv_handle>,
-        marker: PhantomData<&'parent Mpv>,
-    ) -> ProtocolContext<'parent, T, U> {
+impl<T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContextType for ProtocolContext<T, U> {
+    type Inlined = Mutex<Vec<Protocol<T, U>>>;
+}
+
+unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Send for ProtocolContext<T, U> {}
+unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> Sync for ProtocolContext<T, U> {}
+
+pub struct EmptyProtocolContext;
+impl ProtocolContextType for EmptyProtocolContext {
+    type Inlined = ();
+}
+
+pub struct UninitProtocolContext {
+    _drop: Arc<MpvDropHandle>,
+    ctx: NonNull<libmpv_sys::mpv_handle>,
+}
+
+impl ProtocolContextType for UninitProtocolContext {
+    type Inlined = ();
+}
+
+impl UninitProtocolContext {
+    pub fn enable_protocol<T: RefUnwindSafe, U: RefUnwindSafe>(self) -> ProtocolContext<T, U> {
         ProtocolContext {
-            ctx,
+            _drop: self._drop,
+            ctx: self.ctx,
             protocols: Mutex::new(Vec::new()),
-            _does_not_outlive: marker,
         }
     }
+}
 
+impl<Event: EventContextType> Mpv<Event, UninitProtocolContext> {
+    pub fn enable_protocol<T: RefUnwindSafe, U: RefUnwindSafe>(
+        self,
+    ) -> Mpv<Event, ProtocolContext<T, U>> {
+        Mpv {
+            drop_handle: self.drop_handle,
+            ctx: self.ctx,
+            event_inline: self.event_inline,
+            protocols_inline: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl<Event: EventContextType, Protocol: sealed::ProtocolCx> Mpv<Event, Protocol> {
+    pub fn split_protocol(self) -> (Mpv<Event, EmptyProtocolContext>, Protocol) {
+        let new = Mpv {
+            drop_handle: self.drop_handle,
+            ctx: self.ctx,
+            event_inline: self.event_inline,
+            protocols_inline: (),
+        };
+        let protocol = Protocol::extract(self.protocols_inline, &new);
+        (new, protocol)
+    }
+}
+
+impl<Event: EventContextType> Mpv<Event, EmptyProtocolContext> {
+    pub fn combine_protocol<Protocol: sealed::ProtocolCx + sealed::ProtocolContextCtx>(
+        self,
+        protocol: Protocol,
+    ) -> Result<Mpv<Event, Protocol>> {
+        if self.ctx != protocol.get_ctx() {
+            Err(Error::HandleMismatch)
+        } else {
+            Ok(Mpv {
+                drop_handle: self.drop_handle,
+                ctx: self.ctx,
+                event_inline: self.event_inline,
+                protocols_inline: Protocol::to_inline(protocol),
+            })
+        }
+    }
+}
+
+pub trait ProtocolContextExt<T: RefUnwindSafe, U: RefUnwindSafe>:
+    sealed::ProtocolContextExt<T, U>
+{
     /// Register a custom `Protocol`. Once a protocol has been registered, it lives as long as
     /// `Mpv`.
     ///
     /// Returns `Error::Mpv(MpvError::InvalidParameter)` if a protocol with the same name has
     /// already been registered.
-    pub fn register(&self, protocol: Protocol<T, U>) -> Result<()> {
-        let mut protocols = self.protocols.lock().unwrap();
-        protocol.register(self.ctx.as_ptr())?;
+    fn register(&self, protocol: Protocol<T, U>) -> Result<()> {
+        let mut protocols = self.get_protocols().lock().unwrap();
+        protocol.register(self.get_ctx().as_ptr())?;
         protocols.push(protocol);
         Ok(())
     }
+}
+
+impl<T: RefUnwindSafe, U: RefUnwindSafe, P: sealed::ProtocolContextExt<T, U>>
+    ProtocolContextExt<T, U> for P
+{
 }
 
 /// `Protocol` holds all state used by a custom protocol.
@@ -262,6 +311,96 @@ impl<T: RefUnwindSafe, U: RefUnwindSafe> Protocol<T, U> {
                     Some(open_wrapper::<T, U>),
                 ),
             )
+        }
+    }
+}
+
+mod sealed {
+    use std::{panic::RefUnwindSafe, ptr::NonNull, sync::Mutex};
+
+    use super::{
+        EmptyProtocolContext, EventContextType, Mpv, Protocol, ProtocolContext,
+        UninitProtocolContext,
+    };
+
+    pub trait ProtocolContextType {}
+    impl ProtocolContextType for EmptyProtocolContext {}
+    impl ProtocolContextType for UninitProtocolContext {}
+    impl<T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContextType for ProtocolContext<T, U> {}
+
+    pub trait ProtocolCx: super::ProtocolContextType {
+        fn extract<Event: EventContextType>(
+            inline: Self::Inlined,
+            cx: &Mpv<Event, EmptyProtocolContext>,
+        ) -> Self;
+        fn to_inline(self) -> Self::Inlined;
+    }
+    impl ProtocolCx for UninitProtocolContext {
+        fn extract<Event: EventContextType>(
+            _inline: Self::Inlined,
+            cx: &Mpv<Event, EmptyProtocolContext>,
+        ) -> Self {
+            UninitProtocolContext {
+                _drop: cx.drop_handle.clone(),
+                ctx: cx.ctx,
+            }
+        }
+        fn to_inline(self) -> Self::Inlined {}
+    }
+
+    impl<T: RefUnwindSafe, U: RefUnwindSafe> ProtocolCx for ProtocolContext<T, U> {
+        fn extract<Event: EventContextType>(
+            inline: Self::Inlined,
+            cx: &Mpv<Event, EmptyProtocolContext>,
+        ) -> Self {
+            ProtocolContext {
+                _drop: cx.drop_handle.clone(),
+                ctx: cx.ctx,
+                protocols: inline,
+            }
+        }
+
+        fn to_inline(self) -> Self::Inlined {
+            self.protocols
+        }
+    }
+    /// # Safety
+    /// ctx must be valid
+    pub unsafe trait ProtocolContextCtx {
+        ///this must return a valid handle
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle>;
+    }
+    unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContextCtx for ProtocolContext<T, U> {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+    unsafe impl<T: RefUnwindSafe, U: RefUnwindSafe, Event: EventContextType> ProtocolContextCtx
+        for Mpv<Event, ProtocolContext<T, U>>
+    {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+    unsafe impl ProtocolContextCtx for UninitProtocolContext {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+    pub trait ProtocolContextExt<T: RefUnwindSafe, U: RefUnwindSafe>: ProtocolContextCtx {
+        fn get_protocols(&self) -> &Mutex<Vec<Protocol<T, U>>>;
+    }
+
+    impl<T: RefUnwindSafe, U: RefUnwindSafe> ProtocolContextExt<T, U> for ProtocolContext<T, U> {
+        fn get_protocols(&self) -> &Mutex<Vec<Protocol<T, U>>> {
+            &self.protocols
+        }
+    }
+    impl<T: RefUnwindSafe, U: RefUnwindSafe, Event: EventContextType> ProtocolContextExt<T, U>
+        for Mpv<Event, ProtocolContext<T, U>>
+    {
+        fn get_protocols(&self) -> &Mutex<Vec<Protocol<T, U>>> {
+            &self.protocols_inline
         }
     }
 }

@@ -16,29 +16,28 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+#[cfg(feature = "use-bindgen")]
 use std::env;
+#[cfg(feature = "use-bindgen")]
 use std::path::PathBuf;
 
-#[cfg(not(feature = "use-bindgen"))]
-fn main() {
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let crate_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    std::fs::copy(
-        crate_path.join("pregenerated_bindings.rs"),
-        out_path.join("bindings.rs"),
-    )
-    .expect("Couldn't find pregenerated bindings!");
-
-    println!("cargo:rustc-link-lib=mpv");
-}
-
 #[cfg(feature = "use-bindgen")]
-fn main() {
+fn gen_bindings(include_paths: &[PathBuf]) {
     let bindings = bindgen::Builder::default()
-        .header("include/client.h")
-        .header("include/render.h")
-        .header("include/render_gl.h")
-        .header("include/stream_cb.h")
+        .clang_args(
+            include_paths
+                .iter()
+                .map(|path| format!("-I{}", path.to_string_lossy())),
+        )
+        .header_contents(
+            "combined.h",
+            r"
+#include <mpv/client.h>
+#include <mpv/render.h>
+#include <mpv/render_gl.h>
+#include <mpv/stream_cb.h>
+",
+        )
         .impl_debug(true)
         .opaque_type("mpv_handle")
         .opaque_type("mpv_render_context")
@@ -51,4 +50,14 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     println!("cargo:rustc-link-lib=mpv");
+}
+
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    let _libmpv = pkg_config::Config::new()
+        .atleast_version("2.3.0")
+        .probe("mpv")
+        .unwrap();
+    #[cfg(feature = "use-bindgen")]
+    gen_bindings(&_libmpv.include_paths);
 }

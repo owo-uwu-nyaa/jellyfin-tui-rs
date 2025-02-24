@@ -1,16 +1,14 @@
-use std::task;
 
 use ratatui::{
     layout::Rect,
-    widgets::{Block, BorderType, Clear},
-    Frame,
+    widgets::{Block, BorderType, Widget},
 };
-use ratatui_image::{picker::Picker, FontSize, Resize, StatefulImage};
+use ratatui_image::{picker::Picker, FontSize};
 
-use crate::{image::LoadImage, NextScreen, Result};
+use crate::{image::{ImagesAvailable, JellyfinImage, JellyfinImageState}, NextScreen, Result};
 
 pub struct Entry {
-    image: Option<LoadImage>,
+    image: Option<JellyfinImageState>,
     title: String,
     subtitle: Option<String>,
     action: NextScreen,
@@ -34,11 +32,10 @@ pub fn entry_height(font: FontSize) -> u16 {
 impl Entry {
     pub fn render(
         &mut self,
-        cx: &mut task::Context,
-        frame: &mut Frame<'_>,
         area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        availabe: &ImagesAvailable,
         picker: &Picker,
-        resize: impl Fn() -> Resize,
         border_type: BorderType,
     ) -> Result<()> {
         let mut outer = Block::bordered()
@@ -47,26 +44,16 @@ impl Entry {
         if let Some(subtitle) = &self.subtitle {
             outer = outer.title_bottom(subtitle.as_str());
         }
-        frame.render_widget(&outer, area);
-        let area = outer.inner(area);
-        if let Some(image) = &mut self.image {
-            if let Some(image) = image.poll(cx, picker, resize(), area)? {
-                frame.render_stateful_widget(
-                    StatefulImage::default().resize(resize()),
-                    area,
-                    image,
-                );
-            } else {
-                frame.render_widget(Clear, area);
-            }
-        } else {
-            frame.render_widget(Clear, area);
+        let inner = outer.inner(area);
+        outer.render(area, buf);
+        if let Some(state) = &mut self.image {
+            JellyfinImage::default().render(inner, buf, state, availabe, picker)?;
         }
         Ok(())
     }
 
     pub fn new(
-        image: Option<LoadImage>,
+        image: Option<JellyfinImageState>,
         title: String,
         subtitle: Option<String>,
         action: NextScreen,

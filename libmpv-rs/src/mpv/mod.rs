@@ -16,11 +16,12 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+use std::convert::TryInto;
 use std::ffi::{c_char, c_int, NulError};
 use std::marker::PhantomData;
 use std::mem;
-use std::task::Waker;
-use std::{convert::TryInto, sync::Mutex};
+use std::ptr::null;
+use std::sync::Arc;
 
 macro_rules! mpv_cstr_to_str {
     ($cstr: expr) => {
@@ -35,14 +36,14 @@ mod errors;
 /// Event handling
 pub mod events;
 /// Custom protocols (`protocol://$url`) for playback
-#[cfg(feature = "protocols")]
 pub mod protocol;
 /// Custom rendering
 #[cfg(feature = "render")]
 pub mod render;
 
-use events::wake_callback;
+use events::{EventContextSync, EventContextType};
 use libmpv_sys::{mpv_node, mpv_node_list};
+use protocol::{ProtocolContextType, UninitProtocolContext};
 
 pub use self::errors::*;
 use super::*;
@@ -55,9 +56,6 @@ use std::{
     ptr::{self, NonNull},
     result::Result as StdResult,
 };
-
-#[cfg(feature = "protocols")]
-use std::sync::atomic::AtomicBool;
 
 fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
     if err == 0 {
@@ -457,7 +455,7 @@ fn try_map_array<I, O, E, const N: usize>(
             }
         }
     }
-    unsafe { mem::transmute_copy(&out) }
+    Ok(unsafe { mem::transmute_copy(&out) })
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -523,19 +521,11 @@ impl MpvInitializer {
     }
 }
 
-/// The central mpv context.
-pub struct Mpv {
-    /// The handle to the mpv core
-    pub ctx: NonNull<libmpv_sys::mpv_handle>,
-    waker: Box<Mutex<Option<Waker>>>,
-    #[cfg(feature = "protocols")]
-    protocols_guard: AtomicBool,
+struct MpvDropHandle {
+    ctx: NonNull<libmpv_sys::mpv_handle>,
 }
 
-unsafe impl Send for Mpv {}
-unsafe impl Sync for Mpv {}
-
-impl Drop for Mpv {
+impl Drop for MpvDropHandle {
     fn drop(&mut self) {
         unsafe {
             libmpv_sys::mpv_terminate_destroy(self.ctx.as_ptr());
@@ -543,18 +533,35 @@ impl Drop for Mpv {
     }
 }
 
+unsafe impl Send for MpvDropHandle {}
+unsafe impl Sync for MpvDropHandle {}
+
+/// The central mpv context.
+pub struct Mpv<
+    Event: EventContextType = EventContextSync,
+    Protocol: ProtocolContextType = UninitProtocolContext,
+> {
+    drop_handle: Arc<MpvDropHandle>,
+    ctx: NonNull<libmpv_sys::mpv_handle>,
+    event_inline: Event::Inlined,
+    protocols_inline: Protocol::Inlined,
+}
+
+unsafe impl<Event: EventContextType, Protocol: ProtocolContextType> Send for Mpv<Event, Protocol> {}
+unsafe impl<Event: EventContextType, Protocol: ProtocolContextType> Sync for Mpv<Event, Protocol> {}
+
 impl Mpv {
     /// Create a new `Mpv`.
     /// The default settings can be probed by running: `$ mpv --show-profile=libmpv`.
-    pub fn new() -> Result<Mpv> {
-        Mpv::with_initializer(|_| Ok(()))
+    pub fn new() -> Result<Mpv<EventContextSync, UninitProtocolContext>> {
+        Self::with_initializer(|_| Ok(()))
     }
 
     /// Create a new `Mpv`.
     /// The same as `Mpv::new`, but you can set properties before `Mpv` is initialized.
     pub fn with_initializer<F: FnOnce(MpvInitializer) -> Result<()>>(
         initializer: F,
-    ) -> Result<Mpv> {
+    ) -> Result<Mpv<EventContextSync, UninitProtocolContext>> {
         let api_version = unsafe { libmpv_sys::mpv_client_api_version() };
         if crate::MPV_CLIENT_API_MAJOR != api_version >> 16 {
             return Err(Error::VersionMismatch {
@@ -568,28 +575,21 @@ impl Mpv {
             return Err(Error::Null);
         }
 
-        initializer(MpvInitializer { ctx })?;
-        mpv_err((), unsafe { libmpv_sys::mpv_initialize(ctx) }).inspect_err(|_| {
-            unsafe { libmpv_sys::mpv_terminate_destroy(ctx) };
-        })?;
-        let waker = Box::new(Mutex::new(None));
+        let ctx = unsafe { NonNull::new_unchecked(ctx) };
+        let drop_handle = Arc::new(MpvDropHandle { ctx });
 
-        unsafe {
-            libmpv_sys::mpv_set_wakeup_callback(
-                ctx,
-                Some(wake_callback),
-                (&*waker as *const Mutex<Option<Waker>>).cast_mut().cast(),
-            );
-        }
-
+        initializer(MpvInitializer { ctx: ctx.as_ptr() })?;
+        mpv_err((), unsafe { libmpv_sys::mpv_initialize(ctx.as_ptr()) })?;
         Ok(Mpv {
-            ctx: unsafe { NonNull::new_unchecked(ctx) },
-            waker,
-            #[cfg(feature = "protocols")]
-            protocols_guard: AtomicBool::new(false),
+            ctx,
+            drop_handle,
+            event_inline: (),
+            protocols_inline: (),
         })
     }
+}
 
+impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol> {
     /// Load a configuration file. The path has to be absolute, and a file.
     pub fn load_config(&self, path: &str) -> Result<()> {
         let file = CString::new(path)?.into_raw();
@@ -607,12 +607,17 @@ impl Mpv {
         let name = CString::new(name)?;
         let args: StdResult<Vec<_>, NulError> = args.iter().map(|arg| CString::new(*arg)).collect();
         let args = args?;
-        let mut arg_list = Vec::with_capacity(args.len() + 1);
+        let mut arg_list = Vec::with_capacity(args.len() + 2);
         arg_list.push(name.as_ptr());
-        for arg in args {
+        for arg in &args {
             arg_list.push(arg.as_ptr());
         }
-        mpv_err((), f(arg_list.as_mut_ptr()))
+        arg_list.push(null());
+        let res = f(arg_list.as_mut_ptr());
+        drop(arg_list);
+        drop(args);
+        drop(name);
+        mpv_err((), res)
     }
 
     /// Send a command to the `Mpv` instance.
@@ -836,13 +841,12 @@ impl Mpv {
     /// `loadfile` is kind of asynchronous, any additional option is set during loading,
     /// [specifics](https://github.com/mpv-player/mpv/issues/4089).
     pub fn playlist_load_files(&self, files: &[(&str, FileState, Option<&str>)]) -> Result<()> {
-        for (i, elem) in files.iter().enumerate() {
-            let args = elem.2.unwrap_or("");
-
-            let ret = self.command(
-                "loadfile",
-                &[&format!("\"{}\"", elem.0), elem.1.val(), args],
-            );
+        for (i, (file, state, option)) in files.iter().enumerate() {
+            let ret = if let Some(option) = option {
+                self.command("loadfile", &[file, state.val(), option])
+            } else {
+                self.command("loadfile", &[file, state.val()])
+            };
 
             if let Err(err) = ret {
                 return Err(Error::Loadfiles {

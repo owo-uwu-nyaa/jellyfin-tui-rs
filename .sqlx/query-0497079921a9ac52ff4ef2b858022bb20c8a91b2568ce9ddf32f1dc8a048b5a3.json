@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from image_cache where (added+7*24*60*60)<unixepoch()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "0497079921a9ac52ff4ef2b858022bb20c8a91b2568ce9ddf32f1dc8a048b5a3"
+}

@@ -16,10 +16,13 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+use events::EventContextExt;
+
 use crate::events::{Event, PropertyData};
 use crate::*;
 
 use std::collections::HashMap;
+use std::fs::File;
 use std::thread;
 use std::time::Duration;
 
@@ -37,6 +40,11 @@ fn initializer() {
     assert_eq!(true, mpv.get_property("osc").unwrap());
     assert_eq!(true, mpv.get_property("input-default-bindings").unwrap());
     assert_eq!(30i64, mpv.get_property("volume").unwrap());
+}
+
+#[test]
+fn test_file_exists(){
+    assert!(File::open("test-data/speech_12kbps_mb.wav").is_ok(), "Unable to open test file at test-data/speech_12kbps_mb.wav")
 }
 
 #[test]
@@ -87,20 +95,18 @@ macro_rules! assert_event_occurs {
 
 #[test]
 fn events() {
-    let mpv = Mpv::new().unwrap();
-    let mut ev_ctx = mpv.create_event_context();
-    ev_ctx.disable_deprecated_events().unwrap();
+    let mut mpv = Mpv::new().unwrap();
+    mpv.disable_deprecated_events().unwrap();
 
-    ev_ctx.observe_property("volume", Format::Int64, 0).unwrap();
-    ev_ctx
-        .observe_property("media-title", Format::String, 1)
+    mpv.observe_property("volume", Format::Int64, 0).unwrap();
+    mpv.observe_property("media-title", Format::String, 1)
         .unwrap();
 
     mpv.set_property("vo", "null").unwrap();
     mpv.set_property("ytdl", false).unwrap();
 
     assert_event_occurs!(
-        ev_ctx,
+        mpv,
         3.,
         Ok(Event::PropertyChange {
             name: "volume",
@@ -111,7 +117,7 @@ fn events() {
 
     mpv.set_property("volume", 0).unwrap();
     assert_event_occurs!(
-        ev_ctx,
+        mpv,
         10.,
         Ok(Event::PropertyChange {
             name: "volume",
@@ -119,7 +125,7 @@ fn events() {
             reply_userdata: 0,
         })
     );
-    assert!(ev_ctx.wait_event(3.).is_none());
+    assert!(mpv.wait_event(3.).is_none());
 
     mpv.playlist_load_files(&[(
         "https://www.youtube.com/watch?v=DLzxrzFCyOs",
@@ -127,9 +133,9 @@ fn events() {
         None,
     )])
     .unwrap();
-    assert_event_occurs!(ev_ctx, 10., Ok(Event::StartFile));
+    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
     assert_event_occurs!(
-        ev_ctx,
+        mpv,
         10.,
         Ok(Event::PropertyChange {
             name: "media-title",
@@ -137,8 +143,8 @@ fn events() {
             reply_userdata: 1,
         })
     );
-    assert_event_occurs!(ev_ctx, 20., Err(Error::Raw(mpv_error::UnknownFormat)));
-    assert!(ev_ctx.wait_event(3.).is_none());
+    assert_event_occurs!(mpv, 20., Err(Error::Raw(mpv_error::UnknownFormat)));
+    assert!(mpv.wait_event(3.).is_none());
 
     mpv.playlist_load_files(&[(
         "test-data/speech_12kbps_mb.wav",
@@ -146,9 +152,9 @@ fn events() {
         None,
     )])
     .unwrap();
-    assert_event_occurs!(ev_ctx, 10., Ok(Event::StartFile));
+    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
     assert_event_occurs!(
-        ev_ctx,
+        mpv,
         3.,
         Ok(Event::PropertyChange {
             name: "media-title",
@@ -156,12 +162,12 @@ fn events() {
             reply_userdata: 1,
         })
     );
-    assert_event_occurs!(ev_ctx, 3., Ok(Event::AudioReconfig));
-    assert_event_occurs!(ev_ctx, 3., Ok(Event::AudioReconfig));
-    assert_event_occurs!(ev_ctx, 3., Ok(Event::FileLoaded));
-    assert_event_occurs!(ev_ctx, 3., Ok(Event::AudioReconfig));
-    assert_event_occurs!(ev_ctx, 3., Ok(Event::PlaybackRestart));
-    assert!(ev_ctx.wait_event(3.).is_none());
+    assert_event_occurs!(mpv, 3., Ok(Event::AudioReconfig));
+    assert_event_occurs!(mpv, 3., Ok(Event::AudioReconfig));
+    assert_event_occurs!(mpv, 3., Ok(Event::FileLoaded));
+    assert_event_occurs!(mpv, 3., Ok(Event::AudioReconfig));
+    assert_event_occurs!(mpv, 3., Ok(Event::PlaybackRestart));
+    assert!(mpv.wait_event(3.).is_none());
 }
 
 #[test]

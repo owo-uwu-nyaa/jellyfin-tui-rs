@@ -17,15 +17,18 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 use libmpv_sys::mpv_event;
+use mpv::MpvDropHandle;
+use protocol::ProtocolContextType;
 
 use crate::{mpv::mpv_err, *};
 
 use std::ffi::{c_void, CString};
-use std::future::{pending, poll_fn};
+use std::future::{pending, poll_fn, Future};
 use std::os::raw as ctype;
 use std::process::abort;
+use std::ptr::NonNull;
 use std::slice;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 
 /// An `Event`'s ID.
@@ -151,16 +154,113 @@ pub enum Event<'a> {
     Deprecated(mpv_event),
 }
 
-impl Mpv {
+pub struct EventContextSync {
+    _drop: Arc<MpvDropHandle>,
+    /// The handle to the mpv core
+    ctx: NonNull<libmpv_sys::mpv_handle>,
+}
+
+unsafe impl Send for EventContextSync {}
+unsafe impl Sync for EventContextSync {}
+
+pub struct EventContextAsync {
+    inner: EventContextSync,
+    waker: Box<Mutex<Option<Waker>>>,
+}
+
+pub struct EmptyEventContext;
+
+pub trait EventContextType: sealed::EventContextType {
+    type Inlined;
+}
+impl EventContextType for EmptyEventContext {
+    type Inlined = ();
+}
+impl EventContextType for EventContextSync {
+    type Inlined = ();
+}
+impl EventContextType for EventContextAsync {
+    type Inlined = Box<Mutex<Option<Waker>>>;
+}
+
+pub trait EventContext: sealed::EventContext {}
+
+impl EventContext for EventContextSync {}
+
+impl EventContext for EventContextAsync {}
+
+unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Box<Mutex<Option<Waker>>> {
+    let waker = Box::new(Mutex::new(None));
+    unsafe {
+        libmpv_sys::mpv_set_wakeup_callback(
+            ctx.as_ptr(),
+            Some(wake_callback),
+            (&*waker as *const Mutex<Option<Waker>>).cast_mut().cast(),
+        );
+    };
+    waker
+}
+
+impl EventContextSync {
+    pub fn enable_async(self) -> EventContextAsync {
+        let waker = unsafe { setup_waker_ptr(self.ctx) };
+        EventContextAsync { inner: self, waker }
+    }
+}
+
+impl<Protocol: ProtocolContextType> Mpv<EventContextSync, Protocol> {
+    pub fn enable_async(self) -> Mpv<EventContextAsync, Protocol> {
+        let waker = unsafe { setup_waker_ptr(self.ctx) };
+        Mpv {
+            drop_handle: self.drop_handle,
+            ctx: self.ctx,
+            event_inline: waker,
+            protocols_inline: self.protocols_inline,
+        }
+    }
+}
+
+impl<Event: sealed::EventContext, Protocol: ProtocolContextType> Mpv<Event, Protocol> {
+    pub fn split_event(self) -> (Mpv<EmptyEventContext, Protocol>, Event) {
+        let new = Mpv {
+            drop_handle: self.drop_handle,
+            ctx: self.ctx,
+            event_inline: (),
+            protocols_inline: self.protocols_inline,
+        };
+        let event = Event::exract(self.event_inline, &new);
+        (new, event)
+    }
+}
+
+impl<Protocol: ProtocolContextType> Mpv<EmptyEventContext, Protocol> {
+    pub fn combine_event<Event: sealed::EventContext + sealed::EventContextExt>(
+        self,
+        event: Event,
+    ) -> Result<Mpv<Event, Protocol>> {
+        if event.get_ctx() != self.ctx {
+            Err(Error::HandleMismatch)
+        } else {
+            Ok(Mpv {
+                drop_handle: self.drop_handle,
+                ctx: self.ctx,
+                event_inline: Event::to_inlined(event),
+                protocols_inline: self.protocols_inline,
+            })
+        }
+    }
+}
+
+pub trait EventContextExt: sealed::EventContextExt {
     /// Enable an event.
-    pub fn enable_event(&self, ev: events::EventId) -> Result<()> {
+    fn enable_event(&self, ev: events::EventId) -> Result<()> {
         mpv_err((), unsafe {
-            libmpv_sys::mpv_request_event(self.ctx.as_ptr(), ev, 1)
+            libmpv_sys::mpv_request_event(self.get_ctx().as_ptr(), ev, 1)
         })
     }
 
     /// Enable all, except deprecated, events.
-    pub fn enable_all_events(&self) -> Result<()> {
+    fn enable_all_events(&self) -> Result<()> {
         for i in (2..9).chain(16..19).chain(20..23).chain(24..26) {
             self.enable_event(i)?;
         }
@@ -168,20 +268,20 @@ impl Mpv {
     }
 
     /// Disable an event.
-    pub fn disable_event(&self, ev: events::EventId) -> Result<()> {
+    fn disable_event(&self, ev: events::EventId) -> Result<()> {
         mpv_err((), unsafe {
-            libmpv_sys::mpv_request_event(self.ctx.as_ptr(), ev, 0)
+            libmpv_sys::mpv_request_event(self.get_ctx().as_ptr(), ev, 0)
         })
     }
 
     /// Diable all deprecated events.
-    pub fn disable_deprecated_events(&self) -> Result<()> {
+    fn disable_deprecated_events(&self) -> Result<()> {
         self.disable_event(libmpv_sys::mpv_event_id_MPV_EVENT_IDLE)?;
         Ok(())
     }
 
     /// Diable all events.
-    pub fn disable_all_events(&self) -> Result<()> {
+    fn disable_all_events(&self) -> Result<()> {
         for i in 2..26 {
             self.disable_event(i as _)?;
         }
@@ -190,11 +290,11 @@ impl Mpv {
 
     /// Observe `name` property for changes. `id` can be used to unobserve this (or many) properties
     /// again.
-    pub fn observe_property(&self, name: &str, format: Format, id: u64) -> Result<()> {
+    fn observe_property(&self, name: &str, format: Format, id: u64) -> Result<()> {
         let name = CString::new(name)?;
         mpv_err((), unsafe {
             libmpv_sys::mpv_observe_property(
-                self.ctx.as_ptr(),
+                self.get_ctx().as_ptr(),
                 id,
                 name.as_ptr(),
                 format.as_mpv_format() as _,
@@ -203,19 +303,10 @@ impl Mpv {
     }
 
     /// Unobserve any property associated with `id`.
-    pub fn unobserve_property(&self, id: u64) -> Result<()> {
+    fn unobserve_property(&self, id: u64) -> Result<()> {
         mpv_err((), unsafe {
-            libmpv_sys::mpv_unobserve_property(self.ctx.as_ptr(), id)
+            libmpv_sys::mpv_unobserve_property(self.get_ctx().as_ptr(), id)
         })
-    }
-
-    pub async fn wait_event_async(&mut self) -> Result<Event> {
-        let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
-        *self.waker.lock().unwrap() = Some(waker);
-        match self.wait_event(0.0) {
-            Some(v) => v,
-            None => pending().await,
-        }
     }
 
     /// Wait for `timeout` seconds for an `Event`. Passing `0` as `timeout` will poll.
@@ -226,8 +317,8 @@ impl Mpv {
     /// Returns `Some(Err(...))` if there was invalid utf-8, or if either an
     /// `MPV_EVENT_GET_PROPERTY_REPLY`, `MPV_EVENT_SET_PROPERTY_REPLY`, `MPV_EVENT_COMMAND_REPLY`,
     /// or `MPV_EVENT_PROPERTY_CHANGE` event failed, or if `MPV_EVENT_END_FILE` reported an error.
-    pub fn wait_event(&mut self, timeout: f64) -> Option<Result<Event>> {
-        let event = unsafe { *libmpv_sys::mpv_wait_event(self.ctx.as_ptr(), timeout) };
+    fn wait_event(&mut self, timeout: f64) -> Option<Result<Event>> {
+        let event = unsafe { *libmpv_sys::mpv_wait_event(self.get_ctx().as_ptr(), timeout) };
         if event.event_id != mpv_event_id::None {
             if let Err(e) = mpv_err((), event.error) {
                 return Some(Err(e));
@@ -335,6 +426,117 @@ impl Mpv {
             mpv_event_id::QueueOverflow => Some(Ok(Event::QueueOverflow)),
             mpv_event_id::Idle => Some(Ok(Event::Idle)),
             _ => Some(Ok(Event::Deprecated(event))),
+        }
+    }
+}
+
+impl<T: sealed::EventContextExt> EventContextExt for T {}
+
+pub trait EventContextAsyncExt:
+    sealed::EventContextAsyncExt + EventContextExt + Send + Sync
+{
+    fn wait_event_async(&mut self) -> impl Future<Output = Result<Event>> + Send + Sync {
+        async move {
+            let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
+            *self.get_waker().lock().unwrap() = Some(waker);
+            if let Some(v) = self.wait_event(0.0) {
+                return v;
+            }
+            pending().await
+        }
+    }
+}
+
+impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {}
+
+mod sealed {
+    use std::{ptr::NonNull, sync::Mutex, task::Waker};
+
+    use super::{
+        protocol::ProtocolContextType, EmptyEventContext, EventContextAsync, EventContextSync, Mpv,
+    };
+
+    pub trait EventContextType {}
+    impl EventContextType for EventContextSync {}
+    impl EventContextType for EventContextAsync {}
+    impl EventContextType for EmptyEventContext {}
+
+    pub trait EventContext: super::EventContextType {
+        fn exract<Protocol: ProtocolContextType>(
+            inline: Self::Inlined,
+            cx: &Mpv<EmptyEventContext, Protocol>,
+        ) -> Self;
+        fn to_inlined(self) -> Self::Inlined;
+    }
+
+    impl EventContext for EventContextSync {
+        fn exract<Protocol: ProtocolContextType>(
+            _inline: Self::Inlined,
+            cx: &Mpv<EmptyEventContext, Protocol>,
+        ) -> Self {
+            EventContextSync {
+                ctx: cx.ctx,
+                _drop: cx.drop_handle.clone(),
+            }
+        }
+        fn to_inlined(self) -> Self::Inlined {}
+    }
+
+    impl EventContext for EventContextAsync {
+        fn exract<Protocol: ProtocolContextType>(
+            inline: Self::Inlined,
+            cx: &Mpv<EmptyEventContext, Protocol>,
+        ) -> Self {
+            EventContextAsync {
+                inner: EventContextSync::exract((), cx),
+                waker: inline,
+            }
+        }
+
+        fn to_inlined(self) -> Self::Inlined {
+            self.waker
+        }
+    }
+    /// # Safety
+    /// ctx must be valid
+    pub unsafe trait EventContextExt {
+        ///this must return a valid handle
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle>;
+    }
+    unsafe impl EventContextExt for EventContextSync {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+
+    unsafe impl EventContextExt for EventContextAsync {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.inner.ctx
+        }
+    }
+
+    unsafe impl<Protocol: ProtocolContextType> EventContextExt for Mpv<EventContextSync, Protocol> {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+
+    unsafe impl<Protocol: ProtocolContextType> EventContextExt for Mpv<EventContextAsync, Protocol> {
+        fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
+            self.ctx
+        }
+    }
+    pub trait EventContextAsyncExt: EventContextExt {
+        fn get_waker(&self) -> &Mutex<Option<Waker>>;
+    }
+    impl EventContextAsyncExt for EventContextAsync {
+        fn get_waker(&self) -> &Mutex<Option<Waker>> {
+            &self.waker
+        }
+    }
+    impl<Protocol: ProtocolContextType> EventContextAsyncExt for Mpv<EventContextAsync, Protocol> {
+        fn get_waker(&self) -> &Mutex<Option<Waker>> {
+            &self.event_inline
         }
     }
 }

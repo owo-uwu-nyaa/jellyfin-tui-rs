@@ -1,13 +1,10 @@
-use std::task::Poll;
 
-use color_eyre::eyre::{Context, Report};
+use color_eyre::eyre::Context;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{
     items::{ItemType, MediaItem},
-    sha::Sha256,
     user_views::UserView,
-    AuthStatus, JellyfinClient,
 };
 use list::EntryList;
 use load::HomeScreenData;
@@ -16,7 +13,11 @@ use ratatui_image::picker::Picker;
 use screen::EntryScreen;
 use tracing::{debug, instrument};
 
-use crate::{entry::Entry, image::LoadImage, NextScreen, Result, TuiContext};
+use crate::{
+    entry::Entry,
+    image::{ImagesAvailable, JellyfinImageState},
+    NextScreen, Result, TuiContext,
+};
 
 mod list;
 pub mod load;
@@ -24,7 +25,8 @@ mod screen;
 
 fn create_from_media_item(
     item: MediaItem,
-    client: &JellyfinClient<impl AuthStatus, impl Sha256>,
+    context: &TuiContext,
+    images_availabe: &ImagesAvailable,
 ) -> Entry {
     let (title, subtitle) = match &item.item_type {
         ItemType::Movie { container: _ } => (item.name.clone(), None),
@@ -46,13 +48,23 @@ fn create_from_media_item(
         .iter()
         .flat_map(|map| map.iter())
         .next()
-        .map(|(image_type, tag)| LoadImage::new(client, tag.clone(), item.id.clone(), *image_type));
+        .map(|(image_type, tag)| {
+            JellyfinImageState::new(
+                &context.jellyfin,
+                context.cache.clone(),
+                images_availabe,
+                tag.clone(),
+                item.id.clone(),
+                *image_type,
+            )
+        });
     Entry::new(image, title, subtitle, NextScreen::PlayItem(item))
 }
 
 fn create_from_user_view(
     item: &UserView,
-    client: &JellyfinClient<impl AuthStatus, impl Sha256>,
+    context: &TuiContext,
+    images_availabe: &ImagesAvailable,
 ) -> Entry {
     let title = item.name.clone();
     let image = item
@@ -60,7 +72,16 @@ fn create_from_user_view(
         .iter()
         .flat_map(|map| map.iter())
         .next()
-        .map(|(image_type, tag)| LoadImage::new(client, tag.clone(), item.id.clone(), *image_type));
+        .map(|(image_type, tag)| {
+            JellyfinImageState::new(
+                &context.jellyfin,
+                context.cache.clone(),
+                images_availabe,
+                tag.clone(),
+                item.id.clone(),
+                *image_type,
+            )
+        });
     Entry::new(
         image,
         title,
@@ -75,7 +96,8 @@ fn create_from_user_view(
 fn create_from_media_item_vec(
     items: Vec<MediaItem>,
     title: &str,
-    client: &JellyfinClient<impl AuthStatus, impl Sha256>,
+    context: &TuiContext,
+    images_availabe: &ImagesAvailable,
 ) -> Option<EntryList> {
     if items.is_empty() {
         None
@@ -83,7 +105,7 @@ fn create_from_media_item_vec(
         EntryList::new(
             items
                 .into_iter()
-                .map(|item| create_from_media_item(item, client))
+                .map(|item| create_from_media_item(item, context, images_availabe))
                 .collect(),
             title.to_string(),
         )
@@ -91,17 +113,16 @@ fn create_from_media_item_vec(
     }
 }
 
-fn create_home_screen(
-    mut data: HomeScreenData,
-    client: &JellyfinClient<impl AuthStatus, impl Sha256>,
+fn create_home_screen(mut data: HomeScreenData, context: &TuiContext,
+    images_availabe: &ImagesAvailable,
 ) -> EntryScreen {
     let entries = [
-        create_from_media_item_vec(data.resume, "Continue Watching", client),
-        create_from_media_item_vec(data.next_up, "Next Up", client),
+        create_from_media_item_vec(data.resume, "Continue Watching", context, images_availabe),
+        create_from_media_item_vec(data.next_up, "Next Up", context,images_availabe),
         EntryList::new(
             data.views
                 .iter()
-                .map(|item| create_from_user_view(item, client))
+                .map(|item| create_from_user_view(item, context,images_availabe))
                 .collect(),
             "Library".to_string(),
         )
@@ -111,7 +132,7 @@ fn create_home_screen(
     .chain(data.views.iter().map(|view| {
         data.latest
             .remove(view.id.as_str())
-            .and_then(|items| create_from_media_item_vec(items, view.name.as_str(), client))
+            .and_then(|items| create_from_media_item_vec(items, view.name.as_str(), context, images_availabe))
     }))
     .flatten()
     .collect();
@@ -119,29 +140,17 @@ fn create_home_screen(
 }
 
 #[instrument(skip_all)]
-async fn render(
+fn render(
     term: &mut Terminal<impl Backend>,
-    picker: &Picker,
     screen: &mut EntryScreen,
-) -> Report {
-    futures_util::future::poll_fn(|cx| {
-        let mut err = Result::Ok(());
-        term.draw(|frame| {
-            err = screen.render(
-                frame,
-                frame.area(),
-                picker,
-                || ratatui_image::Resize::Scale(None),
-                cx,
-            );
-        })
-        .expect("error rendering term");
-        match err {
-            Ok(()) => Poll::Pending,
-            Err(e) => Poll::Ready(e),
-        }
-    })
-    .await
+    availabe: &ImagesAvailable,
+    picker: &Picker,
+) -> Result<()> {
+    let mut res = Result::Ok(());
+    term.draw(|frame| {
+        res = screen.render(frame.area(), frame.buffer_mut(), availabe, picker);
+    }).context("rendering home screen")?;
+    res
 }
 
 #[instrument(skip_all)]
@@ -149,12 +158,17 @@ pub async fn display_home_screen(
     context: &mut TuiContext,
     data: HomeScreenData,
 ) -> Result<NextScreen> {
-    let mut screen = create_home_screen(data, &context.jellyfin);
+    let images_available = ImagesAvailable::new();
+    let mut screen = create_home_screen(data, context, &images_available);
     loop {
+        render(
+            &mut context.term,
+            &mut screen,
+            &images_available,
+            &context.image_picker,
+        )?;
         let code = tokio::select! {
-            biased;
-            err = render(&mut context.term, &context.image_picker , &mut screen) => {
-                break Err(err)
+            _ = images_available.wait_available() => {continue;
             }
             term = context.events.next() => {
                 match term {

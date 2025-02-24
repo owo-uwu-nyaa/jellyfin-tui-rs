@@ -46,7 +46,7 @@ impl<Sha: Sha256> JellyfinClient<NoAuth, Sha> {
             .client
             .post(format!("{}Users/AuthenticateByName", self.url))
             .json(&AuthUserNameReq {
-                username: username.as_ref(),
+                username,
                 pw: password.as_ref(),
             })
             .header(

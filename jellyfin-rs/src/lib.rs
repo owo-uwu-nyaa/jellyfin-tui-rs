@@ -21,6 +21,7 @@ pub mod sha;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
+pub use reqwest;
 
 #[derive(Debug, Clone)]
 pub struct JellyfinClient<AuthS: AuthStatus = Auth, Sha: Sha256 = sha::Default> {
@@ -97,7 +98,7 @@ impl<AuthS: AuthStatus, Sha: Sha256> JellyfinClient<AuthS, Sha> {
     ) -> err::Result<JellyfinClient<NoAuth, Sha>> {
         Ok(JellyfinClient {
             url: Url::parse(url.as_ref())?,
-            client: Client::new(),
+            client: Client::builder().connector_layer(tower::limit::concurrency::ConcurrencyLimitLayer::new(2)).build()?,
             auth: NoAuth,
             client_info,
             device_name: device_name.into(),

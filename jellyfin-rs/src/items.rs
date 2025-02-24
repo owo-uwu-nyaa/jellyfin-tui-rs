@@ -62,10 +62,9 @@ pub enum ImageType {
     BoxRear,
     Profile,
 }
-
-impl Display for ImageType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+impl ImageType {
+    pub fn name(&self) -> &'static str {
+        match self {
             ImageType::Primary => "Primary",
             ImageType::Art => "Art",
             ImageType::Backdrop => "Backdrop",
@@ -79,8 +78,13 @@ impl Display for ImageType {
             ImageType::Chapter => "Chapter",
             ImageType::BoxRear => "BoxRear",
             ImageType::Profile => "Profile",
-        };
-        f.write_str(s)
+        }
+    }
+}
+
+impl Display for ImageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
