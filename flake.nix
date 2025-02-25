@@ -12,14 +12,19 @@
       url = "github:numtide/flake-utils";
       inputs.systems.follows = "systems";
     };
+    crate2nix = {
+      url = "github:nix-community/crate2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.crate2nix_stable.follows = "crate2nix";
+    };
   };
 
   outputs =
     {
-      self,
       nixpkgs,
       rust-overlay,
       flake-utils,
+      crate2nix,
       ...
     }:
     (
@@ -33,24 +38,21 @@
             inherit system overlays;
           };
           toolchain_dev = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          platform_dev = pkgs.makeRustPlatform {
+          jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix {
+            inherit (crate2nix.tools.${system}) generatedCargoNix;
+          };
+          jellyfin-tui-rust-overlay = jellyfin-tui.override {
             rustc = toolchain_dev;
             cargo = toolchain_dev;
           };
-          jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix { };
         in
         {
           packages = {
             default = jellyfin-tui;
-            inherit jellyfin-tui;
+
+            inherit jellyfin-tui jellyfin-tui-rust-overlay;
           };
           devShells.default =
-            let
-              crate = jellyfin-tui.override {
-                rustPlatform = platform_dev;
-                use_bindgen = true;
-              };
-            in
             pkgs.mkShell.override
               {
                 stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
@@ -58,7 +60,7 @@
               (
                 {
                   inputsFrom = [
-                    crate
+                    jellyfin-tui-rust-overlay
                   ];
                   buildInputs = [
                     pkgs.cargo-nextest
@@ -66,15 +68,18 @@
                     pkgs.rust-bin.nightly.latest.rust-analyzer
                     pkgs.sqlx-cli
                   ];
+                  DATABASE_URL = "sqlite://db.sqlite";
                 }
-                // crate.env
+                // jellyfin-tui-rust-overlay.env
               );
         }
       )
       // (
         let
           jellyfin-tui = final: prev: {
-            jellyfin-tui = final.callPackage ./jellyfin-tui.nix { };
+            jellyfin-tui = final.callPackage ./jellyfin-tui.nix {
+              inherit (crate2nix.tools.${final.system}) generatedCargoNix;
+            };
           };
         in
         {

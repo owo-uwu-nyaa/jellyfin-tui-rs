@@ -1,20 +1,22 @@
 {
+  pkgs,
+  rustc,
+  cargo,
   lib,
-  rustPlatform,
   pkg-config,
-  openssl,
   mpv,
+  sqlite,
   clang,
   libclang,
-  sqlite,
-  use_bindgen ? false,
+  generatedCargoNix,
+  use_bindgen ? true,
+  bundle_sqlite ? false,
 }:
 let
   env =
     {
-      DATABASE_URL = "sqlite://db.sqlite";
     }
-    // (lib.optionalAttrs use_bindgen {
+    // (lib.optionalAttrs (use_bindgen || (!bundle_sqlite)) {
       LIBCLANG_PATH = "${libclang.lib}/lib";
     });
   fileset_src =
@@ -27,46 +29,71 @@ let
     ];
   fileset = lib.fileset.unions [
     (fileset_src ./.)
+    ./migrations
+    ./.sqlx
     (fileset_src ./jellyfin-rs)
     (fileset_src ./libmpv-rs)
     ./libmpv-rs/test-data
     (fileset_src ./libmpv-rs/libmpv-sys)
   ];
-
-  src = lib.fileset.toSource {
-    root = ./.;
-    inherit fileset;
+  c2n_src = generatedCargoNix {
+    name = "jellyfin-tui";
+    src = lib.fileset.toSource {
+      root = ./.;
+      fileset = fileset;
+    };
   };
+  c2n = import c2n_src {
+    nixpkgs = "";
+    inherit pkgs;
+    buildRustCrateForPkgs =
+      crate:
+      pkgs.buildRustCrate.override {
+        rustc = rustc;
+        cargo = cargo;
+        defaultCrateOverrides = pkgs.defaultCrateOverrides // {
+          libmpv-sys =
+            attrs:
+            {
+              nativeBuildInputs = [ pkg-config ];
+              buildInputs = [
+                mpv
+              ] ++ (lib.optionals use_bindgen [ clang ]);
+            }
+            // (lib.attrsets.optionalAttrs use_bindgen {
+              LIBCLANG_PATH = "${libclang.lib}/lib";
+            });
+          rav1e = attrs: {
+            CARGO_ENCODED_RUSTFLAGS = "not set";
+          };
+          libsqlite3-sys =
+            attrs:
+            lib.attrsets.optionalAttrs (!bundle_sqlite) {
+              LIBCLANG_PATH = "${libclang.lib}/lib";
+              nativeBuildInputs = [
+                clang
+              ];
+              buildInputs = [ sqlite ];
+            };
+          sqlx-macros =
+            attrs:
+            lib.attrsets.optionalAttrs (!bundle_sqlite) {
+              buildInputs = [ sqlite ];
+            };
+          jellyfin-tui =
+            attrs:
+            lib.attrsets.optionalAttrs (!bundle_sqlite) {
+              passthru = { inherit env; };
+              buildInputs = [ sqlite ];
+            };
+        };
+      };
+  };
+  features =
+    (lib.optionals use_bindgen [ "use-bindgen" ])
+    ++ (lib.optionals bundle_sqlite [ "sqlite-bundled" ])
+    ++ (lib.optionals (!bundle_sqlite) [ "sqlite-unbundled" ]);
 in
-rustPlatform.buildRustPackage (
-  {
-    inherit src;
-    pname = "jellyfin-tui";
-    version = "0.1.0";
-    cargoLock.lockFile = ./Cargo.lock;
-    cargoTestFlags = [
-      # run in wokspace
-      "--workspace"
-      # skip tests failing in sandbox
-      "--"
-      "--skip"
-      "tests::events"
-      "--skip"
-      "tests::node_map"
-      "--skip"
-      "tests::properties"
-    ];
-    nativeBuildInputs = [
-      pkg-config
-    ] ++ (lib.optionals use_bindgen [ clang ]);
-    buildInputs = [
-      openssl
-      mpv
-      sqlite
-    ];
-    buildFeatures = (lib.optionals use_bindgen [ "use-bindgen" ]);
-    passthru = { inherit env; };
-    SQLX_OFFLINE = "true";
-  }
-  // env
-)
+c2n.workspaceMembers.jellyfin-tui.build.override {
+  inherit features;
+}

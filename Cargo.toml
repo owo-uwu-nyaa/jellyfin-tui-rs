@@ -28,7 +28,7 @@ libmpv = { path = "libmpv-rs", default-features = false }
 libmpv-sys = { path = "libmpv-rs/libmpv-sys" }
 parking_lot = "0.12.3"
 tracing-core = { version = "0.1.33", default-features = false }
-sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite-unbundled"] }
+sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio"] }
 log = "0.4.26"
 tokio-util = "0.7.13"
 
@@ -36,4 +36,7 @@ tokio-util = "0.7.13"
 members = ["jellyfin-rs", "libmpv-rs", "libmpv-rs/libmpv-sys"]
 
 [features]
+default = ["sqlite-bundled"]
 use-bindgen = ["libmpv-sys/use-bindgen"]
+sqlite-bundled = ["sqlx/sqlite"]
+sqlite-unbundled = ["sqlx/sqlite-unbundled"]
