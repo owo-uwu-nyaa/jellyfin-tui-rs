@@ -107,8 +107,8 @@ pub enum ItemType {
     #[serde(rename_all = "PascalCase")]
     Episode {
         container: String,
-        season_id: String,
-        season_name: String,
+        season_id: Option<String>,
+        season_name: Option<String>,
         series_id: String,
         series_name: String,
     },

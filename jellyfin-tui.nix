@@ -6,6 +6,7 @@
   pkg-config,
   mpv,
   sqlite,
+  openssl,
   clang,
   libclang,
   generatedCargoNix,
@@ -19,6 +20,7 @@ let
     // (lib.optionalAttrs (use_bindgen || (!bundle_sqlite)) {
       LIBCLANG_PATH = "${libclang.lib}/lib";
     });
+  shellDeps = [pkg-config mpv openssl];
   fileset_src =
     base:
     lib.fileset.unions [
@@ -83,7 +85,7 @@ let
           jellyfin-tui =
             attrs:
             lib.attrsets.optionalAttrs (!bundle_sqlite) {
-              passthru = { inherit env; };
+              passthru = { inherit env shellDeps; };
               buildInputs = [ sqlite ];
             };
         };

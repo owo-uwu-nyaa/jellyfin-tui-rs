@@ -67,7 +67,7 @@
                     pkgs.cargo-audit
                     pkgs.rust-bin.nightly.latest.rust-analyzer
                     pkgs.sqlx-cli
-                  ];
+                  ] ++ jellyfin-tui-rust-overlay.shellDeps;
                   DATABASE_URL = "sqlite://db.sqlite";
                 }
                 // jellyfin-tui-rust-overlay.env

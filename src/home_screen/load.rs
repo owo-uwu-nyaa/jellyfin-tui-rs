@@ -35,7 +35,8 @@ pub async fn load_data(
             include_hidden: Some(false),
             ..Default::default()
         })
-        .await?;
+        .await
+        .context("fetching user views")?;
     trace!("user_views: {user_views:#?}");
     let resume = client
         .get_user_items_resume(&GetResumeQuery {
@@ -50,7 +51,8 @@ pub async fn load_data(
             exclude_active_sessions: Some(false),
             ..Default::default()
         })
-        .await?;
+        .await
+        .context("fetching resumes")?;
     trace!("resume: {resume:#?}");
     let next_up = client
         .get_shows_next_up(&GetNextUpQuery {
@@ -66,7 +68,8 @@ pub async fn load_data(
             enable_rewatching: Some(false),
             ..Default::default()
         })
-        .await?;
+        .await
+        .context("fetching next up")?;
     trace!("next up: {next_up:#?}");
     let latest: HashMap<_, _> = stream::iter(user_views.items.iter())
         .filter_map(async |view| {
@@ -84,8 +87,12 @@ pub async fn load_data(
                         ..Default::default()
                     })
                     .await
+                    .with_context(|| format!("fetching latest media from {}", view.name))
                 {
-                    Ok(items) => Some(Ok((view.id.clone(), items))),
+                    Ok(items) => match items.deserialize().await {
+                        Ok(items) => Some(Ok((view.id.clone(), items))),
+                        Err(e) => Some(Err(e.into())),
+                    },
                     Err(e) => Some(Err(e)),
                 }
             } else {
@@ -93,7 +100,8 @@ pub async fn load_data(
             }
         })
         .try_collect()
-        .await?;
+        .await
+        .context("fetching latest media")?;
     trace!("recent_grouped: {latest:#?}");
     debug!("collected main screen information");
     Ok(HomeScreenData {
@@ -104,6 +112,7 @@ pub async fn load_data(
     })
 }
 
+#[instrument(skip_all)]
 pub async fn load_home_screen(cx: &mut TuiContext) -> Result<NextScreen> {
     let msg = Paragraph::new("Loading home screen")
         .centered()
@@ -115,7 +124,7 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<NextScreen> {
     loop {
         tokio::select! {
             data = &mut load => {
-                break Ok(NextScreen::HomeScreen(data?))
+                break Ok(NextScreen::HomeScreen(data.context("loading home screen data")?))
             }
             term = cx.events.next() => {
                 match term {

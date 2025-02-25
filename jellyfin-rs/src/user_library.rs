@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tracing::instrument;
 
-use crate::{items::MediaItem, sha::Sha256, Authed, JellyfinClient};
+use crate::{items::MediaItem, sha::Sha256, Authed, JellyfinClient, JsonResponse};
 
 use super::err::Result;
 
@@ -26,12 +26,12 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
     pub async fn get_user_library_latest_media(
         &self,
         query: &GetLatestQuery<'_>,
-    ) -> Result<Vec<MediaItem>> {
+    ) -> Result<JsonResponse<Vec<MediaItem>>> {
         let req = self
             .get(format!("{}Items/Latest", self.url))
             .query(query)
             .send()
             .await?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }

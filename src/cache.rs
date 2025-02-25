@@ -7,7 +7,9 @@ use color_eyre::{
     eyre::{Context, OptionExt},
     Result,
 };
-use tracing::info;
+use tracing::{info, instrument};
+
+
 
 async fn open_db() -> Result<SqlitePool> {
     let mut db_path = dirs::cache_dir().ok_or_eyre("unable to detect cache dir")?;
@@ -39,6 +41,7 @@ async fn open_db() -> Result<SqlitePool> {
 
 
 
+#[instrument(skip_all)]
 pub async fn initialize_cache() -> Result<SqlitePool> {
     let db = open_db().await?;
     sqlx::migrate!().run(&db).await?;

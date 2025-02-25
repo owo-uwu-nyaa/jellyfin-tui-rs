@@ -29,6 +29,7 @@ use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+#[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = EventStream::new();
@@ -58,6 +59,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
 }
 
 #[tokio::main(flavor = "current_thread")]
+#[instrument(skip_all)]
 async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<()>) -> Result<()> {
     let cache = cache::initialize_cache().await?;
     let res = tokio::select! {
