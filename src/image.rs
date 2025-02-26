@@ -380,7 +380,7 @@ pub struct JellyfinImage {
 impl Default for JellyfinImage {
     fn default() -> Self {
         Self {
-            resize: Resize::Scale(FilterType::CatmullRom.into()),
+            resize: Resize::Scale(FilterType::Triangle.into()),
         }
     }
 }
