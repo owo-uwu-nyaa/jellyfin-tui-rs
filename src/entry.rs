@@ -1,4 +1,3 @@
-
 use ratatui::{
     layout::Rect,
     widgets::{Block, BorderType, Widget},
@@ -6,7 +5,10 @@ use ratatui::{
 use ratatui_image::{picker::Picker, FontSize};
 use tracing::instrument;
 
-use crate::{image::{ImagesAvailable, JellyfinImage, JellyfinImageState}, NextScreen, Result};
+use crate::{
+    image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
+    NextScreen, Result,
+};
 
 pub struct Entry {
     image: Option<JellyfinImageState>,

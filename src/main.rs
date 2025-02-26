@@ -1,5 +1,5 @@
-mod entry;
 mod cache;
+mod entry;
 mod home_screen;
 mod image;
 mod login;
@@ -82,10 +82,10 @@ async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<(
 }
 
 #[allow(unused)]
-fn debug(){
+fn debug() {
     info!("pid is {}", std::process::id());
     #[cfg(target_os = "linux")]
-    unsafe{
+    unsafe {
         libc::prctl(libc::PR_SET_PTRACER, libc::PR_SET_PTRACER_ANY);
     }
 }

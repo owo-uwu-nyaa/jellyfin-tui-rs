@@ -9,8 +9,6 @@ use color_eyre::{
 };
 use tracing::{info, instrument};
 
-
-
 async fn open_db() -> Result<SqlitePool> {
     let mut db_path = dirs::cache_dir().ok_or_eyre("unable to detect cache dir")?;
     db_path.push("jellyfin-tui.sqlite");
@@ -38,8 +36,6 @@ async fn open_db() -> Result<SqlitePool> {
         }
     }
 }
-
-
 
 #[instrument(skip_all)]
 pub async fn initialize_cache() -> Result<SqlitePool> {

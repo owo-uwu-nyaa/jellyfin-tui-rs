@@ -45,7 +45,7 @@ impl EntryScreen {
             let position_in_visible = visible / 2;
             if current > position_in_visible {
                 let offset = min(current - position_in_visible, entries.len() - visible);
-                                current -= offset;
+                current -= offset;
                 entries = &mut entries[offset..];
             }
             entries = &mut entries[..visible];

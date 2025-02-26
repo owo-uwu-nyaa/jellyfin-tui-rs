@@ -43,8 +43,11 @@ fn initializer() {
 }
 
 #[test]
-fn test_file_exists(){
-    assert!(File::open("test-data/speech_12kbps_mb.wav").is_ok(), "Unable to open test file at test-data/speech_12kbps_mb.wav")
+fn test_file_exists() {
+    assert!(
+        File::open("test-data/speech_12kbps_mb.wav").is_ok(),
+        "Unable to open test file at test-data/speech_12kbps_mb.wav"
+    )
 }
 
 #[test]

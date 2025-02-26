@@ -99,7 +99,10 @@ impl<AuthS: AuthStatus, Sha: Sha256> JellyfinClient<AuthS, Sha> {
     ) -> err::Result<JellyfinClient<NoAuth, Sha>> {
         Ok(JellyfinClient {
             url: Url::parse(url.as_ref())?,
-            client: Client::builder().connector_layer(tower::limit::concurrency::ConcurrencyLimitLayer::new(2)).connection_verbose(true).build()?,
+            client: Client::builder()
+                .connector_layer(tower::limit::concurrency::ConcurrencyLimitLayer::new(2))
+                .connection_verbose(true)
+                .build()?,
             auth: NoAuth,
             client_info,
             device_name: device_name.into(),
@@ -174,27 +177,28 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
     }
 }
 
-
-
-pub struct JsonResponse<T:DeserializeOwned>{
+pub struct JsonResponse<T: DeserializeOwned> {
     response: reqwest::Response,
-    deserialize: PhantomData<T>
+    deserialize: PhantomData<T>,
 }
 
 impl<T: DeserializeOwned> JsonResponse<T> {
-    pub async fn deserialize(self)->Result<T>{
+    pub async fn deserialize(self) -> Result<T> {
         Ok(self.response.json().await?)
     }
-    pub async fn deserialize_value(self)->Result<serde_json::Value>{
+    pub async fn deserialize_value(self) -> Result<serde_json::Value> {
         Ok(self.response.json().await?)
     }
-    pub async fn deserialize_as<V:DeserializeOwned>(self)->Result<V>{
+    pub async fn deserialize_as<V: DeserializeOwned>(self) -> Result<V> {
         Ok(self.response.json().await?)
     }
 }
 
-impl<T: DeserializeOwned> From<reqwest::Response> for JsonResponse<T>{
+impl<T: DeserializeOwned> From<reqwest::Response> for JsonResponse<T> {
     fn from(value: reqwest::Response) -> Self {
-        Self { response: value, deserialize: PhantomData }
+        Self {
+            response: value,
+            deserialize: PhantomData,
+        }
     }
 }
