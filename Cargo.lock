@@ -1638,6 +1638,7 @@ dependencies = [
  "futures-util",
  "image",
  "jellyfin",
+ "libc",
  "libmpv",
  "libmpv-sys",
  "log",

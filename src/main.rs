@@ -81,6 +81,15 @@ async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<(
     res
 }
 
+#[allow(unused)]
+fn debug(){
+    info!("pid is {}", std::process::id());
+    #[cfg(target_os = "linux")]
+    unsafe{
+        libc::prctl(libc::PR_SET_PTRACER, libc::PR_SET_PTRACER_ANY);
+    }
+}
+
 fn main() -> Result<()> {
     std::env::set_var("LC_NUMERIC", "C");
     color_eyre::install().expect("installing color eyre format handler");
@@ -105,11 +114,12 @@ fn main() -> Result<()> {
         .with(error_layer)
         .init();
     println!("logging to {}", logfile.display());
+    #[cfg(feature = "attach")]
+    debug();
     let config = init()?;
     let (send_panic, paniced) = oneshot::channel();
     let send_panic = Mutex::new(Some(send_panic));
     ThreadPoolBuilder::new()
-        .num_threads(config.thread_pool_size)
         .panic_handler(move |_| {
             error!("panic in thread pool");
             send_panic
@@ -148,7 +158,6 @@ struct Args {
 #[derive(Debug, Deserialize)]
 struct Config {
     pub login_file: PathBuf,
-    pub thread_pool_size: usize,
     pub hwdec: String,
 }
 
@@ -172,7 +181,6 @@ fn init() -> Result<Config> {
                 .to_str()
                 .ok_or_eyre("non unicode char in config dir")?,
         )?
-        .set_default("thread_pool_size", 1)?
         .set_default("hwdec", "auto-safe")?;
     if let Ok(file) = std::fs::read_to_string(config_file) {
         config = config.add_source(config::File::from_str(&file, config::FileFormat::Toml));
