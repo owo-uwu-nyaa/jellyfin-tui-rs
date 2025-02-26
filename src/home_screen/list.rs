@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Padding, Scrollbar, ScrollbarState, StatefulWidget, Widget},
 };
 use ratatui_image::{picker::Picker, FontSize};
+use tracing::{instrument, trace};
 
 use crate::{
     entry::{entry_height, Entry, ENTRY_WIDTH},
@@ -26,12 +27,14 @@ impl EntryList {
             title,
         }
     }
-    pub fn render(
+    #[instrument(skip_all)]
+    pub fn render_list(
         &mut self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
         availabe: &ImagesAvailable,
         picker: &Picker,
+        active: bool,
     ) -> Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
@@ -42,9 +45,9 @@ impl EntryList {
         let mut entries = self.entries.as_mut_slice();
         let mut current = self.current;
         if visible < entries.len() {
-            let visible_back = visible / 2;
-            if current > visible_back {
-                let offset = current - visible_back;
+            let position_in_visible = visible / 2;
+            if current > position_in_visible {
+                let offset = min(current - position_in_visible, entries.len() - visible);
                 current -= offset;
                 entries = &mut entries[offset..];
             }
@@ -55,12 +58,13 @@ impl EntryList {
             .flex(Flex::Start)
             .split(main);
         for i in 0..areas.len() {
-            let border_type = if i == current {
-                BorderType::Thick
+            let border_type = if active && i == current {
+                BorderType::Double
             } else {
                 BorderType::Rounded
             };
-            entries[i].render(areas[i], buf, availabe, picker, border_type)?
+
+            entries[i].render_entry(areas[i], buf, availabe, picker, border_type)?
         }
         if visible < self.entries.len() {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::HorizontalBottom).render(
@@ -79,15 +83,19 @@ impl EntryList {
         min(max_visible.into(), self.entries.len())
     }
 
+    #[instrument(skip_all)]
     pub fn left(&mut self) {
-        self.current = self.current.saturating_sub(1)
+        self.current = self.current.saturating_sub(1);
+        trace!("current: {}, length: {}", self.current, self.entries.len());
     }
 
+    #[instrument(skip_all)]
     pub fn right(&mut self) {
         let new = self.current + 1;
-        if self.entries.len() < new {
+        if self.entries.len() > new {
             self.current = new;
         }
+        trace!("current: {}, length: {}", self.current, self.entries.len());
     }
 
     pub fn get(mut self) -> NextScreen {

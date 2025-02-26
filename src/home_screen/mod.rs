@@ -148,7 +148,7 @@ fn render(
 ) -> Result<()> {
     let mut res = Result::Ok(());
     term.draw(|frame| {
-        res = screen.render(frame.area(), frame.buffer_mut(), availabe, picker);
+        res = screen.render_screen(frame.area(), frame.buffer_mut(), availabe, picker);
     }).context("rendering home screen")?;
     res
 }

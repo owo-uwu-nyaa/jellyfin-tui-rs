@@ -4,6 +4,7 @@ use ratatui::{
     widgets::{Block, BorderType, Widget},
 };
 use ratatui_image::{picker::Picker, FontSize};
+use tracing::instrument;
 
 use crate::{image::{ImagesAvailable, JellyfinImage, JellyfinImageState}, NextScreen, Result};
 
@@ -30,7 +31,8 @@ pub fn entry_height(font: FontSize) -> u16 {
 }
 
 impl Entry {
-    pub fn render(
+    #[instrument(skip_all)]
+    pub fn render_entry(
         &mut self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
@@ -47,7 +49,7 @@ impl Entry {
         let inner = outer.inner(area);
         outer.render(area, buf);
         if let Some(state) = &mut self.image {
-            JellyfinImage::default().render(inner, buf, state, availabe, picker)?;
+            JellyfinImage::default().render_image(inner, buf, state, availabe, picker)?;
         }
         Ok(())
     }
