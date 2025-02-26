@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use crate::{
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
-    NextScreen, Result,
+    NextScreen,
 };
 
 pub struct Entry {
@@ -41,7 +41,7 @@ impl Entry {
         availabe: &ImagesAvailable,
         picker: &Picker,
         border_type: BorderType,
-    ) -> Result<()> {
+    ) {
         let mut outer = Block::bordered()
             .border_type(border_type)
             .title_top(self.title.as_str());
@@ -51,9 +51,15 @@ impl Entry {
         let inner = outer.inner(area);
         outer.render(area, buf);
         if let Some(state) = &mut self.image {
-            JellyfinImage::default().render_image(inner, buf, state, availabe, picker)?;
+            JellyfinImage::default().render_image(inner, buf, state, availabe, picker);
         }
-        Ok(())
+    }
+
+    #[instrument(skip_all)]
+    pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
+        if let Some(image) = self.image.as_mut() {
+            image.prefetch(availabe);
+        }
     }
 
     pub fn new(

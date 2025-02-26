@@ -8,7 +8,7 @@ use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
 
 use super::list::{entry_list_height, EntryList};
-use crate::{entry::ENTRY_WIDTH, image::ImagesAvailable, NextScreen, Result};
+use crate::{entry::ENTRY_WIDTH, image::ImagesAvailable, NextScreen};
 
 pub struct EntryScreen {
     entries: Vec<EntryList>,
@@ -31,7 +31,7 @@ impl EntryScreen {
         buf: &mut ratatui::prelude::Buffer,
         availabe: &ImagesAvailable,
         picker: &Picker,
-    ) -> Result<()> {
+    ) {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));
@@ -55,7 +55,10 @@ impl EntryScreen {
             .flex(Flex::Start)
             .split(main);
         for i in 0..areas.len() {
-            entries[i].render_list(areas[i], buf, availabe, picker, i == current)?
+            entries[i].render_list(areas[i], buf, availabe, picker, i == current)
+        }
+        if visible < entries.len() {
+            entries[visible].prefetch(availabe, areas[0]);
         }
         if visible < self.entries.len() {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight).render(
@@ -66,7 +69,6 @@ impl EntryScreen {
                     .viewport_content_length(ENTRY_WIDTH as usize + 1),
             );
         }
-        Ok(())
     }
 
     #[instrument(skip_all)]

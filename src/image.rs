@@ -11,7 +11,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use color_eyre::eyre::{eyre, Context};
+use color_eyre::eyre::Context;
 use image::{DynamicImage, ImageFormat, ImageReader};
 use jellyfin::{
     image::{GetImage, GetImageQuery},
@@ -313,6 +313,40 @@ impl JellyfinImageState {
             }),
         }
     }
+    #[instrument(skip_all)]
+    pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
+        if self.inner.ready.load(Ordering::SeqCst) {
+            let mut value_ref = self.inner.value.lock();
+            let value = std::mem::replace(value_ref.deref_mut(), ImageStateInnerState::Invalid);
+            match value {
+                ImageStateInnerState::Invalid => panic!("image in invalid state"),
+                ImageStateInnerState::Lazy {
+                    get_image,
+                    db,
+                    tag,
+                    item_id,
+                    image_type,
+                    cancel,
+                } => {
+                    self.inner.ready.store(false, Ordering::SeqCst);
+                    tokio::spawn(fetch_image(
+                        get_image,
+                        db,
+                        tag,
+                        item_id,
+                        image_type,
+                        cancel,
+                        Arc::downgrade(&self.inner),
+                        availabe.inner.clone(),
+                    ));
+                }
+                val @ ImageStateInnerState::Image(_)
+                | val @ ImageStateInnerState::ImageReady(_) => {
+                    *value_ref = val;
+                }
+            }
+        }
+    }
 }
 
 #[instrument(skip_all)]
@@ -389,12 +423,12 @@ impl JellyfinImage {
         state: &mut JellyfinImageState,
         availabe: &ImagesAvailable,
         picker: &Picker,
-    ) -> Result<()> {
+    ) {
         if state.inner.ready.load(Ordering::SeqCst) {
             let mut value_ref = state.inner.value.lock();
             let value = std::mem::replace(value_ref.deref_mut(), ImageStateInnerState::Invalid);
             match value {
-                ImageStateInnerState::Invalid => Err(eyre!("image in invalid state")),
+                ImageStateInnerState::Invalid => panic!("image in invalid state"),
                 ImageStateInnerState::ImageReady(dynamic_image) => {
                     trace!("image ready");
                     let image = picker.new_resize_protocol(dynamic_image);
@@ -406,7 +440,6 @@ impl JellyfinImage {
                         state,
                         availabe,
                     );
-                    Ok(())
                 }
                 ImageStateInnerState::Image(image) => {
                     self.render_image_inner(
@@ -417,7 +450,6 @@ impl JellyfinImage {
                         state,
                         availabe,
                     );
-                    Ok(())
                 }
                 ImageStateInnerState::Lazy {
                     get_image,
@@ -438,11 +470,8 @@ impl JellyfinImage {
                         Arc::downgrade(&state.inner),
                         availabe.inner.clone(),
                     ));
-                    Ok(())
                 }
             }
-        } else {
-            Ok(())
         }
     }
 }

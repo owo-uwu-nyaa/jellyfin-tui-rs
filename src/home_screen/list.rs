@@ -10,7 +10,7 @@ use tracing::{instrument, trace};
 use crate::{
     entry::{entry_height, Entry, ENTRY_WIDTH},
     image::ImagesAvailable,
-    NextScreen, Result,
+    NextScreen,
 };
 
 pub struct EntryList {
@@ -27,6 +27,15 @@ impl EntryList {
             title,
         }
     }
+
+    #[instrument(skip_all)]
+    pub fn prefetch(&mut self, availabe: &ImagesAvailable, area: Rect) {
+        let visible = self.visible(area.width);
+        for entry in self.entries.iter_mut().take(visible) {
+            entry.prefetch(availabe);
+        }
+    }
+
     #[instrument(skip_all)]
     pub fn render_list(
         &mut self,
@@ -35,7 +44,7 @@ impl EntryList {
         availabe: &ImagesAvailable,
         picker: &Picker,
         active: bool,
-    ) -> Result<()> {
+    ) {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));
@@ -51,21 +60,23 @@ impl EntryList {
                 current -= offset;
                 entries = &mut entries[offset..];
             }
-            entries = &mut entries[..visible];
         }
         let areas = Layout::horizontal(repeat_n(Constraint::Length(ENTRY_WIDTH), visible))
             .spacing(1)
             .flex(Flex::Start)
             .split(main);
-        for i in 0..areas.len() {
+        for i in 0..visible {
             let border_type = if active && i == current {
                 BorderType::Double
             } else {
                 BorderType::Rounded
             };
-
-            entries[i].render_entry(areas[i], buf, availabe, picker, border_type)?
+            entries[i].render_entry(areas[i], buf, availabe, picker, border_type)
         }
+        if visible < entries.len() {
+            entries[visible].prefetch(availabe);
+        }
+
         if visible < self.entries.len() {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::HorizontalBottom).render(
                 area,
@@ -75,7 +86,6 @@ impl EntryList {
                     .viewport_content_length(ENTRY_WIDTH as usize + 1),
             );
         }
-        Ok(())
     }
 
     fn visible(&self, width: u16) -> usize {

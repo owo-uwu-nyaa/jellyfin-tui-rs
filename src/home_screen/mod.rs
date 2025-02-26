@@ -126,21 +126,6 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntrySc
 }
 
 #[instrument(skip_all)]
-fn render(
-    term: &mut Terminal<impl Backend>,
-    screen: &mut EntryScreen,
-    availabe: &ImagesAvailable,
-    picker: &Picker,
-) -> Result<()> {
-    let mut res = Result::Ok(());
-    term.draw(|frame| {
-        res = screen.render_screen(frame.area(), frame.buffer_mut(), availabe, picker);
-    })
-    .context("rendering home screen")?;
-    res
-}
-
-#[instrument(skip_all)]
 pub async fn display_home_screen(
     context: &mut TuiContext,
     data: HomeScreenData,
@@ -148,12 +133,17 @@ pub async fn display_home_screen(
     let images_available = ImagesAvailable::new();
     let mut screen = create_home_screen(data, context);
     loop {
-        render(
-            &mut context.term,
-            &mut screen,
-            &images_available,
-            &context.image_picker,
-        )?;
+        context
+            .term
+            .draw(|frame| {
+                screen.render_screen(
+                    frame.area(),
+                    frame.buffer_mut(),
+                    &images_available,
+                    &context.image_picker,
+                );
+            })
+            .context("rendering home screen")?;
         let code = tokio::select! {
             _ = images_available.wait_available() => {continue;
             }
