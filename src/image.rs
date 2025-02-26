@@ -13,7 +13,6 @@ use std::{
 use bytes::Bytes;
 use color_eyre::{
     eyre::{eyre, Context},
-    Report,
 };
 use image::{DynamicImage, ImageFormat, ImageReader};
 use jellyfin::{
@@ -123,6 +122,14 @@ impl Future for ImagesAvailableFuture<'_> {
 }
 
 enum ImageStateInnerState {
+    Lazy {
+        get_image: GetImage,
+        db: SqlitePool,
+        tag: String,
+        item_id: String,
+        image_type: ImageType,
+        cancel: CancellationToken,
+    },
     Invalid,
     ImageReady(DynamicImage),
     Image(StatefulProtocol),
@@ -257,7 +264,7 @@ async fn fetch_image(
 }
 
 impl JellyfinImageState {
-    pub fn new(
+    pub fn new_eager(
         client: &JellyfinClient<impl AuthStatus, impl Sha256>,
         db: SqlitePool,
         wake: &ImagesAvailable,
@@ -283,6 +290,30 @@ impl JellyfinImageState {
             wake.inner.clone(),
         ));
         Self { inner }
+    }
+    pub fn new(
+        client: &JellyfinClient<impl AuthStatus, impl Sha256>,
+        db: SqlitePool,
+        tag: String,
+        item_id: String,
+        image_type: ImageType,
+    ) -> Self {
+        let get_image = client.prepare_get_image(&item_id, image_type);
+        let cancel = CancellationToken::new();
+        Self {
+            inner: Arc::new(ImageStateInner {
+                _cancel_fetch: cancel.clone().drop_guard(),
+                ready: true.into(),
+                value: parking_lot::Mutex::new(ImageStateInnerState::Lazy {
+                    get_image,
+                    db,
+                    tag,
+                    item_id,
+                    image_type,
+                    cancel,
+                }),
+            }),
+        }
     }
 }
 
@@ -388,6 +419,27 @@ impl JellyfinImage {
                         state,
                         availabe,
                     );
+                    Ok(())
+                }
+                ImageStateInnerState::Lazy {
+                    get_image,
+                    db,
+                    tag,
+                    item_id,
+                    image_type,
+                    cancel,
+                } => {
+                    state.inner.ready.store(false, Ordering::SeqCst);
+                    tokio::spawn(fetch_image(
+                        get_image,
+                        db,
+                        tag,
+                        item_id,
+                        image_type,
+                        cancel,
+                        Arc::downgrade(&state.inner),
+                        availabe.inner.clone(),
+                    ));
                     Ok(())
                 }
             }

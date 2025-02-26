@@ -1,4 +1,3 @@
-
 use color_eyre::eyre::Context;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
@@ -23,11 +22,7 @@ mod list;
 pub mod load;
 mod screen;
 
-fn create_from_media_item(
-    item: MediaItem,
-    context: &TuiContext,
-    images_availabe: &ImagesAvailable,
-) -> Entry {
+fn create_from_media_item(item: MediaItem, context: &TuiContext) -> Entry {
     let (title, subtitle) = match &item.item_type {
         ItemType::Movie { container: _ } => (item.name.clone(), None),
         ItemType::Episode {
@@ -52,7 +47,6 @@ fn create_from_media_item(
             JellyfinImageState::new(
                 &context.jellyfin,
                 context.cache.clone(),
-                images_availabe,
                 tag.clone(),
                 item.id.clone(),
                 *image_type,
@@ -61,11 +55,7 @@ fn create_from_media_item(
     Entry::new(image, title, subtitle, NextScreen::PlayItem(item))
 }
 
-fn create_from_user_view(
-    item: &UserView,
-    context: &TuiContext,
-    images_availabe: &ImagesAvailable,
-) -> Entry {
+fn create_from_user_view(item: &UserView, context: &TuiContext) -> Entry {
     let title = item.name.clone();
     let image = item
         .image_tags
@@ -76,7 +66,6 @@ fn create_from_user_view(
             JellyfinImageState::new(
                 &context.jellyfin,
                 context.cache.clone(),
-                images_availabe,
                 tag.clone(),
                 item.id.clone(),
                 *image_type,
@@ -97,7 +86,6 @@ fn create_from_media_item_vec(
     items: Vec<MediaItem>,
     title: &str,
     context: &TuiContext,
-    images_availabe: &ImagesAvailable,
 ) -> Option<EntryList> {
     if items.is_empty() {
         None
@@ -105,7 +93,7 @@ fn create_from_media_item_vec(
         EntryList::new(
             items
                 .into_iter()
-                .map(|item| create_from_media_item(item, context, images_availabe))
+                .map(|item| create_from_media_item(item, context))
                 .collect(),
             title.to_string(),
         )
@@ -113,16 +101,14 @@ fn create_from_media_item_vec(
     }
 }
 
-fn create_home_screen(mut data: HomeScreenData, context: &TuiContext,
-    images_availabe: &ImagesAvailable,
-) -> EntryScreen {
+fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntryScreen {
     let entries = [
-        create_from_media_item_vec(data.resume, "Continue Watching", context, images_availabe),
-        create_from_media_item_vec(data.next_up, "Next Up", context,images_availabe),
+        create_from_media_item_vec(data.resume, "Continue Watching", context),
+        create_from_media_item_vec(data.next_up, "Next Up", context),
         EntryList::new(
             data.views
                 .iter()
-                .map(|item| create_from_user_view(item, context,images_availabe))
+                .map(|item| create_from_user_view(item, context))
                 .collect(),
             "Library".to_string(),
         )
@@ -132,7 +118,7 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext,
     .chain(data.views.iter().map(|view| {
         data.latest
             .remove(view.id.as_str())
-            .and_then(|items| create_from_media_item_vec(items, view.name.as_str(), context, images_availabe))
+            .and_then(|items| create_from_media_item_vec(items, view.name.as_str(), context))
     }))
     .flatten()
     .collect();
@@ -149,7 +135,8 @@ fn render(
     let mut res = Result::Ok(());
     term.draw(|frame| {
         res = screen.render_screen(frame.area(), frame.buffer_mut(), availabe, picker);
-    }).context("rendering home screen")?;
+    })
+    .context("rendering home screen")?;
     res
 }
 
@@ -159,7 +146,7 @@ pub async fn display_home_screen(
     data: HomeScreenData,
 ) -> Result<NextScreen> {
     let images_available = ImagesAvailable::new();
-    let mut screen = create_home_screen(data, context, &images_available);
+    let mut screen = create_home_screen(data, context);
     loop {
         render(
             &mut context.term,
