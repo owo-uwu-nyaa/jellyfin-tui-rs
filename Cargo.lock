@@ -1635,6 +1635,7 @@ dependencies = [
  "config",
  "crossterm",
  "dirs",
+ "either",
  "futures-util",
  "image",
  "jellyfin",

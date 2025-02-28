@@ -18,6 +18,7 @@ use home_screen::{
     display_home_screen,
     load::{load_home_screen, HomeScreenData},
 };
+use image::ImageProtocolCache;
 use jellyfin::{items::MediaItem, user_views::UserViewType, Auth, JellyfinClient};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
@@ -41,6 +42,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
             events,
             image_picker: picker,
             cache,
+            image_cache: ImageProtocolCache::new(),
         };
         let mut state = NextScreen::LoadHomeScreen;
         loop {
@@ -201,6 +203,7 @@ struct TuiContext {
     pub events: EventStream,
     pub image_picker: Picker,
     pub cache: SqlitePool,
+    pub image_cache: ImageProtocolCache,
 }
 
 enum NextScreen {

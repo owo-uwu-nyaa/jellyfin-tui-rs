@@ -7,8 +7,6 @@ use jellyfin::{
 };
 use list::EntryList;
 use load::HomeScreenData;
-use ratatui::{prelude::Backend, Terminal};
-use ratatui_image::picker::Picker;
 use screen::EntryScreen;
 use tracing::{debug, instrument};
 
@@ -50,6 +48,7 @@ fn create_from_media_item(item: MediaItem, context: &TuiContext) -> Entry {
                 tag.clone(),
                 item.id.clone(),
                 *image_type,
+                context.image_cache.clone(),
             )
         });
     Entry::new(image, title, subtitle, NextScreen::PlayItem(item))
@@ -69,6 +68,7 @@ fn create_from_user_view(item: &UserView, context: &TuiContext) -> Entry {
                 tag.clone(),
                 item.id.clone(),
                 *image_type,
+                context.image_cache.clone(),
             )
         });
     Entry::new(

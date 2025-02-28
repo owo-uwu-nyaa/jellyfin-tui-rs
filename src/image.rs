@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     future::Future,
     io::Cursor,
     ops::DerefMut,
@@ -12,6 +13,7 @@ use std::{
 
 use bytes::Bytes;
 use color_eyre::eyre::Context;
+use either::Either;
 use image::{DynamicImage, ImageFormat, ImageReader};
 use jellyfin::{
     image::{GetImage, GetImageQuery},
@@ -119,6 +121,40 @@ impl Future for ImagesAvailableFuture<'_> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct ImageProtocolKey {
+    tag: String,
+    item_id: String,
+    image_type: ImageType,
+}
+
+#[derive(Clone)]
+pub struct ImageProtocolCache {
+    protocols:
+        Arc<parking_lot::Mutex<HashMap<ImageProtocolKey, Either<StatefulProtocol, DynamicImage>>>>,
+}
+
+impl ImageProtocolCache {
+    #[instrument(level = "trace", skip_all)]
+    fn store_protocol(&self, protocol: StatefulProtocol, key: ImageProtocolKey) {
+        trace!("storing image protocol in cache");
+        self.protocols.lock().insert(key, Either::Left(protocol));
+    }
+    #[instrument(level = "trace", skip_all)]
+    fn store_image(&self, image: DynamicImage, key: ImageProtocolKey) {
+        let mut map = self.protocols.lock();
+        if let std::collections::hash_map::Entry::Vacant(entry) = map.entry(key) {
+            trace!("storing image in cache");
+            entry.insert(Either::Right(image));
+        }
+    }
+    pub fn new() -> Self {
+        Self {
+            protocols: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+        }
+    }
+}
+
 enum ImageStateInnerState {
     Lazy {
         get_image: GetImage,
@@ -129,14 +165,31 @@ enum ImageStateInnerState {
         cancel: CancellationToken,
     },
     Invalid,
-    ImageReady(DynamicImage),
-    Image(StatefulProtocol),
+    ImageReady(DynamicImage, ImageProtocolKey),
+    Image(StatefulProtocol, ImageProtocolKey),
+}
+
+impl Default for ImageStateInnerState {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 struct ImageStateInner {
-    _cancel_fetch: DropGuard,
+    _cancel_fetch: Option<DropGuard>,
     ready: AtomicBool,
+    cache: ImageProtocolCache,
     value: parking_lot::Mutex<ImageStateInnerState>,
+}
+
+impl Drop for ImageStateInner {
+    fn drop(&mut self) {
+        match std::mem::take(self.value.get_mut()) {
+            ImageStateInnerState::ImageReady(image, key) => self.cache.store_image(image, key),
+            ImageStateInnerState::Image(protocol, key) => self.cache.store_protocol(protocol, key),
+            _ => {}
+        }
+    }
 }
 
 pub struct JellyfinImageState {
@@ -144,26 +197,32 @@ pub struct JellyfinImageState {
 }
 
 #[instrument(skip_all)]
-fn parse_image(val: Bytes, out: &Weak<ImageStateInner>, wake: &ImagesAvailableInner) {
+fn parse_image(
+    val: Bytes,
+    out: &Weak<ImageStateInner>,
+    wake: &ImagesAvailableInner,
+    key: ImageProtocolKey,
+    cache: ImageProtocolCache,
+) {
     trace!("parsing image");
-    let out = if let Some(out) = out.upgrade() {
-        out
-    } else {
-        trace!("parsing cancelled");
-        return;
-    };
     let mut reader = ImageReader::new(Cursor::new(val));
     reader.set_format(ImageFormat::WebP);
-    *out.value.lock() = match reader.decode().context("decoding image") {
+    match reader.decode().context("decoding image") {
         Ok(image) => {
             trace!("image parsed");
-            out.ready.store(true, Ordering::SeqCst);
-            wake.wake();
-            ImageStateInnerState::ImageReady(image)
+            if let Some(out) = out.upgrade() {
+                out.ready.store(true, Ordering::SeqCst);
+                wake.wake();
+                *out.value.lock() = ImageStateInnerState::ImageReady(image, key);
+            } else {
+                cache.store_image(image, key);
+            }
         }
         Err(e) => {
             warn!("parsing error: {e:?}");
-            ImageStateInnerState::Invalid
+            if let Some(out) = out.upgrade() {
+                *out.value.lock() = ImageStateInnerState::Invalid;
+            };
         }
     };
 }
@@ -245,10 +304,23 @@ async fn fetch_image(
     cancel: CancellationToken,
     out: Weak<ImageStateInner>,
     wake: Arc<ImagesAvailableInner>,
+    cache: ImageProtocolCache,
 ) {
     match do_fetch_image(get_image, &db, &tag, &item_id, image_type.name(), &cancel).await {
         Ok(Some(image)) => {
-            rayon::spawn(move || parse_image(image, &out, &wake));
+            rayon::spawn(move || {
+                parse_image(
+                    image,
+                    &out,
+                    &wake,
+                    ImageProtocolKey {
+                        tag,
+                        item_id,
+                        image_type,
+                    },
+                    cache,
+                )
+            });
         }
         Ok(None) => {}
         Err(e) => {
@@ -262,62 +334,64 @@ async fn fetch_image(
 }
 
 impl JellyfinImageState {
-    pub fn new_eager(
-        client: &JellyfinClient<impl AuthStatus, impl Sha256>,
-        db: SqlitePool,
-        wake: &ImagesAvailable,
-        tag: String,
-        item_id: String,
-        image_type: ImageType,
-    ) -> Self {
-        let get_image = client.prepare_get_image(&item_id, image_type);
-        let cancel = CancellationToken::new();
-        let inner = Arc::new(ImageStateInner {
-            _cancel_fetch: cancel.clone().drop_guard(),
-            value: parking_lot::Mutex::new(ImageStateInnerState::Invalid),
-            ready: false.into(),
-        });
-        tokio::spawn(fetch_image(
-            get_image,
-            db,
-            tag,
-            item_id,
-            image_type,
-            cancel,
-            Arc::downgrade(&inner),
-            wake.inner.clone(),
-        ));
-        Self { inner }
-    }
     pub fn new(
         client: &JellyfinClient<impl AuthStatus, impl Sha256>,
         db: SqlitePool,
         tag: String,
         item_id: String,
         image_type: ImageType,
+        cache: ImageProtocolCache,
     ) -> Self {
-        let get_image = client.prepare_get_image(&item_id, image_type);
-        let cancel = CancellationToken::new();
-        Self {
-            inner: Arc::new(ImageStateInner {
-                _cancel_fetch: cancel.clone().drop_guard(),
-                ready: true.into(),
-                value: parking_lot::Mutex::new(ImageStateInnerState::Lazy {
-                    get_image,
-                    db,
-                    tag,
-                    item_id,
-                    image_type,
-                    cancel,
+        let key = ImageProtocolKey {
+            tag,
+            item_id,
+            image_type,
+        };
+        let cached = cache.protocols.lock().remove(&key);
+        if let Some(cached) = cached {
+            trace!("got image from cache");
+            let state = match cached {
+                Either::Left(protocol) => ImageStateInnerState::Image(protocol, key),
+                Either::Right(image) => ImageStateInnerState::ImageReady(image, key),
+            };
+            Self {
+                inner: Arc::new(ImageStateInner {
+                    _cancel_fetch: None,
+                    ready: true.into(),
+                    cache,
+                    value: parking_lot::Mutex::new(state),
                 }),
-            }),
+            }
+        } else {
+            let ImageProtocolKey {
+                tag,
+                item_id,
+                image_type,
+            } = key;
+            let get_image = client.prepare_get_image(&item_id, image_type);
+            let cancel = CancellationToken::new();
+            Self {
+                inner: Arc::new(ImageStateInner {
+                    _cancel_fetch: cancel.clone().drop_guard().into(),
+                    ready: true.into(),
+                    value: parking_lot::Mutex::new(ImageStateInnerState::Lazy {
+                        get_image,
+                        db,
+                        tag,
+                        item_id,
+                        image_type,
+                        cancel,
+                    }),
+                    cache,
+                }),
+            }
         }
     }
     #[instrument(skip_all)]
     pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
         if self.inner.ready.load(Ordering::SeqCst) {
             let mut value_ref = self.inner.value.lock();
-            let value = std::mem::replace(value_ref.deref_mut(), ImageStateInnerState::Invalid);
+            let value = std::mem::take(value_ref.deref_mut());
             match value {
                 ImageStateInnerState::Invalid => panic!("image in invalid state"),
                 ImageStateInnerState::Lazy {
@@ -338,10 +412,11 @@ impl JellyfinImageState {
                         cancel,
                         Arc::downgrade(&self.inner),
                         availabe.inner.clone(),
+                        self.inner.cache.clone(),
                     ));
                 }
-                val @ ImageStateInnerState::Image(_)
-                | val @ ImageStateInnerState::ImageReady(_) => {
+                val @ ImageStateInnerState::Image(_, _)
+                | val @ ImageStateInnerState::ImageReady(_, _) => {
                     *value_ref = val;
                 }
             }
@@ -359,7 +434,7 @@ fn resize_image(
     trace!("resizing image");
     if let Some(out) = out.upgrade() {
         let mut value = out.value.lock();
-        if let ImageStateInnerState::Image(protocol) = value.deref_mut() {
+        if let ImageStateInnerState::Image(protocol, _) = value.deref_mut() {
             protocol.resize_encode(&resize, protocol.background_color(), area);
             trace!("resized");
         } else {
@@ -392,18 +467,20 @@ impl JellyfinImage {
     }
 
     #[instrument(skip_all)]
+    #[allow(clippy::too_many_arguments)]
     fn render_image_inner(
         self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
         mut image: StatefulProtocol,
+        key: ImageProtocolKey,
         state_mut: &mut ImageStateInnerState,
         state: &JellyfinImageState,
         availabe: &ImagesAvailable,
     ) {
         if let Some(area) = image.needs_resize(&self.resize, area) {
             trace!("image needs resize");
-            *state_mut = ImageStateInnerState::Image(image);
+            *state_mut = ImageStateInnerState::Image(image, key);
             state.inner.ready.store(false, Ordering::SeqCst);
             let resize = self.resize;
             let out = Arc::downgrade(&state.inner);
@@ -411,7 +488,7 @@ impl JellyfinImage {
             rayon::spawn(move || resize_image(resize, area, &out, &wake));
         } else {
             image.render(area, buf);
-            *state_mut = ImageStateInnerState::Image(image);
+            *state_mut = ImageStateInnerState::Image(image, key);
         }
     }
 
@@ -426,26 +503,28 @@ impl JellyfinImage {
     ) {
         if state.inner.ready.load(Ordering::SeqCst) {
             let mut value_ref = state.inner.value.lock();
-            let value = std::mem::replace(value_ref.deref_mut(), ImageStateInnerState::Invalid);
+            let value = std::mem::take(value_ref.deref_mut());
             match value {
                 ImageStateInnerState::Invalid => panic!("image in invalid state"),
-                ImageStateInnerState::ImageReady(dynamic_image) => {
+                ImageStateInnerState::ImageReady(dynamic_image, key) => {
                     trace!("image ready");
                     let image = picker.new_resize_protocol(dynamic_image);
                     self.render_image_inner(
                         area,
                         buf,
                         image,
+                        key,
                         value_ref.deref_mut(),
                         state,
                         availabe,
                     );
                 }
-                ImageStateInnerState::Image(image) => {
+                ImageStateInnerState::Image(image, key) => {
                     self.render_image_inner(
                         area,
                         buf,
                         image,
+                        key,
                         value_ref.deref_mut(),
                         state,
                         availabe,
@@ -469,6 +548,7 @@ impl JellyfinImage {
                         cancel,
                         Arc::downgrade(&state.inner),
                         availabe.inner.clone(),
+                        state.inner.cache.clone(),
                     ));
                 }
             }
