@@ -36,7 +36,10 @@ pub async fn load_data(
             ..Default::default()
         })
         .await
-        .context("fetching user views")?;
+        .context("fetching user views")?
+        .deserialize()
+        .await
+        .context("deserializing user views")?;
     trace!("user_views: {user_views:#?}");
     let resume = client
         .get_user_items_resume(&GetResumeQuery {
@@ -52,7 +55,10 @@ pub async fn load_data(
             ..Default::default()
         })
         .await
-        .context("fetching resumes")?;
+        .context("fetching resumes")?
+        .deserialize()
+        .await
+        .context("deserializing resumes")?;
     trace!("resume: {resume:#?}");
     let next_up = client
         .get_shows_next_up(&GetNextUpQuery {
@@ -69,7 +75,7 @@ pub async fn load_data(
             ..Default::default()
         })
         .await
-        .context("fetching next up")?;
+        .context("fetching next up")?.deserialize().await.context("deserializing next up")?;
     trace!("next up: {next_up:#?}");
     let latest: HashMap<_, _> = stream::iter(user_views.items.iter())
         .filter_map(async |view| {

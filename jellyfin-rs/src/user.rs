@@ -7,6 +7,7 @@ use crate::sha::Sha256;
 use crate::AuthStatus;
 use crate::Authed;
 use crate::JellyfinClient;
+use crate::JsonResponse;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -642,7 +643,11 @@ struct AuthUserStdQuery {
 
 impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
     /// Gets a list of all users that the `UserAuth` has access to, given some filters.
-    pub async fn get_users(&self, is_hidden: bool, is_disabled: bool) -> Result<Vec<User>> {
+    pub async fn get_users(
+        &self,
+        is_hidden: bool,
+        is_disabled: bool,
+    ) -> Result<JsonResponse<Vec<User>>> {
         let req = self
             .get(format!("{}Users", self.url,))
             .query(&GetUsersQuery {
@@ -651,14 +656,14 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
             })
             .send()
             .await?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
-    pub async fn get_user_by_id(&self, id: impl AsRef<str>) -> Result<User> {
+    pub async fn get_user_by_id(&self, id: impl AsRef<str>) -> Result<JsonResponse<User>> {
         let req = self
             .get(format!("{}Users/{}", self.url, id.as_ref()))
             .send()
             .await?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
     pub async fn delete_user(&self, id: impl AsRef<str>) -> Result<()> {
         let _req = self
@@ -723,16 +728,16 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
         let _req = req.error_for_status()?;
         Ok(())
     }
-    pub async fn get_user_by_auth(&self) -> Result<User> {
+    pub async fn get_user_by_auth(&self) -> Result<JsonResponse<User>> {
         let req = self.get(format!("{}Users/Me", self.url)).send().await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
     pub async fn create_user(
         &self,
         username: impl AsRef<str>,
         password: impl AsRef<str>,
-    ) -> Result<User> {
+    ) -> Result<JsonResponse<User>> {
         let req = self
             .post(format!("{}Users/New", self.url))
             .json(&CreateUserReq {
@@ -742,7 +747,7 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }
 
@@ -777,7 +782,7 @@ impl<Auth: AuthStatus, Sha: Sha256> JellyfinClient<Auth, Sha> {
     pub async fn user_forgot_password(
         &self,
         username: impl AsRef<str>,
-    ) -> Result<ForgotPasswordResponse> {
+    ) -> Result<JsonResponse<ForgotPasswordResponse>> {
         let req = self
             .client
             .post(format!("{}Users/ForgotPassword", self.url))
@@ -787,12 +792,12 @@ impl<Auth: AuthStatus, Sha: Sha256> JellyfinClient<Auth, Sha> {
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
     pub async fn user_redeem_forgot_password_pin(
         &self,
         pin: impl AsRef<str>,
-    ) -> Result<RedeemForgotPasswordResponse> {
+    ) -> Result<JsonResponse<RedeemForgotPasswordResponse>> {
         let req = self
             .client
             .post(format!("{}Users/ForgotPassword/Pin", self.url))
@@ -800,16 +805,16 @@ impl<Auth: AuthStatus, Sha: Sha256> JellyfinClient<Auth, Sha> {
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
-    pub async fn get_public_user_list(&self) -> Result<Vec<User>> {
+    pub async fn get_public_user_list(&self) -> Result<JsonResponse<Vec<User>>> {
         let req = self
             .client
             .get(format!("{}Users/Public", self.url))
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }
 

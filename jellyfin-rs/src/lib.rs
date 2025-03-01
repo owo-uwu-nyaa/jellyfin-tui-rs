@@ -1,4 +1,4 @@
-use std::{borrow::Cow, marker::PhantomData};
+use std::{borrow::Cow, future::Future, marker::PhantomData};
 
 pub use err::Result;
 use reqwest::{
@@ -6,7 +6,7 @@ use reqwest::{
     Client, IntoUrl, RequestBuilder,
 };
 use sealed::AuthSealed;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use session::SessionInfo;
 use sha::Sha256;
 use url::Url;
@@ -200,5 +200,40 @@ impl<T: DeserializeOwned> From<reqwest::Response> for JsonResponse<T> {
             response: value,
             deserialize: PhantomData,
         }
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct JellyfinVec<T> {
+    pub items: Vec<T>,
+    pub total_record_count: Option<u32>,
+    pub start_index: u32,
+}
+
+impl<T> JellyfinVec<T> {
+    pub async fn collect<I, F, E>(mut f: F) -> std::result::Result<Vec<T>, E>
+    where
+        F: FnMut(u32) -> I,
+        I: Future<Output = std::result::Result<JellyfinVec<T>, E>>,
+    {
+        let initial = f(0).await?;
+        let mut last_len = initial.items.len();
+        let mut res = initial.items;
+        let total = initial.total_record_count;
+        loop {
+            if let Some(total) = total{
+                if total as usize<=res.len(){
+                    break;
+                }
+            }
+            if last_len==0{
+                break;
+            }
+            let mut next = f(res.len() as u32).await?;
+            last_len = next.items.len();
+            res.append(&mut next.items);
+        }
+        Ok(res)
     }
 }

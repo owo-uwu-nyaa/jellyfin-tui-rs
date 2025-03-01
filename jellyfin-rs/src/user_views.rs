@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::{items::ImageType, sha::Sha256, Auth, JellyfinClient, Result};
+use crate::{items::ImageType, sha::Sha256, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result};
 
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -16,14 +16,17 @@ pub struct GetUserViewsQuery<'s> {
 
 impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
     #[instrument(skip(self))]
-    pub async fn get_user_views(&self, query: &GetUserViewsQuery<'_>) -> Result<UserViews> {
+    pub async fn get_user_views(
+        &self,
+        query: &GetUserViewsQuery<'_>,
+    ) -> Result<JsonResponse<JellyfinVec<UserView>>> {
         let req = self
             .get(format!("{}UserViews", self.url))
             .query(&query)
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }
 
@@ -36,14 +39,6 @@ pub struct UserView {
     pub view_type: UserViewType,
     pub image_tags: Option<HashMap<ImageType, String>>,
     pub sort_name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
-pub struct UserViews {
-    pub items: Vec<UserView>,
-    pub start_index: u32,
-    pub total_record_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

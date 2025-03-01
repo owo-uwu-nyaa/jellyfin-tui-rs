@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::{sha::Sha256, Auth, JellyfinClient, Result};
+use crate::{JellyfinVec, JsonResponse};
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
@@ -132,34 +133,32 @@ pub struct MediaItem {
     pub item_type: ItemType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct MediaItemList {
-    pub items: Vec<MediaItem>,
-    pub start_index: u32,
-    pub total_record_count: Option<u32>,
-}
-
 impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
     #[instrument(skip(self))]
-    pub async fn get_user_items_resume(&self, query: &GetResumeQuery<'_>) -> Result<MediaItemList> {
+    pub async fn get_user_items_resume(
+        &self,
+        query: &GetResumeQuery<'_>,
+    ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
         let req = self
             .get(format!("{}UserItems/Resume", self.url))
             .query(query)
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 
     #[instrument(skip(self))]
-    pub async fn get_shows_next_up(&self, query: &GetNextUpQuery<'_>) -> Result<MediaItemList> {
+    pub async fn get_shows_next_up(
+        &self,
+        query: &GetNextUpQuery<'_>,
+    ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
         let req = self
             .get(format!("{}Shows/NextUp", self.url))
             .query(query)
             .send()
             .await?;
         let req = req.error_for_status()?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }

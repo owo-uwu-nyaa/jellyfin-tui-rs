@@ -5,6 +5,8 @@ use serde::Serialize;
 use crate::sha::Sha256;
 use crate::Authed;
 use crate::JellyfinClient;
+use crate::JellyfinVec;
+use crate::JsonResponse;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -18,14 +20,6 @@ pub struct ActivityLogEntry {
     pub date: String,
     pub user_id: String,
     pub severity: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct ActivityLogEntries {
-    pub items: Vec<ActivityLogEntry>,
-    pub total_record_count: u32,
-    pub start_index: u32,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,7 +38,7 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
         limit: Option<u32>,
         min_date: Option<&str>,
         has_user_id: bool,
-    ) -> Result<ActivityLogEntries> {
+    ) -> Result<JsonResponse<JellyfinVec<ActivityLogEntry>>> {
         let req = self
             .get(format!("{}System/ActivityLog/Entries", self.url,))
             .query(&GetActivityLogEntriesQuery {
@@ -55,6 +49,6 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
             })
             .send()
             .await?;
-        Ok(req.json().await?)
+        Ok(req.into())
     }
 }
