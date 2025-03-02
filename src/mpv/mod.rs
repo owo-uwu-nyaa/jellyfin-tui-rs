@@ -1,13 +1,18 @@
+mod fetch_items;
+
 use std::{
     collections::{HashMap, HashSet},
+    ffi::CString,
     sync::LazyLock,
     time::Duration,
 };
 
 use color_eyre::eyre::{Context, Result};
-use jellyfin::reqwest::header::AUTHORIZATION;
+use fetch_items::fetch_items;
+use jellyfin::items::MediaItem;
 use libmpv::{
     events::{Event, EventContextAsync, EventContextAsyncExt, PropertyData},
+    node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode},
     LogLevel, Mpv,
 };
 use libmpv_sys::{
@@ -31,31 +36,59 @@ pub struct MpvPlayer {
     inner: Mpv<EventContextAsync>,
     interval: Interval,
     position: i64,
+    current_item: String,
 }
 
 impl MpvPlayer {
-    pub fn new(cx: &TuiContext) -> Result<Self> {
-        let mpv = Mpv::with_initializer(|mpv| {
-            mpv.set_property("ytdl", false)?;
-            mpv.set_property("title", "jellyfin-tui-player")?;
-            mpv.set_property("fullscreen", true)?;
-            mpv.set_property("drag-and-drop", false)?;
-            mpv.set_property("osc", true)?;
-            mpv.set_property("terminal", false)?;
+    pub async fn new(cx: &TuiContext, item: MediaItem) -> Result<Self> {
+        let (items, initial_position) = fetch_items(cx, item).await?;
+        let mpv = Mpv::with_initializer(|mpv| -> Result<()> {
+            mpv.set_property(c"ytdl", false)?;
+            mpv.set_property(c"title", c"jellyfin-tui-player")?;
+            mpv.set_property(c"fullscreen", true)?;
+            mpv.set_property(c"drag-and-drop", false)?;
+            mpv.set_property(c"osc", true)?;
+            mpv.set_property(c"terminal", false)?;
             mpv.set_property(
-                "http-header-fields",
-                &[(
-                    AUTHORIZATION.as_str().as_bytes(),
-                    cx.jellyfin.get_auth().header.as_bytes(),
-                )],
+                c"http-header-fields",
+                &BorrowingMpvNodeMap::new(
+                    &[BorrowingCPtr::new(c"authorization")],
+                    &[CString::new(cx.jellyfin.get_auth().header.as_bytes())
+                        .context("converting auth header to cstr")?
+                        .to_node()],
+                ),
             )?;
-            mpv.set_property("input-default-bindings", true)?;
-            mpv.set_property("input-vo-keyboard", true)?;
-            mpv.set_property("idle", "yes")?;
-            mpv.set_property("hwdec", cx.config.hwdec.as_str())?;
+            mpv.set_property(c"input-default-bindings", true)?;
+            mpv.set_property(c"input-vo-keyboard", true)?;
+            mpv.set_property(c"idle", c"yes")?;
+            mpv.set_property(
+                c"hwdec",
+                CString::new(cx.config.hwdec.as_str())
+                    .context("converting hwdec to cstr")?
+                    .as_c_str(),
+            )?;
             Ok(())
         })?
         .enable_async();
+        mpv.playlist_replace(
+            &CString::new(cx.jellyfin.get_video_url(&items[initial_position]))
+                .context("converting video url to cstr")?,
+        )
+        .context("adding to playlist")?;
+        for item in items[0..initial_position].iter().rev() {
+            mpv.playlist_insert_at(
+                &CString::new(cx.jellyfin.get_video_url(item))
+                    .context("converting video url to cstr")?,
+                0,
+            )?;
+        }
+        for item in items[initial_position + 1..].iter() {
+            mpv.playlist_append(
+                &CString::new(cx.jellyfin.get_video_url(item))
+                    .context("converting video url to cstr")?,
+            )?;
+        }
+
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         Ok(Self {
@@ -78,15 +111,6 @@ impl MpvPlayer {
         let block = Block::bordered()
             .title("Now playing")
             .padding(Padding::uniform(1));
-        self.inner.command_async(
-            "loadfile",
-            &[&format!(
-                "{}/Videos/{}/main.m3u8",
-                cx.jellyfin.get_base_url(),
-                id
-            )],
-            0,
-        )?;
         loop {
             cx.term.draw(|frame| {
                 frame.render_widget(&block, frame.area());

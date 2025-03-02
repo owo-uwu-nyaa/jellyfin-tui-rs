@@ -22,17 +22,18 @@ use std::{
     io::{Read, Seek, SeekFrom},
     mem, thread,
     time::Duration,
+    ffi::CString,
 };
 
 fn main() {
     use libmpv::{protocol::*, *};
 
-    let path = format!(
+    let path =CString::new( format!(
         "filereader://{}",
         env::args()
             .nth(1)
             .expect("Expected path to local media as argument, found nil.")
-    );
+    )).unwrap();
 
     let protocol = unsafe {
         Protocol::new(
@@ -47,12 +48,11 @@ fn main() {
     };
 
     let mpv = Mpv::new().unwrap().enable_protocol();
-    mpv.set_property("volume", 25).unwrap();
+    mpv.set_property(c"volume", 25).unwrap();
 
     mpv.register(protocol).unwrap();
 
-    mpv.playlist_load_files(&[(&path, FileState::AppendPlay, None)])
-        .unwrap();
+    mpv.playlist_replace(&path).unwrap();
 
     thread::sleep(Duration::from_secs(10));
 

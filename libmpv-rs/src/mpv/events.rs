@@ -33,6 +33,8 @@ use std::task::{Poll, Waker};
 
 /// An `Event`'s ID.
 pub use libmpv_sys::mpv_event_id as EventId;
+
+use super::node::MpvNode;
 pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_AUDIO_RECONFIG as AudioReconfig;
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_CLIENT_MESSAGE as ClientMessage;
@@ -55,8 +57,8 @@ pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_VIDEO_RECONFIG as VideoReconfig;
 }
 
-unsafe fn wake(waker_ptr: *const Mutex<Option<Waker>>) {
-    let waker = &*waker_ptr;
+pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
+    let waker = unsafe { &*cx.cast_const().cast::<Mutex<Option<Waker>>>() };
     if let Ok(waker) = waker.lock() {
         if let Some(waker) = &*waker {
             waker.wake_by_ref();
@@ -64,10 +66,6 @@ unsafe fn wake(waker_ptr: *const Mutex<Option<Waker>>) {
     } else {
         abort()
     }
-}
-
-pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
-    wake(cx.cast_const().cast());
 }
 
 #[derive(Debug)]
@@ -86,21 +84,23 @@ impl<'a> PropertyData<'a> {
     // `client.h`
     unsafe fn from_raw(format: MpvFormat, ptr: *mut ctype::c_void) -> Result<PropertyData<'a>> {
         assert!(!ptr.is_null());
-        match format {
-            mpv_format::Flag => Ok(PropertyData::Flag(*(ptr as *mut bool))),
-            mpv_format::String => {
-                let char_ptr = *(ptr as *mut *mut ctype::c_char);
-                Ok(PropertyData::Str(mpv_cstr_to_str!(char_ptr)?))
+        unsafe {
+            match format {
+                mpv_format::Flag => Ok(PropertyData::Flag(*(ptr as *mut bool))),
+                mpv_format::String => {
+                    let char_ptr = *(ptr as *mut *mut ctype::c_char);
+                    Ok(PropertyData::Str(mpv_cstr_to_str!(char_ptr)?))
+                }
+                mpv_format::OsdString => {
+                    let char_ptr = *(ptr as *mut *mut ctype::c_char);
+                    Ok(PropertyData::OsdStr(mpv_cstr_to_str!(char_ptr)?))
+                }
+                mpv_format::Double => Ok(PropertyData::Double(*(ptr as *mut f64))),
+                mpv_format::Int64 => Ok(PropertyData::Int64(*(ptr as *mut i64))),
+                mpv_format::Node => Ok(PropertyData::Node(&*(ptr as *mut MpvNode))),
+                mpv_format::None => unreachable!(),
+                _ => unimplemented!(),
             }
-            mpv_format::OsdString => {
-                let char_ptr = *(ptr as *mut *mut ctype::c_char);
-                Ok(PropertyData::OsdStr(mpv_cstr_to_str!(char_ptr)?))
-            }
-            mpv_format::Double => Ok(PropertyData::Double(*(ptr as *mut f64))),
-            mpv_format::Int64 => Ok(PropertyData::Int64(*(ptr as *mut i64))),
-            mpv_format::Node => Ok(PropertyData::Node(&*(ptr as *mut MpvNode))),
-            mpv_format::None => unreachable!(),
-            _ => unimplemented!(),
         }
     }
 }

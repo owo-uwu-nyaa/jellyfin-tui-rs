@@ -19,7 +19,7 @@
 [package]
 name = "libmpv"
 version = "2.0.1"
-edition = "2018"
+edition = "2024"
 authors = ["ParadoxSpiral <paradoxspiral@riseup.net>"]
 license = "LGPL-2.1"
 readme = "README.md"

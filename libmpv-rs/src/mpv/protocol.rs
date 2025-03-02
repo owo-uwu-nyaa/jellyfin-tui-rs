@@ -51,20 +51,21 @@ where
     U: RefUnwindSafe,
 {
     let data = user_data as *mut ProtocolData<T, U>;
+    let ret = unsafe {
+        (*info).cookie = user_data;
+        (*info).read_fn = Some(read_wrapper::<T, U>);
+        (*info).seek_fn = Some(seek_wrapper::<T, U>);
+        (*info).size_fn = Some(size_wrapper::<T, U>);
+        (*info).close_fn = Some(close_wrapper::<T, U>);
 
-    (*info).cookie = user_data;
-    (*info).read_fn = Some(read_wrapper::<T, U>);
-    (*info).seek_fn = Some(seek_wrapper::<T, U>);
-    (*info).size_fn = Some(size_wrapper::<T, U>);
-    (*info).close_fn = Some(close_wrapper::<T, U>);
-
-    let ret = panic::catch_unwind(|| {
-        let uri = mpv_cstr_to_str!(uri as *const _).unwrap();
-        ptr::write(
-            (*data).cookie,
-            ((*data).open_fn)(&mut (*data).user_data, uri),
-        );
-    });
+        panic::catch_unwind(|| {
+            let uri = mpv_cstr_to_str!(uri as *const _).unwrap();
+            ptr::write(
+                (*data).cookie,
+                ((*data).open_fn)(&mut (*data).user_data, uri),
+            );
+        })
+    };
 
     if ret.is_ok() {
         0
@@ -84,7 +85,7 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    let ret = panic::catch_unwind(|| {
+    let ret = panic::catch_unwind(|| unsafe{
         let slice = slice::from_raw_parts_mut(buf, nbytes as _);
         ((*data).read_fn)(&mut *(*data).cookie, slice)
     });
@@ -98,12 +99,12 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    if (*data).seek_fn.is_none() {
+    if unsafe{(*data).seek_fn}.is_none() {
         return mpv_error::Unsupported as _;
     }
 
     let ret =
-        panic::catch_unwind(|| (*(*data).seek_fn.as_ref().unwrap())(&mut *(*data).cookie, offset));
+        panic::catch_unwind(|| unsafe{(*(*data).seek_fn.as_ref().unwrap())(&mut *(*data).cookie, offset)});
     if let Ok(ret) = ret {
         ret
     } else {
@@ -118,11 +119,11 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    if (*data).size_fn.is_none() {
+    if unsafe{(*data).size_fn}.is_none() {
         return mpv_error::Unsupported as _;
     }
 
-    let ret = panic::catch_unwind(|| (*(*data).size_fn.as_ref().unwrap())(&mut *(*data).cookie));
+    let ret = panic::catch_unwind(||unsafe{ (*(*data).size_fn.as_ref().unwrap())(&mut *(*data).cookie)});
     if let Ok(ret) = ret {
         ret
     } else {
@@ -136,9 +137,9 @@ where
     T: RefUnwindSafe,
     U: RefUnwindSafe,
 {
-    let data = Box::from_raw(cookie as *mut ProtocolData<T, U>);
+    let data = unsafe{Box::from_raw(cookie as *mut ProtocolData<T, U>)};
 
-    panic::catch_unwind(|| (data.close_fn)(Box::from_raw(data.cookie)));
+    panic::catch_unwind(|| (data.close_fn)(unsafe{Box::from_raw(data.cookie)}));
 }
 
 struct ProtocolData<T, U> {
@@ -284,7 +285,7 @@ impl<T: RefUnwindSafe, U: RefUnwindSafe> Protocol<T, U> {
         size_fn: Option<StreamSize<T>>,
     ) -> Protocol<T, U> {
         let c_layout = Layout::from_size_align(mem::size_of::<T>(), mem::align_of::<T>()).unwrap();
-        let cookie = alloc::alloc(c_layout) as *mut T;
+        let cookie = unsafe{alloc::alloc(c_layout) as *mut T};
         let data = Box::into_raw(Box::new(ProtocolData {
             cookie,
             user_data,

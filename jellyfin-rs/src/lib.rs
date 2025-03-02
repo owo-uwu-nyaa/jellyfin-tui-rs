@@ -19,6 +19,7 @@ pub mod image;
 pub mod items;
 pub mod session;
 pub mod sha;
+pub mod shows;
 pub mod user;
 pub mod user_library;
 pub mod user_views;

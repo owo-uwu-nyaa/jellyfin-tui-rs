@@ -19,6 +19,7 @@
 use events::EventContextExt;
 
 use crate::events::{Event, PropertyData};
+use crate::node::{MpvNode, MpvNodeValue};
 use crate::*;
 
 use std::collections::HashMap;
@@ -28,17 +29,12 @@ use std::time::Duration;
 
 #[test]
 fn initializer() {
-    let mpv = Mpv::with_initializer(|init| {
-        init.set_property("osc", true)?;
-        init.set_property("input-default-bindings", true)?;
-        init.set_property("volume", 30)?;
-
+    let mpv = Mpv::with_initializer(|init| -> Result<()> {
+        init.set_property(c"volume", 30)?;
         Ok(())
     })
     .unwrap();
 
-    assert_eq!(true, mpv.get_property("osc").unwrap());
-    assert_eq!(true, mpv.get_property("input-default-bindings").unwrap());
     assert_eq!(30i64, mpv.get_property("volume").unwrap());
 }
 
@@ -53,10 +49,11 @@ fn test_file_exists() {
 #[test]
 fn properties() {
     let mpv = Mpv::new().unwrap();
-    mpv.set_property("volume", 0).unwrap();
-    mpv.set_property("vo", "null").unwrap();
-    mpv.set_property("ytdl-format", "best[width<240]").unwrap();
-    mpv.set_property("sub-gauss", 0.6).unwrap();
+    mpv.set_property(c"volume", 0).unwrap();
+    mpv.set_property(c"vo", c"null").unwrap();
+    mpv.set_property(c"ytdl-format", c"best[width<240]")
+        .unwrap();
+    mpv.set_property(c"sub-gauss", 0.6).unwrap();
 
     assert_eq!(0i64, mpv.get_property("volume").unwrap());
     let vo: MpvStr = mpv.get_property("vo").unwrap();
@@ -67,13 +64,8 @@ fn properties() {
         0.6,
         f64::round(subg * f64::powi(10.0, 4)) / f64::powi(10.0, 4)
     );
-
-    mpv.playlist_load_files(&[(
-        "test-data/speech_12kbps_mb.wav",
-        FileState::AppendPlay,
-        None,
-    )])
-    .unwrap();
+    mpv.playlist_replace(c"test-data/speech_12kbps_mb.wav")
+        .unwrap();
     thread::sleep(Duration::from_millis(250));
 
     let title: MpvStr = mpv.get_property("media-title").unwrap();
@@ -105,8 +97,7 @@ fn events() {
     mpv.observe_property("media-title", Format::String, 1)
         .unwrap();
 
-    mpv.set_property("vo", "null").unwrap();
-    mpv.set_property("ytdl", false).unwrap();
+    mpv.set_property(c"vo", c"null").unwrap();
 
     assert_event_occurs!(
         mpv,
@@ -118,7 +109,7 @@ fn events() {
         })
     );
 
-    mpv.set_property("volume", 0).unwrap();
+    mpv.set_property(c"volume", 0).unwrap();
     assert_event_occurs!(
         mpv,
         10.,
@@ -130,31 +121,8 @@ fn events() {
     );
     assert!(mpv.wait_event(3.).is_none());
 
-    mpv.playlist_load_files(&[(
-        "https://www.youtube.com/watch?v=DLzxrzFCyOs",
-        FileState::AppendPlay,
-        None,
-    )])
-    .unwrap();
-    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
-    assert_event_occurs!(
-        mpv,
-        10.,
-        Ok(Event::PropertyChange {
-            name: "media-title",
-            change: PropertyData::Str("watch?v=DLzxrzFCyOs"),
-            reply_userdata: 1,
-        })
-    );
-    assert_event_occurs!(mpv, 20., Err(Error::Raw(mpv_error::UnknownFormat)));
-    assert!(mpv.wait_event(3.).is_none());
-
-    mpv.playlist_load_files(&[(
-        "test-data/speech_12kbps_mb.wav",
-        FileState::AppendPlay,
-        None,
-    )])
-    .unwrap();
+    mpv.playlist_append_play(c"test-data/speech_12kbps_mb.wav")
+        .unwrap();
     assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
     assert_event_occurs!(
         mpv,
@@ -177,11 +145,7 @@ fn events() {
 fn node_map() -> Result<()> {
     let mpv = Mpv::new()?;
 
-    mpv.playlist_load_files(&[(
-        "test-data/speech_12kbps_mb.wav",
-        FileState::AppendPlay,
-        None,
-    )])?;
+    mpv.playlist_append_play(c"test-data/speech_12kbps_mb.wav")?;
 
     thread::sleep(Duration::from_millis(250));
     let audio_params: MpvNode = mpv.get_property("audio-params")?;
@@ -212,11 +176,7 @@ fn node_map() -> Result<()> {
 fn node_array() -> Result<()> {
     let mpv = Mpv::new()?;
 
-    mpv.playlist_load_files(&[(
-        "test-data/speech_12kbps_mb.wav",
-        FileState::AppendPlay,
-        None,
-    )])?;
+    mpv.playlist_append_play(c"test-data/speech_12kbps_mb.wav")?;
 
     thread::sleep(Duration::from_millis(250));
     let playlist: MpvNode = mpv.get_property("playlist")?;

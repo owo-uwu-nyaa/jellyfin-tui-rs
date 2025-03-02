@@ -4,7 +4,6 @@ mod home_screen;
 mod image;
 mod login;
 mod mpv;
-mod play_video;
 
 use std::{fs::File, io::stdout, path::PathBuf, sync::Mutex};
 
@@ -20,6 +19,7 @@ use home_screen::{
 };
 use image::ImageProtocolCache;
 use jellyfin::{items::MediaItem, user_views::UserViewType, Auth, JellyfinClient};
+use mpv::MpvPlayer;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
@@ -52,7 +52,8 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
                 NextScreen::Quit => break,
                 NextScreen::ShowUserView { id: _, kind: _ } => todo!(),
                 NextScreen::PlayItem(media_item) => {
-                    play_video::play_item(&mut context, media_item).await?
+                    MpvPlayer::new(&mut context, media_item).await?;
+                    todo!()
                 }
             };
         }

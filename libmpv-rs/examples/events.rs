@@ -16,21 +16,21 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use libmpv::{events::*, *};
+use libmpv::{events::*, node::MpvNode, *};
 
-use std::{collections::HashMap, env, thread, time::Duration};
+use std::{collections::HashMap, env, ffi::CString, thread, time::Duration};
 
 const VIDEO_URL: &str = "https://www.youtube.com/watch?v=DLzxrzFCyOs";
 
 fn main() -> Result<()> {
-    let path = env::args()
+    let path = CString::new(env::args()
         .nth(1)
-        .unwrap_or_else(|| String::from(VIDEO_URL));
+        .unwrap_or_else(|| String::from(VIDEO_URL))).unwrap();
 
     // Create an `Mpv` and set some properties.
     let mpv = Mpv::new()?;
-    mpv.set_property("volume", 15)?;
-    mpv.set_property("vo", "null")?;
+    mpv.set_property(c"volume", 15)?;
+    mpv.set_property(c"vo", c"null")?;
 
     mpv.disable_deprecated_events()?;
     mpv.observe_property("volume", Format::Int64, 0)?;
@@ -39,12 +39,11 @@ fn main() -> Result<()> {
 
     crossbeam::scope(|scope| {
         scope.spawn(|_| {
-            mpv.playlist_load_files(&[(&path, FileState::AppendPlay, None)])
-                .unwrap();
+            mpv.playlist_replace(&path).unwrap();
 
             thread::sleep(Duration::from_secs(3));
 
-            mpv.set_property("volume", 25).unwrap();
+            mpv.set_property(c"volume", 25).unwrap();
 
             thread::sleep(Duration::from_secs(5));
 

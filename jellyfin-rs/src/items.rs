@@ -161,4 +161,8 @@ impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
         let req = req.error_for_status()?;
         Ok(req.into())
     }
+
+    pub fn get_video_url(&self, item: &MediaItem) -> String {
+        format!("{}/Videos/{}/main.m3u8", self.url, item.id)
+    }
 }
