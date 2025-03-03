@@ -30,11 +30,15 @@ use std::time::Duration;
 #[test]
 fn initializer() {
     let mpv = Mpv::with_initializer(|init| -> Result<()> {
-        init.set_property(c"volume", 30)?;
+        init.set_option(c"osc", true)?;
+        //init.set_option(c"input-default-bindings", true)?;
+        //init.set_option(c"volume", 30)?;
         Ok(())
     })
     .unwrap();
 
+    assert_eq!(true, mpv.get_property("osc").unwrap());
+    assert_eq!(true, mpv.get_property("input-default-bindings").unwrap());
     assert_eq!(30i64, mpv.get_property("volume").unwrap());
 }
 
@@ -90,7 +94,9 @@ macro_rules! assert_event_occurs {
 
 #[test]
 fn events() {
-    let mut mpv = Mpv::new().unwrap();
+    let mut mpv = Mpv::with_initializer(|mpv|{
+        mpv.set_option(c"ytdl", false)
+    }).unwrap();
     mpv.disable_deprecated_events().unwrap();
 
     mpv.observe_property("volume", Format::Int64, 0).unwrap();
@@ -119,6 +125,21 @@ fn events() {
             reply_userdata: 0,
         })
     );
+    assert!(mpv.wait_event(3.).is_none());
+
+    mpv.playlist_append_play(c"https://www.youtube.com/watch?v=DLzxrzFCyOs")
+        .unwrap();
+    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
+    assert_event_occurs!(
+        mpv,
+        10.,
+        Ok(Event::PropertyChange {
+            name: "media-title",
+            change: PropertyData::Str("watch?v=DLzxrzFCyOs"),
+            reply_userdata: 1,
+        })
+    );
+    assert_event_occurs!(mpv, 20., Err(Error::Raw(mpv_error::UnknownFormat)));
     assert!(mpv.wait_event(3.).is_none());
 
     mpv.playlist_append_play(c"test-data/speech_12kbps_mb.wav")

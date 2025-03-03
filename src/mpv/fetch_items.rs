@@ -15,6 +15,7 @@ pub async fn fetch_items(cx: &TuiContext, item: MediaItem) -> Result<(Vec<MediaI
             image_tags: _,
             media_type: _,
             name: _,
+            user_data:_,
             item_type: ItemType::Series,
         } => (fetch_series(cx, &id).await?, 0),
         MediaItem {
@@ -22,6 +23,7 @@ pub async fn fetch_items(cx: &TuiContext, item: MediaItem) -> Result<(Vec<MediaI
             image_tags: _,
             media_type: _,
             name: _,
+            user_data:_,
             item_type:
                 ItemType::Season {
                     series_id,
@@ -40,10 +42,10 @@ pub async fn fetch_items(cx: &TuiContext, item: MediaItem) -> Result<(Vec<MediaI
                         start_index: 0.into(),
                         limit: 1.into(),
                         season_id: id.as_str().into(),
-                        enable_images: Some(true),
-                        image_type_limit: Some(1),
-                        enable_image_types: Some("Primary, Backdrop, Thumb"),
-                        enable_user_data: Some(false),
+                        enable_images: true.into(),
+                        image_type_limit: 1.into(),
+                        enable_image_types: "Primary, Backdrop, Thumb".into(),
+                        enable_user_data: true.into(),
                         ..Default::default()
                     },
                 )
@@ -66,6 +68,7 @@ pub async fn fetch_items(cx: &TuiContext, item: MediaItem) -> Result<(Vec<MediaI
             image_tags: _,
             media_type: _,
             name: _,
+            user_data:_,
             item_type:
                 ItemType::Episode {
                     container: _,
@@ -84,6 +87,7 @@ pub async fn fetch_items(cx: &TuiContext, item: MediaItem) -> Result<(Vec<MediaI
             image_tags: _,
             media_type: _,
             name: _,
+            user_data:_,
             item_type: ItemType::Movie { container: _ },
         } => (vec![item], 0),
     })
@@ -111,9 +115,9 @@ async fn fetch_series(cx: &TuiContext, series_id: &str) -> Result<Vec<MediaItem>
                     start_index: start.into(),
                     limit: 12.into(),
                     enable_images: Some(true),
-                    image_type_limit: Some(1),
-                    enable_image_types: Some("Primary, Backdrop, Thumb"),
-                    enable_user_data: Some(false),
+                    image_type_limit: 1.into(),
+                    enable_image_types: "Primary, Backdrop, Thumb".into(),
+                    enable_user_data: false.into(),
                     ..Default::default()
                 },
             )

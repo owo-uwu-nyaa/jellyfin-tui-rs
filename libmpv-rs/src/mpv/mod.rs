@@ -197,9 +197,9 @@ pub struct MpvInitializer {
 
 impl MpvInitializer {
     /// Set the value of a property.
-    pub fn set_property<'n>(&self, name: &CStr, data: impl ToNode<'n>) -> Result<()> {
+    pub fn set_option<'n>(&self, name: &CStr, data: impl ToNode<'n>) -> Result<()> {
         mpv_err((), unsafe {
-            libmpv_sys::mpv_set_property(
+            libmpv_sys::mpv_set_option(
                 self.ctx.as_ptr(),
                 name.as_ptr(),
                 libmpv_sys::mpv_format_MPV_FORMAT_NODE,

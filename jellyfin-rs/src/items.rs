@@ -123,6 +123,15 @@ pub enum ItemType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
+pub struct UserData{
+    pub playback_position_ticks:u64,
+    pub play_count:u64,
+    pub is_favorite: bool,
+    pub played: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
 pub struct MediaItem {
     pub id: String,
     pub image_tags: Option<HashMap<ImageType, String>>,
@@ -131,6 +140,7 @@ pub struct MediaItem {
     #[serde(flatten)]
     #[serde(rename = "type")]
     pub item_type: ItemType,
+    pub user_data: Option<UserData>,
 }
 
 impl<Sha: Sha256> JellyfinClient<Auth, Sha> {

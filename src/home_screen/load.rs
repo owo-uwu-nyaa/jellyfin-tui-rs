@@ -43,15 +43,15 @@ pub async fn load_data(
     trace!("user_views: {user_views:#?}");
     let resume = client
         .get_user_items_resume(&GetResumeQuery {
-            user_id: Some(user_id),
-            limit: Some(16),
-            enable_user_data: Some(false),
-            image_type_limit: Some(1),
-            enable_image_types: Some("Primary, Backdrop, Thumb"),
-            media_types: Some("Video"),
-            enable_total_record_count: Some(true),
-            enable_images: Some(true),
-            exclude_active_sessions: Some(false),
+            user_id: user_id.into(),
+            limit: 16.into(),
+            enable_user_data: true.into(),
+            image_type_limit: 1.into(),
+            enable_image_types: "Primary, Backdrop, Thumb".into(),
+            media_types: "Video".into(),
+            enable_total_record_count: true.into(),
+            enable_images: true.into(),
+            exclude_active_sessions: false.into(),
             ..Default::default()
         })
         .await
@@ -64,7 +64,7 @@ pub async fn load_data(
         .get_shows_next_up(&GetNextUpQuery {
             user_id: Some(user_id),
             limit: Some(16),
-            enable_user_data: Some(false),
+            enable_user_data: Some(true),
             enable_images: Some(true),
             image_type_limit: Some(1),
             enable_image_types: Some("Primary, Backdrop, Thumb"),
@@ -84,7 +84,7 @@ pub async fn load_data(
                     .get_user_library_latest_media(&GetLatestQuery {
                         user_id: Some(user_id),
                         limit: Some(16),
-                        enable_user_data: Some(false),
+                        enable_user_data: Some(true),
                         enable_images: Some(true),
                         image_type_limit: Some(1),
                         enable_image_types: Some("Primary, Backdrop, Thumb"),

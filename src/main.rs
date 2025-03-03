@@ -19,7 +19,6 @@ use home_screen::{
 };
 use image::ImageProtocolCache;
 use jellyfin::{items::MediaItem, user_views::UserViewType, Auth, JellyfinClient};
-use mpv::MpvPlayer;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
@@ -52,7 +51,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
                 NextScreen::Quit => break,
                 NextScreen::ShowUserView { id: _, kind: _ } => todo!(),
                 NextScreen::PlayItem(media_item) => {
-                    MpvPlayer::new(&mut context, media_item).await?;
+                    mpv::play(&context, media_item).await?;
                     todo!()
                 }
             };
