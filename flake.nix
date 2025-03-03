@@ -12,11 +12,6 @@
       url = "github:numtide/flake-utils";
       inputs.systems.follows = "systems";
     };
-    crate2nix = {
-      url = "github:nix-community/crate2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.crate2nix_stable.follows = "crate2nix";
-    };
   };
 
   outputs =
@@ -24,7 +19,6 @@
       nixpkgs,
       rust-overlay,
       flake-utils,
-      crate2nix,
       ...
     }:
     (
@@ -38,12 +32,14 @@
             inherit system overlays;
           };
           toolchain_dev = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix {
-            inherit (crate2nix.tools.${system}) generatedCargoNix;
-          };
-          jellyfin-tui-rust-overlay = jellyfin-tui.override {
+          platform_dev = pkgs.makeRustPlatform {
             rustc = toolchain_dev;
             cargo = toolchain_dev;
+          };
+
+          jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix { };
+          jellyfin-tui-rust-overlay = jellyfin-tui.override {
+            rustPlatform = platform_dev;
           };
         in
         {
@@ -57,29 +53,27 @@
               {
                 stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.clangStdenv;
               }
-              (
-                {
-                  inputsFrom = [
-                    jellyfin-tui-rust-overlay
-                  ];
-                  buildInputs = [
-                    pkgs.cargo-nextest
-                    pkgs.cargo-audit
-                    pkgs.rust-bin.nightly.latest.rust-analyzer
-                    pkgs.sqlx-cli
-                  ] ++ jellyfin-tui-rust-overlay.shellDeps;
-                  DATABASE_URL = "sqlite://db.sqlite";
-                }
-                // jellyfin-tui-rust-overlay.env
-              );
+              {
+                buildInputs = [
+                  pkgs.cargo-nextest
+                  pkgs.cargo-audit
+                  pkgs.rust-bin.nightly.latest.rust-analyzer
+                  pkgs.sqlx-cli
+                  pkgs.pkg-config
+                  pkgs.openssl
+                  pkgs.mpv
+                  pkgs.sqlite
+                  toolchain_dev
+                  platform_dev.bindgenHook
+                ];
+                DATABASE_URL = "sqlite://db.sqlite";
+              };
         }
       )
       // (
         let
           jellyfin-tui = final: prev: {
-            jellyfin-tui = final.callPackage ./jellyfin-tui.nix {
-              inherit (crate2nix.tools.${final.system}) generatedCargoNix;
-            };
+            jellyfin-tui = final.callPackage ./jellyfin-tui.nix { };
           };
         in
         {
