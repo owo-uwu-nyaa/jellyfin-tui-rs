@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use crate::{
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
-    NextScreen,
+    state::NextScreen,
 };
 
 pub struct Entry {

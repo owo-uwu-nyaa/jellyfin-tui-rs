@@ -11,9 +11,10 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
+    Result, TuiContext,
     entry::Entry,
     image::{ImagesAvailable, JellyfinImageState},
-    NextScreen, Result, TuiContext,
+    state::{Navigation, NextScreen},
 };
 
 mod list;
@@ -129,7 +130,7 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntrySc
 pub async fn display_home_screen(
     context: &mut TuiContext,
     data: HomeScreenData,
-) -> Result<NextScreen> {
+) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
     let mut screen = create_home_screen(data, context);
     loop {
@@ -157,14 +158,14 @@ pub async fn display_home_screen(
                     }))) => Some(code),
                     Some(Ok(_)) => None,
                     Some(Err(e)) => break Err(e).context("getting key events from terminal"),
-                    None => break Ok(NextScreen::Quit)
+                    None => break Ok(Navigation::PopContext)
                 }
             }
         };
         debug!("received code {code:?}");
         match code {
             Some(KeyCode::Char('q') | KeyCode::Esc) => {
-                break Ok(NextScreen::Quit);
+                break Ok(Navigation::PopContext);
             }
             Some(KeyCode::Left) => {
                 screen.left();
@@ -179,7 +180,10 @@ pub async fn display_home_screen(
                 screen.down();
             }
             Some(KeyCode::Enter) => {
-                break Ok(screen.get());
+                break Ok(Navigation::Push {
+                    current: NextScreen::LoadHomeScreen,
+                    next: screen.get(),
+                });
             }
             _ => {}
         }

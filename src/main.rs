@@ -4,30 +4,32 @@ mod home_screen;
 mod image;
 mod login;
 mod mpv;
+mod state;
 
 use std::{fs::File, io::stdout, path::PathBuf, sync::Mutex};
 
 use clap::Parser;
-use color_eyre::eyre::{eyre, Context, OptionExt, Result};
+use color_eyre::eyre::{Context, OptionExt, Result, eyre};
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste, EventStream},
     execute,
 };
 use home_screen::{
     display_home_screen,
-    load::{load_home_screen, HomeScreenData},
+    load::{HomeScreenData, load_home_screen},
 };
 use image::ImageProtocolCache;
-use jellyfin::{items::MediaItem, user_views::UserViewType, Auth, JellyfinClient};
+use jellyfin::{Auth, JellyfinClient, items::MediaItem, user_views::UserViewType};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
 use serde::Deserialize;
 use sqlx::SqlitePool;
+use state::State;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
@@ -43,18 +45,9 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
             cache,
             image_cache: ImageProtocolCache::new(),
         };
-        let mut state = NextScreen::LoadHomeScreen;
-        loop {
-            state = match state {
-                NextScreen::LoadHomeScreen => load_home_screen(&mut context).await?,
-                NextScreen::HomeScreen(data) => display_home_screen(&mut context, data).await?,
-                NextScreen::Quit => break,
-                NextScreen::ShowUserView { id: _, kind: _ } => todo!(),
-                NextScreen::PlayItem(media_item) => {
-                    mpv::play(&context, media_item).await?;
-                    todo!()
-                }
-            };
+        let mut state = State::new();
+        while let Some(screen) = state.pop() {
+            state.navigate(screen.show(&mut context).await?);
         }
     }
     Ok(())
@@ -204,12 +197,4 @@ struct TuiContext {
     pub image_picker: Picker,
     pub cache: SqlitePool,
     pub image_cache: ImageProtocolCache,
-}
-
-enum NextScreen {
-    LoadHomeScreen,
-    HomeScreen(HomeScreenData),
-    ShowUserView { id: String, kind: UserViewType },
-    PlayItem(MediaItem),
-    Quit,
 }

@@ -10,7 +10,7 @@ use tracing::{instrument, trace};
 use crate::{
     entry::{entry_height, Entry, ENTRY_WIDTH},
     image::ImagesAvailable,
-    NextScreen,
+    state::NextScreen,
 };
 
 pub struct EntryList {

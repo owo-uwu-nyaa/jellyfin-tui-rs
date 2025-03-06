@@ -13,8 +13,9 @@ use jellyfin::{
 use ratatui::widgets::{Block, Paragraph};
 use tracing::{debug, instrument, trace};
 
-use crate::{NextScreen, TuiContext};
+use crate::{state::{Navigation, NextScreen}, TuiContext};
 
+#[derive(Debug)]
 pub struct HomeScreenData {
     pub resume: Vec<MediaItem>,
     pub next_up: Vec<MediaItem>,
@@ -119,7 +120,7 @@ pub async fn load_data(
 }
 
 #[instrument(skip_all)]
-pub async fn load_home_screen(cx: &mut TuiContext) -> Result<NextScreen> {
+pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
     let msg = Paragraph::new("Loading home screen")
         .centered()
         .block(Block::bordered());
@@ -130,7 +131,7 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<NextScreen> {
     loop {
         tokio::select! {
             data = &mut load => {
-                break Ok(NextScreen::HomeScreen(data.context("loading home screen data")?))
+                break Ok(Navigation::Replace(NextScreen::HomeScreen(data.context("loading home screen data")?)))
             }
             term = cx.events.next() => {
                 match term {
@@ -140,7 +141,7 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<NextScreen> {
                         kind: KeyEventKind::Press,
                         state: _,
                     })))
-                        | None => break Ok(NextScreen::Quit),
+                        | None => break Ok(Navigation::PopContext),
                     Some(Ok(_)) => {
                         cx.term
                           .draw(|frame| frame.render_widget(&msg, frame.area()))

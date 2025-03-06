@@ -8,7 +8,7 @@ use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
 
 use super::list::{entry_list_height, EntryList};
-use crate::{entry::ENTRY_WIDTH, image::ImagesAvailable, NextScreen};
+use crate::{entry::ENTRY_WIDTH, image::ImagesAvailable, state::NextScreen};
 
 pub struct EntryScreen {
     entries: Vec<EntryList>,
