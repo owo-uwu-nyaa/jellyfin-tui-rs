@@ -22,8 +22,8 @@ use protocol::ProtocolContextType;
 
 use crate::{mpv::mpv_err, *};
 
-use std::ffi::{c_void, CString};
-use std::future::{pending, poll_fn, Future};
+use std::ffi::{CString, c_void};
+use std::future::{Future, pending, poll_fn};
 use std::os::raw as ctype;
 use std::process::abort;
 use std::ptr::NonNull;
@@ -130,7 +130,9 @@ pub enum Event<'a> {
         data: MpvNode,
     },
     /// Event received when a new file is playing
-    StartFile,
+    StartFile{
+        playlist_entry_id: i64,
+    },
     /// Event received when the file being played currently has stopped, for an error or not
     EndFile(EndFileReason),
     /// Event received when a file has been *loaded*, but has not been started
@@ -372,7 +374,12 @@ pub trait EventContextExt: sealed::EventContextExt {
                     }))
                 }
             }
-            mpv_event_id::StartFile => Some(Ok(Event::StartFile)),
+            mpv_event_id::StartFile => {
+                let start_file = unsafe { *(event.data as *mut libmpv_sys::mpv_event_start_file) };
+                Some(Ok(Event::StartFile{
+                    playlist_entry_id: start_file.playlist_entry_id,
+                }))
+            }
             mpv_event_id::EndFile => {
                 let end_file = unsafe { *(event.data as *mut libmpv_sys::mpv_event_end_file) };
 
@@ -435,25 +442,33 @@ impl<T: sealed::EventContextExt> EventContextExt for T {}
 pub trait EventContextAsyncExt:
     sealed::EventContextAsyncExt + EventContextExt + Send + Sync
 {
-    fn wait_event_async(&mut self) -> impl Future<Output = Result<Event>> + Send + Sync {
-        async move {
-            let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
-            *self.get_waker().lock().unwrap() = Some(waker);
-            if let Some(v) = self.wait_event(0.0) {
-                return v;
-            }
-            pending().await
+    fn wait_event_async(&mut self) -> impl Future<Output = Result<Event>> + Send + Sync;
+    fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>)->Poll<Result<Event>>{
+        *self.get_waker().lock().unwrap() = Some(cx.waker().clone());
+        if let Some(v) = self.wait_event(0.0) {
+            Poll::Ready(v)
+        }else{
+            Poll::Pending
         }
     }
 }
 
-impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {}
+impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {
+    async fn wait_event_async(&mut self) -> Result<Event> {
+        let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
+        *self.get_waker().lock().unwrap() = Some(waker);
+        if let Some(v) = self.wait_event(0.0) {
+            return v;
+        }
+        pending().await
+    }
+}
 
 mod sealed {
     use std::{ptr::NonNull, sync::Mutex, task::Waker};
 
     use super::{
-        protocol::ProtocolContextType, EmptyEventContext, EventContextAsync, EventContextSync, Mpv,
+        EmptyEventContext, EventContextAsync, EventContextSync, Mpv, protocol::ProtocolContextType,
     };
 
     pub trait EventContextType {}

@@ -31,8 +31,8 @@ use std::time::Duration;
 fn initializer() {
     let mpv = Mpv::with_initializer(|init| -> Result<()> {
         init.set_option(c"osc", true)?;
-        //init.set_option(c"input-default-bindings", true)?;
-        //init.set_option(c"volume", 30)?;
+        init.set_option(c"input-default-bindings", true)?;
+        init.set_option(c"volume", 30)?;
         Ok(())
     })
     .unwrap();

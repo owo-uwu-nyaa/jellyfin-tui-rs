@@ -1,6 +1,6 @@
 use std::{
     convert::TryInto,
-    ffi::{c_char, c_void, CStr},
+    ffi::{CStr, c_char, c_void},
     marker::PhantomData,
     mem::MaybeUninit,
     ptr::null_mut,
@@ -158,9 +158,7 @@ impl MpvNode {
 }
 
 unsafe impl GetData for MpvNode {
-    fn get_from_c_void<T, F: FnMut(*mut c_void) -> Result<T>>(
-        mut fun: F,
-    ) -> Result<MpvNode> {
+    fn get_from_c_void<T, F: FnMut(*mut c_void) -> Result<T>>(mut fun: F) -> Result<MpvNode> {
         let mut val = MaybeUninit::uninit();
         let _ = fun(val.as_mut_ptr() as *mut _)?;
         Ok(MpvNode(unsafe { val.assume_init() }))
@@ -177,8 +175,8 @@ pub struct BorrowingMpvNode<'n> {
     _l: PhantomData<&'n libmpv_sys::mpv_node>,
 }
 
-impl BorrowingMpvNode<'_>{
-    pub fn node(&self)->*mut libmpv_sys::mpv_node{
+impl BorrowingMpvNode<'_> {
+    pub fn node(&self) -> *mut libmpv_sys::mpv_node {
         (&raw const self.node).cast_mut()
     }
 }
@@ -215,8 +213,15 @@ impl ToNode<'static> for i64 {
 
 impl ToNode<'static> for bool {
     fn to_node(self) -> BorrowingMpvNode<'static> {
-        let v = if self {1i64}else{0};
-        v.to_node()
+        BorrowingMpvNode {
+            node: libmpv_sys::mpv_node {
+                u: libmpv_sys::mpv_node__bindgen_ty_1 {
+                    flag: if self { 1 } else { 0 },
+                },
+                format: libmpv_sys::mpv_format_MPV_FORMAT_FLAG,
+            },
+            _l: PhantomData,
+        }
     }
 }
 
