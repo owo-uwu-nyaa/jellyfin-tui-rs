@@ -64,6 +64,8 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
             while let Poll::Ready(res) = mpv.poll_next_unpin(cx) {
                 match res {
                     Some(Ok(MpvEvent::StartFile(index))) => {
+                        //mpv index is 1 based
+                        let index = index - 1;
                         info!("new index: {index}");
                         send_playing_stopped(
                             state.id.as_ref(),
@@ -91,7 +93,7 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                         break 'res Poll::Ready(Some(()));
                     }
                     Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Position(pos)))) => {
-                        trace!("positoin updated to {pos}");
+                        trace!("position updated to {pos}");
                         state.position = Some(pos);
                     }
                     Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Idle(idle)))) => {
@@ -218,12 +220,21 @@ impl<'j> Player<'j> {
         index: usize,
     ) -> Result<Self> {
         let mpv = MpvStream::new(cx)?;
+
         let position = items[index]
             .user_data
             .as_ref()
             .ok_or_eyre("user data missing")?
             .playback_position_ticks
             / 10000000;
+        for item in items[0..index].iter() {
+            mpv.playlist_append(
+                &CString::new(jellyfin.get_video_url(item))
+                    .context("converting video url to cstr")?,
+            )?;
+        }
+        debug!("previous files added");
+
         mpv.command(&[
             c"loadfile".to_node(),
             CString::new(jellyfin.get_video_url(&items[index]))
@@ -242,14 +253,6 @@ impl<'j> Player<'j> {
         ])
         .context("adding to playlist")?;
         debug!("main file added to playlist");
-        for item in items[0..index].iter().rev() {
-            mpv.playlist_insert_at(
-                &CString::new(jellyfin.get_video_url(item))
-                    .context("converting video url to cstr")?,
-                0,
-            )?;
-        }
-        debug!("previous files added");
         for item in items[index + 1..].iter() {
             mpv.playlist_append(
                 &CString::new(jellyfin.get_video_url(item))
