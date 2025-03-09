@@ -29,13 +29,17 @@ keywords = ["media", "playback", "mpv", "libmpv"]
 
 [dependencies]
 libmpv-sys = { path = "libmpv-sys", version = "3.1.0" }
+tokio = { version = "1.44.0", default-features = false, optional = true, features = ["time"] }
+tracing = { version = "0.1.41", optional = true, default-features = false }
 
 [dev-dependencies]
 crossbeam = "0.7"
 
 [features]
-default = ["render"]
+default = ["render", "tokio"]
 render = [] # Enable custom rendering
 use-bindgen = ["libmpv-sys/use-bindgen"]
+tracing = ["dep:tracing"]
+tokio = ["dep:tokio"]
 [badges]
 travis-ci = { repository = "https://github.com/ParadoxSpiral/mpv-rs", branch = "master" } 

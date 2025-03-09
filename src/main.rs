@@ -14,12 +14,8 @@ use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste, EventStream},
     execute,
 };
-use home_screen::{
-    display_home_screen,
-    load::{HomeScreenData, load_home_screen},
-};
 use image::ImageProtocolCache;
-use jellyfin::{Auth, JellyfinClient, items::MediaItem, user_views::UserViewType};
+use jellyfin::{Auth, JellyfinClient};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
@@ -124,6 +120,7 @@ fn main() -> Result<()> {
                 .into_iter()
                 .for_each(|send_panic| send_panic.send(()).expect("sending panic failed"));
         })
+        .thread_name(|n|format!("tui-worker-{n}"))
         .build_global()
         .context("building global thread pool")?;
     info!("logging initiaited");
@@ -154,6 +151,7 @@ struct Args {
 struct Config {
     pub login_file: PathBuf,
     pub hwdec: String,
+    pub mpv_log_level: String,
 }
 
 #[instrument]
@@ -176,7 +174,8 @@ fn init() -> Result<Config> {
                 .to_str()
                 .ok_or_eyre("non unicode char in config dir")?,
         )?
-        .set_default("hwdec", "auto-safe")?;
+        .set_default("hwdec", "auto-safe")?
+    .set_default("mpv_log_level", "info")?;
     if let Ok(file) = std::fs::read_to_string(config_file) {
         config = config.add_source(config::File::from_str(&file, config::FileFormat::Toml));
     }

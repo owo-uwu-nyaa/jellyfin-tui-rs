@@ -279,6 +279,12 @@ impl Mpv {
 }
 
 impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol> {
+    pub fn set_log_level(&self, level: &CStr) -> Result<()> {
+        mpv_err((), unsafe {
+            libmpv_sys::mpv_request_log_messages(self.ctx.as_ptr(), level.as_ptr())
+        })
+    }
+
     /// Load a configuration file. The path has to be absolute, and a file.
     pub fn load_config(&self, path: &str) -> Result<()> {
         let file = CString::new(path)?.into_raw();

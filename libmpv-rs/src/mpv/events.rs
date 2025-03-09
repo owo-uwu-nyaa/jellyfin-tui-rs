@@ -24,7 +24,9 @@ use crate::{mpv::mpv_err, *};
 
 use std::ffi::{CString, c_void};
 use std::future::{Future, pending, poll_fn};
+use std::marker::PhantomPinned;
 use std::os::raw as ctype;
+use std::pin::Pin;
 use std::process::abort;
 use std::ptr::NonNull;
 use std::slice;
@@ -57,15 +59,41 @@ pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_VIDEO_RECONFIG as VideoReconfig;
 }
 
+struct PanicAbort;
+impl Drop for PanicAbort {
+    fn drop(&mut self) {
+        eprintln!("waking waker paniced");
+        abort()
+    }
+}
+
+pub struct WakerContext {
+    location: Pin<Box<WakerLocation>>,
+    interval: interval::DefaultInterval,
+}
+
+pub struct WakerLocation {
+    inner: Mutex<Option<Waker>>,
+    _pin: PhantomPinned,
+}
+
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
-    let waker = unsafe { &*cx.cast_const().cast::<Mutex<Option<Waker>>>() };
-    if let Ok(waker) = waker.lock() {
+    let abort_guard = PanicAbort;
+    #[cfg(feature = "tracing")]
+    {
+        tracing::trace!("wake_callback called");
+    }
+    let waker = unsafe { &*cx.cast_const().cast::<WakerLocation>() };
+    if let Ok(waker) = waker.inner.lock() {
         if let Some(waker) = &*waker {
             waker.wake_by_ref();
         }
     } else {
+        eprintln!("waker poisoned");
         abort()
     }
+    std::mem::forget(abort_guard);
 }
 
 #[derive(Debug)]
@@ -130,7 +158,7 @@ pub enum Event<'a> {
         data: MpvNode,
     },
     /// Event received when a new file is playing
-    StartFile{
+    StartFile {
         playlist_entry_id: i64,
     },
     /// Event received when the file being played currently has stopped, for an error or not
@@ -167,23 +195,15 @@ unsafe impl Sync for EventContextSync {}
 
 pub struct EventContextAsync {
     inner: EventContextSync,
-    waker: Box<Mutex<Option<Waker>>>,
+    waker: WakerContext,
 }
 
 pub struct EmptyEventContext;
 
-pub trait EventContextType: sealed::EventContextType {
-    type Inlined;
-}
-impl EventContextType for EmptyEventContext {
-    type Inlined = ();
-}
-impl EventContextType for EventContextSync {
-    type Inlined = ();
-}
-impl EventContextType for EventContextAsync {
-    type Inlined = Box<Mutex<Option<Waker>>>;
-}
+pub trait EventContextType: sealed::EventContextType {}
+impl EventContextType for EmptyEventContext {}
+impl EventContextType for EventContextSync {}
+impl EventContextType for EventContextAsync {}
 
 pub trait EventContext: sealed::EventContext {}
 
@@ -191,13 +211,16 @@ impl EventContext for EventContextSync {}
 
 impl EventContext for EventContextAsync {}
 
-unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Box<Mutex<Option<Waker>>> {
-    let waker = Box::new(Mutex::new(None));
+unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Pin<Box<WakerLocation>> {
+    let waker = Box::pin(WakerLocation {
+        inner: Mutex::new(None),
+        _pin: PhantomPinned,
+    });
     unsafe {
         libmpv_sys::mpv_set_wakeup_callback(
             ctx.as_ptr(),
             Some(wake_callback),
-            (&*waker as *const Mutex<Option<Waker>>).cast_mut().cast(),
+            (&raw const *waker).cast_mut().cast(),
         );
     };
     waker
@@ -205,18 +228,27 @@ unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Box<Mutex<Opt
 
 impl EventContextSync {
     pub fn enable_async(self) -> EventContextAsync {
-        let waker = unsafe { setup_waker_ptr(self.ctx) };
-        EventContextAsync { inner: self, waker }
+        let location = unsafe { setup_waker_ptr(self.ctx) };
+        EventContextAsync {
+            inner: self,
+            waker: WakerContext {
+                location,
+                interval: <interval::DefaultInterval as interval::Interval>::new(),
+            },
+        }
     }
 }
 
 impl<Protocol: ProtocolContextType> Mpv<EventContextSync, Protocol> {
     pub fn enable_async(self) -> Mpv<EventContextAsync, Protocol> {
-        let waker = unsafe { setup_waker_ptr(self.ctx) };
+        let location = unsafe { setup_waker_ptr(self.ctx) };
         Mpv {
             drop_handle: self.drop_handle,
             ctx: self.ctx,
-            event_inline: waker,
+            event_inline: WakerContext {
+                location,
+                interval: <interval::DefaultInterval as interval::Interval>::new(),
+            },
             protocols_inline: self.protocols_inline,
         }
     }
@@ -376,7 +408,7 @@ pub trait EventContextExt: sealed::EventContextExt {
             }
             mpv_event_id::StartFile => {
                 let start_file = unsafe { *(event.data as *mut libmpv_sys::mpv_event_start_file) };
-                Some(Ok(Event::StartFile{
+                Some(Ok(Event::StartFile {
                     playlist_entry_id: start_file.playlist_entry_id,
                 }))
             }
@@ -439,15 +471,20 @@ pub trait EventContextExt: sealed::EventContextExt {
 
 impl<T: sealed::EventContextExt> EventContextExt for T {}
 
+fn poll(wake: &mut WakerContext, cx: &mut std::task::Context<'_>) {
+    *wake.location.inner.lock().unwrap() = Some(cx.waker().clone());
+    interval::Interval::poll(&mut wake.interval, cx);
+}
+
 pub trait EventContextAsyncExt:
     sealed::EventContextAsyncExt + EventContextExt + Send + Sync
 {
     fn wait_event_async(&mut self) -> impl Future<Output = Result<Event>> + Send + Sync;
-    fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>)->Poll<Result<Event>>{
-        *self.get_waker().lock().unwrap() = Some(cx.waker().clone());
+    fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Event>> {
+        poll(self.get_waker(), cx);
         if let Some(v) = self.wait_event(0.0) {
             Poll::Ready(v)
-        }else{
+        } else {
             Poll::Pending
         }
     }
@@ -455,8 +492,11 @@ pub trait EventContextAsyncExt:
 
 impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {
     async fn wait_event_async(&mut self) -> Result<Event> {
-        let waker = poll_fn(|cx| Poll::Ready(cx.waker().clone())).await;
-        *self.get_waker().lock().unwrap() = Some(waker);
+        poll_fn(|cx| {
+            poll(self.get_waker(), cx);
+            Poll::Ready(())
+        })
+        .await;
         if let Some(v) = self.wait_event(0.0) {
             return v;
         }
@@ -465,16 +505,25 @@ impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventConte
 }
 
 mod sealed {
-    use std::{ptr::NonNull, sync::Mutex, task::Waker};
+    use std::ptr::NonNull;
 
     use super::{
-        EmptyEventContext, EventContextAsync, EventContextSync, Mpv, protocol::ProtocolContextType,
+        EmptyEventContext, EventContextAsync, EventContextSync, Mpv, WakerContext,
+        protocol::ProtocolContextType,
     };
 
-    pub trait EventContextType {}
-    impl EventContextType for EventContextSync {}
-    impl EventContextType for EventContextAsync {}
-    impl EventContextType for EmptyEventContext {}
+    pub trait EventContextType {
+        type Inlined;
+    }
+    impl EventContextType for EventContextSync {
+        type Inlined = ();
+    }
+    impl EventContextType for EventContextAsync {
+        type Inlined = WakerContext;
+    }
+    impl EventContextType for EmptyEventContext {
+        type Inlined = ();
+    }
 
     pub trait EventContext: super::EventContextType {
         fn exract<Protocol: ProtocolContextType>(
@@ -542,16 +591,44 @@ mod sealed {
         }
     }
     pub trait EventContextAsyncExt: EventContextExt {
-        fn get_waker(&self) -> &Mutex<Option<Waker>>;
+        fn get_waker(&mut self) -> &mut WakerContext;
     }
     impl EventContextAsyncExt for EventContextAsync {
-        fn get_waker(&self) -> &Mutex<Option<Waker>> {
-            &self.waker
+        fn get_waker(&mut self) -> &mut WakerContext {
+            &mut self.waker
         }
     }
     impl<Protocol: ProtocolContextType> EventContextAsyncExt for Mpv<EventContextAsync, Protocol> {
-        fn get_waker(&self) -> &Mutex<Option<Waker>> {
-            &self.event_inline
+        fn get_waker(&mut self) -> &mut WakerContext {
+            &mut self.event_inline
         }
     }
+}
+
+mod interval {
+    use std::{
+        task::Context,
+        time::Duration,
+    };
+
+    pub trait Interval {
+        fn new() -> Self;
+        fn poll(&mut self, cx: &mut Context);
+    }
+
+    #[cfg(feature = "tokio")]
+    impl Interval for tokio::time::Interval {
+        fn new() -> Self {
+            let mut interval = tokio::time::interval(Duration::from_millis(500));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval
+        }
+
+        fn poll(&mut self, cx: &mut Context) {
+            while self.poll_tick(cx).is_ready() {}
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    pub type DefaultInterval = tokio::time::Interval;
 }

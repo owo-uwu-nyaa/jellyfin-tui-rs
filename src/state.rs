@@ -14,9 +14,11 @@ pub enum NextScreen {
     LoadHomeScreen,
     HomeScreen(HomeScreenData),
     ShowUserView { id: String, kind: UserViewType },
-    PlayItem(MediaItem),
+    LoadPlayItem(MediaItem),
+    PlayItem { items: Vec<MediaItem>, index: usize },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Navigation {
     PopContext,
@@ -32,10 +34,10 @@ impl NextScreen {
         match self {
             NextScreen::LoadHomeScreen => load_home_screen(cx).await,
             NextScreen::HomeScreen(data) => display_home_screen(cx, data).await,
-            NextScreen::PlayItem(media_item) => {
-                crate::mpv::play(cx, media_item).await?;
-                todo!()
+            NextScreen::LoadPlayItem(media_item) => {
+                crate::mpv::fetch_items::fetch_screen(cx, media_item).await
             }
+            NextScreen::PlayItem { items, index } => crate::mpv::play(cx, items, index).await,
             screen => todo!("{screen:?}"),
         }
     }

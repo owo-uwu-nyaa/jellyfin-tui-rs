@@ -23,6 +23,7 @@ pub mod shows;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
+pub mod playback_status;
 pub use reqwest;
 
 #[derive(Debug, Clone)]

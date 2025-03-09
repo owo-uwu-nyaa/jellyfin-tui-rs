@@ -52,7 +52,7 @@ fn create_from_media_item(item: MediaItem, context: &TuiContext) -> Entry {
                 context.image_cache.clone(),
             )
         });
-    Entry::new(image, title, subtitle, NextScreen::PlayItem(item))
+    Entry::new(image, title, subtitle, NextScreen::LoadPlayItem(item))
 }
 
 fn create_from_user_view(item: &UserView, context: &TuiContext) -> Entry {
@@ -166,6 +166,9 @@ pub async fn display_home_screen(
         match code {
             Some(KeyCode::Char('q') | KeyCode::Esc) => {
                 break Ok(Navigation::PopContext);
+            }
+            Some(KeyCode::Char('r')) => {
+                break Ok(Navigation::Replace(NextScreen::LoadHomeScreen));
             }
             Some(KeyCode::Left) => {
                 screen.left();

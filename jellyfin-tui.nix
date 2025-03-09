@@ -4,10 +4,8 @@
   pkg-config,
   openssl,
   mpv,
-  clang,
-  libclang,
   sqlite,
-  use_bindgen ? false,
+  use_bindgen ? true,
   bundle_sqlite ? false,
 }:
 let
@@ -61,6 +59,6 @@ rustPlatform.buildRustPackage {
   ] ++ (lib.optionals (!bundle_sqlite) [ sqlite ]);
   buildFeatures =
     (lib.optionals use_bindgen [ "use-bindgen" ])
-    ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-bundled" ]);
+    ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
   SQLX_OFFLINE = "true";
 }

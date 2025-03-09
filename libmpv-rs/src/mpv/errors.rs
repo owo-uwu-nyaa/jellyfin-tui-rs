@@ -52,7 +52,10 @@ impl fmt::Debug for Error {
             ),
             Error::InvalidUtf8 => f.write_str("Invalid utf-8"),
             Error::Null => f.write_str("libmpc handle is null"),
-            Error::Raw(err) => f.write_str(mpv_error_str(*err)),
+            Error::Raw(err) => {
+                f.write_str("error from libmpv: ")?;
+                f.write_str(mpv_error_str(*err))
+            }
             Error::IntConversion(try_from_int_error) => {
                 write!(f, "Int conversion error: {try_from_int_error:?}")
             }

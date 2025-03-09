@@ -129,7 +129,7 @@ fn events() {
 
     mpv.playlist_append_play(c"https://www.youtube.com/watch?v=DLzxrzFCyOs")
         .unwrap();
-    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
+    assert_event_occurs!(mpv, 10., Ok(Event::StartFile{ playlist_entry_id:1 }));
     assert_event_occurs!(
         mpv,
         10.,
@@ -144,7 +144,7 @@ fn events() {
 
     mpv.playlist_append_play(c"test-data/speech_12kbps_mb.wav")
         .unwrap();
-    assert_event_occurs!(mpv, 10., Ok(Event::StartFile));
+    assert_event_occurs!(mpv, 10., Ok(Event::StartFile{ playlist_entry_id:2 }));
     assert_event_occurs!(
         mpv,
         3.,

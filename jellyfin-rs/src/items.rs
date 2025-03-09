@@ -173,6 +173,6 @@ impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
     }
 
     pub fn get_video_url(&self, item: &MediaItem) -> String {
-        format!("{}/Videos/{}/main.m3u8", self.url, item.id)
+        format!("{}Items/{}/Download", self.url, item.id)
     }
 }

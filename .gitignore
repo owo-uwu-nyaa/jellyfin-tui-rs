@@ -3,3 +3,5 @@
 /result
 /db.sqlite
 /.gdb_history
+/db.sqlite-shm
+/db.sqlite-wal
