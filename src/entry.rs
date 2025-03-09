@@ -76,7 +76,7 @@ impl Entry {
         }
     }
 
-    pub fn get(self) -> NextScreen {
+    pub fn get_action(self) -> NextScreen {
         self.action
     }
 }

@@ -185,7 +185,7 @@ pub async fn display_home_screen(
             Some(KeyCode::Enter) => {
                 break Ok(Navigation::Push {
                     current: NextScreen::LoadHomeScreen,
-                    next: screen.get(),
+                    next: screen.get().get_action(),
                 });
             }
             _ => {}

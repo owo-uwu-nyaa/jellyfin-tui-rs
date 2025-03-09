@@ -10,7 +10,6 @@ use tracing::{instrument, trace};
 use crate::{
     entry::{entry_height, Entry, ENTRY_WIDTH},
     image::ImagesAvailable,
-    state::NextScreen,
 };
 
 pub struct EntryList {
@@ -108,8 +107,8 @@ impl EntryList {
         trace!("current: {}, length: {}", self.current, self.entries.len());
     }
 
-    pub fn get(mut self) -> NextScreen {
-        self.entries.swap_remove(self.current).get()
+    pub fn get(mut self) -> Entry {
+        self.entries.swap_remove(self.current)
     }
 }
 

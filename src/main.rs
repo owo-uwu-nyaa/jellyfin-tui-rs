@@ -5,6 +5,7 @@ mod image;
 mod login;
 mod mpv;
 mod state;
+mod grid;
 
 use std::{fs::File, io::stdout, path::PathBuf, sync::Mutex};
 

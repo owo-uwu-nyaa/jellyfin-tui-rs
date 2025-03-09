@@ -8,7 +8,7 @@ use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
 
 use super::list::{entry_list_height, EntryList};
-use crate::{entry::ENTRY_WIDTH, image::ImagesAvailable, state::NextScreen};
+use crate::{entry::{Entry, ENTRY_WIDTH}, image::ImagesAvailable};
 
 pub struct EntryScreen {
     entries: Vec<EntryList>,
@@ -96,7 +96,7 @@ impl EntryScreen {
         self.entries[self.current].right();
     }
 
-    pub fn get(mut self) -> NextScreen {
+    pub fn get(mut self) -> Entry{
         self.entries.swap_remove(self.current).get()
     }
 
