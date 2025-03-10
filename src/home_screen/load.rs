@@ -13,7 +13,10 @@ use jellyfin::{
 use ratatui::widgets::{Block, Paragraph};
 use tracing::{debug, instrument, trace};
 
-use crate::{state::{Navigation, NextScreen}, TuiContext};
+use crate::{
+    state::{Navigation, NextScreen},
+    TuiContext,
+};
 
 #[derive(Debug)]
 pub struct HomeScreenData {
@@ -76,7 +79,10 @@ pub async fn load_data(
             ..Default::default()
         })
         .await
-        .context("fetching next up")?.deserialize().await.context("deserializing next up")?;
+        .context("fetching next up")?
+        .deserialize()
+        .await
+        .context("deserializing next up")?;
     trace!("next up: {next_up:#?}");
     let latest: HashMap<_, _> = stream::iter(user_views.items.iter())
         .filter_map(async |view| {

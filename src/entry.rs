@@ -1,14 +1,18 @@
-use jellyfin::{items::{ItemType, MediaItem}, user_views::UserView};
+use jellyfin::{
+    items::{ItemType, MediaItem},
+    user_views::UserView,
+};
 use ratatui::{
     layout::Rect,
     widgets::{Block, BorderType, Widget},
 };
-use ratatui_image::{FontSize, picker::Picker};
+use ratatui_image::{picker::Picker, FontSize};
 use tracing::instrument;
 
 use crate::{
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
-    state::NextScreen, TuiContext,
+    state::NextScreen,
+    TuiContext,
 };
 
 pub struct Entry {
@@ -113,30 +117,24 @@ impl Entry {
     }
 
     pub fn from_user_view(item: UserView, context: &TuiContext) -> Self {
-    let title = item.name.clone();
-    let image = item
-        .image_tags
-        .iter()
-        .flat_map(|map| map.iter())
-        .next()
-        .map(|(image_type, tag)| {
-            JellyfinImageState::new(
-                &context.jellyfin,
-                context.cache.clone(),
-                tag.clone(),
-                item.id.clone(),
-                *image_type,
-                context.image_cache.clone(),
-            )
-        });
-    Self::new(
-        image,
-        title,
-        None,
-        NextScreen::LoadUserView(item) ,
-    )
-}
-
+        let title = item.name.clone();
+        let image = item
+            .image_tags
+            .iter()
+            .flat_map(|map| map.iter())
+            .next()
+            .map(|(image_type, tag)| {
+                JellyfinImageState::new(
+                    &context.jellyfin,
+                    context.cache.clone(),
+                    tag.clone(),
+                    item.id.clone(),
+                    *image_type,
+                    context.image_cache.clone(),
+                )
+            });
+        Self::new(image, title, None, NextScreen::LoadUserView(item))
+    }
 
     pub fn get_action(self) -> NextScreen {
         self.action

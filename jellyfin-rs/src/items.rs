@@ -8,6 +8,7 @@ use serde::Serialize;
 use tracing::instrument;
 
 #[derive(Debug, Default, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetItemsQuery<'a> {
     pub user_id: Option<&'a str>,
     pub start_index: Option<u32>,
@@ -22,6 +23,7 @@ pub struct GetItemsQuery<'a> {
     pub fields: Option<&'a str>,
     pub sort_by: Option<&'a str>,
     pub recursive: Option<bool>,
+    pub sort_order: Option<&'a str>,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]

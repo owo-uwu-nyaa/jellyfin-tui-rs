@@ -43,5 +43,6 @@ pub async fn initialize_cache() -> Result<SqlitePool> {
     sqlx::migrate!().run(&db).await?;
     info!("migrations applied");
     tokio::spawn(crate::image::clean_image_cache(db.clone()));
+    tokio::spawn(crate::login::clean_creds(db.clone()));
     Ok(db)
 }

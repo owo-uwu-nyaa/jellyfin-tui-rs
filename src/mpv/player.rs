@@ -1,7 +1,7 @@
 use std::{ffi::CString, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{Stream, StreamExt, stream::FusedStream};
-use jellyfin::{Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody};
+use futures_util::{stream::FusedStream, Stream, StreamExt};
+use jellyfin::{items::MediaItem, playback_status::ProgressBody, Auth, JellyfinClient};
 use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
 use tokio::{
     task::JoinSet,

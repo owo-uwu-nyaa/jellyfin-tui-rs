@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-use crate::{items::MediaItem, sha::Sha256, Authed, JellyfinClient, JellyfinVec, JsonResponse, Result};
+use crate::{
+    items::MediaItem, sha::Sha256, Authed, JellyfinClient, JellyfinVec, JsonResponse, Result,
+};
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

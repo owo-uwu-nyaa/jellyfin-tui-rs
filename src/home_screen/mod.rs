@@ -8,16 +8,15 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
-    Result, TuiContext,
     entry::Entry,
     image::ImagesAvailable,
     state::{Navigation, NextScreen},
+    Result, TuiContext,
 };
 
 mod list;
 pub mod load;
 mod screen;
-
 
 fn create_from_media_item_vec(
     items: Vec<MediaItem>,
@@ -44,7 +43,8 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntrySc
         create_from_media_item_vec(data.next_up, "Next Up", context),
         EntryList::new(
             data.views
-                .iter().cloned()
+                .iter()
+                .cloned()
                 .map(|item| Entry::from_user_view(item, context))
                 .collect(),
             "Library".to_string(),

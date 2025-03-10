@@ -7,8 +7,10 @@ use base64::{engine::general_purpose::URL_SAFE, Engine};
 use tracing::{instrument, trace};
 
 use crate::{
-    err::JellyfinError, sha::Sha256, user::UserAuth, Auth, ClientInfo, JellyfinClient, KeyAuth,
-    NoAuth,
+    err::JellyfinError,
+    sha::Sha256,
+    user::{User, UserAuth},
+    Auth, ClientInfo, JellyfinClient, KeyAuth, NoAuth,
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize)]
@@ -18,9 +20,14 @@ struct AuthUserNameReq<'a> {
     pw: &'a str,
 }
 impl<Sha: Sha256> JellyfinClient<NoAuth, Sha> {
-    pub fn auth_key(self, key: impl ToString) -> JellyfinClient<KeyAuth, Sha> {
+    pub fn auth_key(self, key: String, user_name: impl AsRef<str>) -> JellyfinClient<KeyAuth, Sha> {
         let key = key.to_string();
-        let auth_header = make_key_auth_header::<Sha>(&key, &self.client_info, &self.device_name);
+        let auth_header = make_key_auth_header::<Sha>(
+            &key,
+            &self.client_info,
+            &self.device_name,
+            user_name.as_ref(),
+        );
         JellyfinClient {
             url: self.url,
             client: self.client,
@@ -80,10 +87,37 @@ impl<Sha: Sha256> JellyfinClient<NoAuth, Sha> {
             device_name: self.device_name,
             auth: Auth {
                 user: auth.user,
-                session_info: auth.session_info,
                 access_token: auth.access_token,
-                server_id: auth.server_id,
                 header: auth_header,
+            },
+            _phantom: PhantomData,
+        })
+    }
+}
+
+impl<Sha: Sha256> JellyfinClient<KeyAuth, Sha> {
+    pub async fn get_self(self) -> Result<JellyfinClient<Auth, Sha>, (Self, JellyfinError)> {
+        let req = match self.get(format!("{}Users/Me", self.url)).send().await {
+            Ok(v) => v,
+            Err(e) => return Err((self, e.into())),
+        };
+        let req = match req.error_for_status() {
+            Ok(v) => v,
+            Err(e) => return Err((self, e.into())),
+        };
+        let user: User = match req.json().await {
+            Ok(v) => v,
+            Err(e) => return Err((self, e.into())),
+        };
+        Ok(JellyfinClient {
+            url: self.url,
+            client: self.client,
+            client_info: self.client_info,
+            device_name: self.device_name,
+            auth: Auth {
+                user,
+                access_token: self.auth.access_key,
+                header: self.auth.header,
             },
             _phantom: PhantomData,
         })
@@ -150,6 +184,7 @@ fn make_key_auth_header<Sha: Sha256>(
     key: &str,
     client_info: &ClientInfo,
     device_name: &str,
+    user_name: &str,
 ) -> HeaderValue {
     let mut val = r#"MediaBrowser Token=""#.to_string();
     val += key;
@@ -160,17 +195,7 @@ fn make_key_auth_header<Sha: Sha256>(
     val += r#"", Device=""#;
     URL_SAFE.encode_string(device_name.as_bytes(), &mut val);
     val += r#"", DeviceId=""#;
-    make_key_client_id::<Sha>(client_info, device_name, &mut val);
+    make_user_client_id::<Sha>(user_name, client_info, device_name);
     val.push('"');
     HeaderValue::try_from(val).expect("invalid client info for header value")
-}
-
-#[instrument(skip_all)]
-fn make_key_client_id<Sha: Sha256>(client_info: &ClientInfo, device_name: &str, out: &mut String) {
-    let mut digest = Sha::new();
-    digest.update(client_info.name.as_bytes());
-    digest.update(client_info.version.as_bytes());
-    digest.update(device_name.as_bytes());
-    let hash = digest.finalize();
-    URL_SAFE.encode_string(hash, out);
 }

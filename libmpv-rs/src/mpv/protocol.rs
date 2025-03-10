@@ -85,7 +85,7 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    let ret = panic::catch_unwind(|| unsafe{
+    let ret = panic::catch_unwind(|| unsafe {
         let slice = slice::from_raw_parts_mut(buf, nbytes as _);
         ((*data).read_fn)(&mut *(*data).cookie, slice)
     });
@@ -99,12 +99,13 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    if unsafe{(*data).seek_fn}.is_none() {
+    if unsafe { (*data).seek_fn }.is_none() {
         return mpv_error::Unsupported as _;
     }
 
-    let ret =
-        panic::catch_unwind(|| unsafe{(*(*data).seek_fn.as_ref().unwrap())(&mut *(*data).cookie, offset)});
+    let ret = panic::catch_unwind(|| unsafe {
+        (*(*data).seek_fn.as_ref().unwrap())(&mut *(*data).cookie, offset)
+    });
     if let Ok(ret) = ret {
         ret
     } else {
@@ -119,11 +120,13 @@ where
 {
     let data = cookie as *mut ProtocolData<T, U>;
 
-    if unsafe{(*data).size_fn}.is_none() {
+    if unsafe { (*data).size_fn }.is_none() {
         return mpv_error::Unsupported as _;
     }
 
-    let ret = panic::catch_unwind(||unsafe{ (*(*data).size_fn.as_ref().unwrap())(&mut *(*data).cookie)});
+    let ret = panic::catch_unwind(|| unsafe {
+        (*(*data).size_fn.as_ref().unwrap())(&mut *(*data).cookie)
+    });
     if let Ok(ret) = ret {
         ret
     } else {
@@ -137,9 +140,9 @@ where
     T: RefUnwindSafe,
     U: RefUnwindSafe,
 {
-    let data = unsafe{Box::from_raw(cookie as *mut ProtocolData<T, U>)};
+    let data = unsafe { Box::from_raw(cookie as *mut ProtocolData<T, U>) };
 
-    panic::catch_unwind(|| (data.close_fn)(unsafe{Box::from_raw(data.cookie)}));
+    panic::catch_unwind(|| (data.close_fn)(unsafe { Box::from_raw(data.cookie) }));
 }
 
 struct ProtocolData<T, U> {
@@ -285,7 +288,7 @@ impl<T: RefUnwindSafe, U: RefUnwindSafe> Protocol<T, U> {
         size_fn: Option<StreamSize<T>>,
     ) -> Protocol<T, U> {
         let c_layout = Layout::from_size_align(mem::size_of::<T>(), mem::align_of::<T>()).unwrap();
-        let cookie = unsafe{alloc::alloc(c_layout) as *mut T};
+        let cookie = unsafe { alloc::alloc(c_layout) as *mut T };
         let data = Box::into_raw(Box::new(ProtocolData {
             cookie,
             user_data,

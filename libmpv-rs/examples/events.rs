@@ -23,9 +23,12 @@ use std::{collections::HashMap, env, ffi::CString, thread, time::Duration};
 const VIDEO_URL: &str = "https://www.youtube.com/watch?v=DLzxrzFCyOs";
 
 fn main() -> Result<()> {
-    let path = CString::new(env::args()
-        .nth(1)
-        .unwrap_or_else(|| String::from(VIDEO_URL))).unwrap();
+    let path = CString::new(
+        env::args()
+            .nth(1)
+            .unwrap_or_else(|| String::from(VIDEO_URL)),
+    )
+    .unwrap();
 
     // Create an `Mpv` and set some properties.
     let mpv = Mpv::new()?;
@@ -50,25 +53,27 @@ fn main() -> Result<()> {
             // Trigger `Event::EndFile`.
             mpv.playlist_next_force().unwrap();
         });
-        scope.spawn(move |_| loop {
-            let ev = events.wait_event(600.).unwrap_or(Err(Error::Null));
+        scope.spawn(move |_| {
+            loop {
+                let ev = events.wait_event(600.).unwrap_or(Err(Error::Null));
 
-            match ev {
-                Ok(Event::EndFile(r)) => {
-                    println!("Exiting! Reason: {:?}", r);
-                    break;
-                }
+                match ev {
+                    Ok(Event::EndFile(r)) => {
+                        println!("Exiting! Reason: {:?}", r);
+                        break;
+                    }
 
-                Ok(Event::PropertyChange {
-                    name: "demuxer-cache-state",
-                    change: PropertyData::Node(mpv_node),
-                    ..
-                }) => {
-                    let ranges = seekable_ranges(mpv_node).unwrap();
-                    println!("Seekable ranges updated: {:?}", ranges);
+                    Ok(Event::PropertyChange {
+                        name: "demuxer-cache-state",
+                        change: PropertyData::Node(mpv_node),
+                        ..
+                    }) => {
+                        let ranges = seekable_ranges(mpv_node).unwrap();
+                        println!("Seekable ranges updated: {:?}", ranges);
+                    }
+                    Ok(e) => println!("Event triggered: {:?}", e),
+                    Err(e) => println!("Event errored: {:?}", e),
                 }
-                Ok(e) => println!("Event triggered: {:?}", e),
-                Err(e) => println!("Event errored: {:?}", e),
             }
         });
     })

@@ -11,20 +11,25 @@ use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
 use player::{Player, PlayerState};
 use ratatui::{
-    Terminal,
     layout::{Constraint, Layout},
     prelude::CrosstermBackend,
     widgets::{Block, Padding, Paragraph},
+    Terminal,
 };
 use tokio::select;
 use tracing::instrument;
 
-use crate::{state::{Navigation, NextScreen}, TuiContext};
+use crate::{
+    state::{Navigation, NextScreen},
+    TuiContext,
+};
 
 #[instrument(skip_all)]
 pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
-    if items.is_empty(){
-       return Ok(Navigation::Replace(NextScreen::Error("Unable to play, item is empty".into())));
+    if items.is_empty() {
+        return Ok(Navigation::Replace(NextScreen::Error(
+            "Unable to play, item is empty".into(),
+        )));
     }
     let mut player = Player::new(cx, &cx.jellyfin, items, index)?;
     loop {

@@ -1,17 +1,17 @@
 mod cache;
 mod entry;
+mod grid;
 mod home_screen;
 mod image;
 mod login;
 mod mpv;
 mod state;
-mod grid;
 mod user_view;
 
 use std::{fs::File, io::stdout, path::PathBuf, sync::Mutex};
 
 use clap::Parser;
-use color_eyre::eyre::{Context, OptionExt, Result, eyre};
+use color_eyre::eyre::{eyre, Context, OptionExt, Result};
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste, EventStream},
     execute,
@@ -27,13 +27,13 @@ use state::State;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 #[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = EventStream::new();
-    if let Some(client) = login::login(&mut term, &config, &mut events).await? {
+    if let Some(client) = login::login(&mut term, &config, &mut events, &cache).await? {
         let mut context = TuiContext {
             jellyfin: client,
             term,
@@ -122,7 +122,7 @@ fn main() -> Result<()> {
                 .into_iter()
                 .for_each(|send_panic| send_panic.send(()).expect("sending panic failed"));
         })
-        .thread_name(|n|format!("tui-worker-{n}"))
+        .thread_name(|n| format!("tui-worker-{n}"))
         .build_global()
         .context("building global thread pool")?;
     info!("logging initiaited");
@@ -177,7 +177,7 @@ fn init() -> Result<Config> {
                 .ok_or_eyre("non unicode char in config dir")?,
         )?
         .set_default("hwdec", "auto-safe")?
-    .set_default("mpv_log_level", "info")?;
+        .set_default("mpv_log_level", "info")?;
     if let Ok(file) = std::fs::read_to_string(config_file) {
         config = config.add_source(config::File::from_str(&file, config::FileFormat::Toml));
     }

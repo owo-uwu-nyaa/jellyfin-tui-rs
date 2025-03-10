@@ -18,22 +18,23 @@
 
 use std::{
     env,
+    ffi::CString,
     fs::File,
     io::{Read, Seek, SeekFrom},
     mem, thread,
     time::Duration,
-    ffi::CString,
 };
 
 fn main() {
     use libmpv::{protocol::*, *};
 
-    let path =CString::new( format!(
+    let path = CString::new(format!(
         "filereader://{}",
         env::args()
             .nth(1)
             .expect("Expected path to local media as argument, found nil.")
-    )).unwrap();
+    ))
+    .unwrap();
 
     let protocol = unsafe {
         Protocol::new(

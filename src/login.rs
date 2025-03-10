@@ -1,9 +1,10 @@
 use std::{
     borrow::Cow,
-    fs::{create_dir_all, OpenOptions},
+    fs::{OpenOptions, create_dir_all},
     io::Write,
     os::unix::fs::OpenOptionsExt,
     pin::pin,
+    time::Duration,
 };
 
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
@@ -11,14 +12,16 @@ use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use ratatui::{
+    DefaultTerminal,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, BorderType, Padding, Paragraph, Wrap},
-    DefaultTerminal,
 };
 use serde::{Deserialize, Serialize};
-use tracing::{error, instrument};
+use sqlx::{SqlitePool, query, query_scalar};
+use tokio::select;
+use tracing::{error, info, instrument};
 use url::Url;
 
 use crate::Config;
@@ -196,11 +199,12 @@ async fn get_login_info(
     }
 }
 
-#[instrument(skip(term, events))]
+#[instrument(skip_all)]
 pub async fn login(
     term: &mut DefaultTerminal,
     config: &Config,
     events: &mut EventStream,
+    cache: &SqlitePool,
 ) -> Result<Option<JellyfinClient<Auth>>> {
     let mut login_info: LoginInfo;
     let mut error: Option<Report>;
@@ -259,8 +263,12 @@ pub async fn login(
                 continue;
             }
         }
-        let mut auth_request =
-            pin!(client.auth_user_name(&login_info.username, &login_info.password));
+        let mut auth_request = pin!(jellyfin_login(
+            client,
+            cache,
+            &login_info.username,
+            &login_info.password,
+        ));
         loop {
             tokio::select! {
                 event = events.next() => {
@@ -284,7 +292,7 @@ pub async fn login(
                         Ok(client) => break 'connect client,
                         Err((c,e)) => {
                             client = c;
-                            error = Some(Report::new(e).wrap_err("logging in"));
+                            error = Some(e.wrap_err("logging in"));
                             break
                         },
                     }
@@ -315,4 +323,99 @@ pub async fn login(
             .context("writing out new login info")?;
     }
     Ok(Some(client))
+}
+
+async fn jellyfin_login(
+    mut client: JellyfinClient<NoAuth>,
+    cache: &SqlitePool,
+    username: &str,
+    password: &str,
+) -> std::result::Result<JellyfinClient<Auth>, (JellyfinClient<NoAuth>, Report)> {
+    let device_name = client.get_device_name();
+    let client_name = client.get_client_info().name.as_ref();
+    let client_version = client.get_client_info().version.as_ref();
+    match query_scalar!("select access_token from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
+                        device_name,
+                        client_name,
+                        client_version,
+                        username
+    ).fetch_optional(cache).await{
+        Ok(None) => {}
+        Err(e) => return Err((client,e.into())),
+        Ok(Some(access_token)) => {
+            info!("testing cached credentials");
+            match client.auth_key(access_token, username).get_self().await{
+                Ok(client) => {
+                    info!("credentials valid");
+                    return Ok(client)
+                },
+                Err((c,e)) => {
+                    error!("Error getting self from server: {e:?}");
+                    client=c.without_auth();
+                    let device_name = client.get_device_name();
+                    let client_name = client.get_client_info().name.as_ref();
+                    let client_version = client.get_client_info().version.as_ref();
+                    match query!("delete from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
+                                 device_name,
+                                 client_name,
+                                 client_version,
+                                 username
+                    ).execute(cache).await{
+                        Ok(_)=>{},
+                        Err(e) => {
+                            return Err((client,e.into()))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    info!("connecting to server");
+    let client = match client.auth_user_name(username, password).await {
+        Ok(v) => v,
+        Err((client, e)) => return Err((client, e.into())),
+    };
+    let device_name = client.get_device_name();
+    let client_name = client.get_client_info().name.as_ref();
+    let client_version = client.get_client_info().version.as_ref();
+    let access_token = client.get_auth().access_token.as_str();
+    match query!("insert into creds (device_name, client_name, client_version, user_name, access_token) values (?, ?, ?, ?, ?)",
+                 device_name,
+                 client_name,
+                 client_version,
+                 username,
+                 access_token,
+    ).execute(cache).await{
+        Ok(_)=> {},
+        Err(e)=> return Err((client.without_auth(), e.into())),
+    }
+    Ok(client)
+}
+
+#[instrument(skip_all)]
+pub async fn clean_creds(db: SqlitePool) {
+    let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 24));
+    let err = loop {
+        select! {
+            biased;
+            _ = db.close_event() => {
+                return
+            }
+            _ = interval.tick() => {}
+        }
+
+        match query!("delete from creds where (added+30*24*60*60)<unixepoch()")
+            .execute(&db)
+            .await
+            .context("deleting old creds")
+        {
+            Err(e) => break e,
+            Ok(res) => {
+                if res.rows_affected() > 0 {
+                    info!("removed {} access tokens from cache", res.rows_affected());
+                }
+            }
+        }
+    };
+    error!("Error cleaning image cache: {err:?}");
 }

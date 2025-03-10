@@ -1,5 +1,5 @@
 use crate::{
-    entry::{ENTRY_WIDTH, Entry, entry_height},
+    entry::{entry_height, Entry, ENTRY_WIDTH},
     image::ImagesAvailable,
 };
 use ratatui::{

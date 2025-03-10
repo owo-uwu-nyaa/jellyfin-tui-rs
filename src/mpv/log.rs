@@ -11,10 +11,8 @@ use libmpv_sys::{
     mpv_log_level_MPV_LOG_LEVEL_WARN,
 };
 use parking_lot::RwLock;
-use tracing::{
-    Level, Metadata, field::FieldSet, level_filters::STATIC_MAX_LEVEL,
-};
-use tracing_core::{Callsite, LevelFilter, callsite::DefaultCallsite, identify_callsite};
+use tracing::{field::FieldSet, level_filters::STATIC_MAX_LEVEL, Level, Metadata};
+use tracing_core::{callsite::DefaultCallsite, identify_callsite, Callsite, LevelFilter};
 
 pub fn log_message(prefix: &str, level: LogLevel, text: &str) {
     #[allow(non_upper_case_globals)]

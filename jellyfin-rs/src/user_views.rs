@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::{items::ImageType, sha::Sha256, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result};
+use crate::{
+    items::ImageType, sha::Sha256, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result,
+};
 
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +41,7 @@ pub struct UserView {
     pub view_type: UserViewType,
     pub image_tags: Option<HashMap<ImageType, String>>,
     pub sort_name: String,
-    pub collection_type: CollectionType
+    pub collection_type: CollectionType,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -50,8 +52,8 @@ pub enum UserViewType {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum CollectionType{
+pub enum CollectionType {
     Playlists,
     Movies,
-    TvShows
+    TvShows,
 }

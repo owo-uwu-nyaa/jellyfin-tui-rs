@@ -7,7 +7,6 @@ use reqwest::{
 };
 use sealed::AuthSealed;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use session::SessionInfo;
 use sha::Sha256;
 use url::Url;
 use user::User;
@@ -17,14 +16,14 @@ pub mod auth;
 pub mod err;
 pub mod image;
 pub mod items;
+pub mod playback_status;
+pub mod playlist;
 pub mod session;
 pub mod sha;
 pub mod shows;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
-pub mod playback_status;
-pub mod playlist;
 pub use reqwest;
 
 #[derive(Debug, Clone)]
@@ -40,9 +39,7 @@ pub struct JellyfinClient<AuthS: AuthStatus = Auth, Sha: Sha256 = sha::Default> 
 pub struct NoAuth;
 pub struct Auth {
     pub user: User,
-    pub session_info: SessionInfo,
     pub access_token: String,
-    pub server_id: String,
     pub header: HeaderValue,
 }
 
@@ -134,9 +131,10 @@ impl<AuthS: AuthStatus, Sha: Sha256> JellyfinClient<AuthS, Sha> {
         url: impl AsRef<str>,
         client_info: ClientInfo,
         device_name: impl Into<Cow<'static, str>>,
-        key: impl ToString,
+        key: String,
+        username: impl AsRef<str>,
     ) -> Result<JellyfinClient<KeyAuth, Sha>> {
-        Ok(Self::new(url, client_info, device_name)?.auth_key(key))
+        Ok(Self::new(url, client_info, device_name)?.auth_key(key, username))
     }
 
     pub fn get_auth(&self) -> &AuthS {
@@ -177,6 +175,16 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
         self.client
             .delete(url)
             .header(AUTHORIZATION, self.auth.header().clone())
+    }
+    pub fn without_auth(self) -> JellyfinClient<NoAuth, Sha> {
+        JellyfinClient {
+            url: self.url,
+            client: self.client,
+            client_info: self.client_info,
+            device_name: self.device_name,
+            auth: NoAuth,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -225,12 +233,12 @@ impl<T> JellyfinVec<T> {
         let mut res = initial.items;
         let total = initial.total_record_count;
         loop {
-            if let Some(total) = total{
-                if total as usize<=res.len(){
+            if let Some(total) = total {
+                if total as usize <= res.len() {
                     break;
                 }
             }
-            if last_len==0{
+            if last_len == 0 {
                 break;
             }
             let mut next = f(res.len() as u32).await?;

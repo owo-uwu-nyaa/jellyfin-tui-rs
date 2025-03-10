@@ -1,17 +1,17 @@
 use std::{
     ffi::CString,
     ops::Deref,
-    task::{Poll, ready},
+    task::{ready, Poll},
 };
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::Stream;
 use libmpv::{
-    Format, Mpv,
     events::{
-        Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData, mpv_event_id,
+        mpv_event_id, Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData,
     },
     node::{BorrowingMpvNodeList, ToNode},
+    Format, Mpv,
 };
 use tracing::{info, instrument, trace, warn};
 

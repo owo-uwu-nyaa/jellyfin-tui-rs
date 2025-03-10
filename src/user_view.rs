@@ -2,21 +2,21 @@ use color_eyre::eyre::{Context, Result};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
     sha::Sha256,
     user_views::UserView,
+    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
 use std::pin::pin;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
-    TuiContext,
     entry::Entry,
     grid::EntryGrid,
     image::ImagesAvailable,
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
 async fn fetch_user_view_items(
@@ -30,26 +30,26 @@ async fn fetch_user_view_items(
                 user_id: user_id.into(),
                 start_index: start.into(),
                 limit: 100.into(),
-                recursive: true.into(),
+                recursive: None,
                 parent_id: view.id.as_str().into(),
                 exclude_item_types: None,
-                include_item_types: "Series".into(),
+                include_item_types: None,
                 enable_images: true.into(),
                 enable_image_types: "Primary, Backdrop, Thumb".into(),
                 image_type_limit: 1.into(),
                 enable_user_data: true.into(),
                 fields: None,
-                sort_by: "DateAdded".into(),
+                sort_by: "DateLastContentAdded".into(),
+                sort_order: "Descending".into(),
             })
             .await
             .context("requesting items")?
-            .deserialize_as::<JellyfinVec<serde_json::Value>>()
+            .deserialize()
             .await
             .context("deserializing items")
     })
     .await?;
-    info!("items: {items:#?}");
-    todo!()
+    Ok(items)
 }
 
 pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navigation> {

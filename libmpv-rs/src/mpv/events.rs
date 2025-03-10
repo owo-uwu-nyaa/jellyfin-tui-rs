@@ -606,10 +606,7 @@ mod sealed {
 }
 
 mod interval {
-    use std::{
-        task::Context,
-        time::Duration,
-    };
+    use std::{task::Context, time::Duration};
 
     pub trait Interval {
         fn new() -> Self;
