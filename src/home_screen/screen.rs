@@ -2,7 +2,7 @@ use std::{cmp::min, iter::repeat_n};
 
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
-    widgets::{Block, Padding, Scrollbar, ScrollbarState, StatefulWidget, Widget},
+    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget, Wrap},
 };
 use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
@@ -42,6 +42,10 @@ impl EntryScreen {
         outer.render(area, buf);
         let entry_height = entry_list_height(picker.font_size());
         let visible = self.visible(area.height, entry_height);
+        if visible == 0{
+            Paragraph::new("insufficient space").wrap(Wrap{ trim: true }).render(main, buf);
+            return;
+        }
         let mut entries = self.entries.as_mut_slice();
         let mut current = self.current;
         if visible < entries.len() {

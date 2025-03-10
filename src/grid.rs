@@ -4,7 +4,7 @@ use crate::{
 };
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
-    widgets::{Block, BorderType, Padding, Scrollbar, ScrollbarState, StatefulWidget, Widget},
+    widgets::{Block, BorderType, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget, Wrap},
 };
 use ratatui_image::picker::Picker;
 use std::{cmp::min, iter::repeat_n};
@@ -43,6 +43,10 @@ impl EntryGrid {
         let entry_height = entry_height(picker.font_size());
         debug!("entry_height: {entry_height}");
         let height: usize = ((main.height+ 1) / (entry_height + 1)).into();
+        if height==0||self.width==0{
+            Paragraph::new("insufficient space").wrap(Wrap{ trim: true }).render(main, buf);
+            return;
+        }
         debug!("height: {height}");
         let rows = self.entries.len().div_ceil(self.width);
         debug!("rows: {rows}");
