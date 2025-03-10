@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from creds where (added+30*24*60*60)<unixepoch()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "8f554b3bf89a4fc44a7d14c259870bd2074ca8989454bad5a71ed14959de26ef"
+}

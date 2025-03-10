@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "6fb8aca14f8d3fa393b9fc56d6fc7b259a9c2a2ec4a927183b36f362e01e7d73"
+}

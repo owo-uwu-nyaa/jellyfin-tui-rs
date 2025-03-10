@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select access_token from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "access_token",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dc00ae52e92f632de6c12fe181c852d642cdb7512e2761c6e4b993d7f5d54030"
+}
