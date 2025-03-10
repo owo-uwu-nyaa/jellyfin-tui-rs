@@ -8,7 +8,7 @@ use ratatui::{
 };
 use ratatui_image::picker::Picker;
 use std::{cmp::min, iter::repeat_n};
-use tracing::{instrument, trace};
+use tracing::{debug, instrument, trace};
 
 pub struct EntryGrid {
     entries: Vec<Entry>,
@@ -41,8 +41,11 @@ impl EntryGrid {
         outer.render(area, buf);
         self.width = ((main.width + 1) / (ENTRY_WIDTH + 1)).into();
         let entry_height = entry_height(picker.font_size());
-        let height: usize = ((main.width + 1) / (entry_height + 1)).into();
+        debug!("entry_height: {entry_height}");
+        let height: usize = ((main.height+ 1) / (entry_height + 1)).into();
+        debug!("height: {height}");
         let rows = self.entries.len().div_ceil(self.width);
+        debug!("rows: {rows}");
         let row_index = self.current / self.width;
         let mut skip_rows = 0usize;
         if height < rows {
@@ -51,7 +54,9 @@ impl EntryGrid {
                 skip_rows = min(row_index - position, rows - height);
             }
         }
+        debug!("skip_rows: {skip_rows}");
         let rendered_rows = min(height, rows);
+        debug!("rendered_rows: {rendered_rows}");
         let row_areas = Layout::vertical(repeat_n(Constraint::Length(entry_height), height))
             .spacing(1)
             .flex(Flex::Start)
