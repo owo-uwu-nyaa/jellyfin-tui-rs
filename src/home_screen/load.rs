@@ -140,8 +140,8 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
                         modifiers: _,
                         kind: KeyEventKind::Press,
                         state: _,
-                    })))
-                        | None => break Ok(Navigation::PopContext),
+                    }))) => break Ok(Navigation::PopContext),
+                    None => break Ok(Navigation::Exit),
                     Some(Ok(_)) => {
                         cx.term
                           .draw(|frame| frame.render_widget(&msg, frame.area()))

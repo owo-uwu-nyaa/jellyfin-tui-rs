@@ -6,6 +6,7 @@ mod login;
 mod mpv;
 mod state;
 mod grid;
+mod user_view;
 
 use std::{fs::File, io::stdout, path::PathBuf, sync::Mutex};
 

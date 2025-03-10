@@ -19,10 +19,13 @@ use ratatui::{
 use tokio::select;
 use tracing::instrument;
 
-use crate::{TuiContext, state::Navigation};
+use crate::{state::{Navigation, NextScreen}, TuiContext};
 
 #[instrument(skip_all)]
 pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
+    if items.is_empty(){
+       return Ok(Navigation::Replace(NextScreen::Error("Unable to play, item is empty".into())));
+    }
     let mut player = Player::new(cx, &cx.jellyfin, items, index)?;
     loop {
         cx.term.clear()?;
@@ -43,12 +46,11 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
                     }))) => {break;}
                     Some(Ok(_)) => {},
                     Some(Err(e)) => return Err(e).context("getting key events from terminal"),
-                    None => {break;}
+                    None => {return Ok(Navigation::Exit);}
                 }
             }
         }
     }
-    while let Some(()) = player.try_next().await? {}
     //some ffmpeg stuff still writes to stdout
     cx.term.clear()?;
     Ok(Navigation::PopContext)

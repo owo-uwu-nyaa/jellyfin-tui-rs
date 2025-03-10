@@ -29,6 +29,8 @@ pub struct Player<'j> {
     last_index: Option<usize>,
     done: bool,
     finished: bool,
+    playback_started: bool,
+    initial_index: i64,
 }
 
 impl FusedStream for Player<'_> {
@@ -66,6 +68,18 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                     Some(Ok(MpvEvent::StartFile(index))) => {
                         //mpv index is 1 based
                         let index = index - 1;
+                        if !state.playback_started {
+                            state.playback_started = true;
+                            debug!("initial index: {index}, should be {}", state.initial_index);
+                            if index != state.initial_index {
+                                mpv.command(&[
+                                    c"playlist-play-index".to_node(),
+                                    (state.initial_index).to_node(),
+                                ])?;
+                                debug!("setting index to {}", state.initial_index);
+                                continue;
+                            }
+                        }
                         info!("new index: {index}");
                         send_playing_stopped(
                             state.id.as_ref(),
@@ -227,6 +241,7 @@ impl<'j> Player<'j> {
             .ok_or_eyre("user data missing")?
             .playback_position_ticks
             / 10000000;
+
         for item in items[0..index].iter() {
             mpv.playlist_append(
                 &CString::new(jellyfin.get_video_url(item))
@@ -240,8 +255,7 @@ impl<'j> Player<'j> {
             CString::new(jellyfin.get_video_url(&items[index]))
                 .context("converting video url to cstr")?
                 .to_node(),
-            //c"https://www.youtube.com/watch?v=Q9kLrlqoMfk".to_node(),
-            c"replace".to_node(),
+            c"append-play".to_node(),
             0i64.to_node(),
             BorrowingMpvNodeMap::new(
                 &[BorrowingCPtr::new(c"start")],
@@ -251,8 +265,8 @@ impl<'j> Player<'j> {
             )
             .to_node(),
         ])
-        .context("adding to playlist")?;
-        debug!("main file added to playlist");
+        .context("added main item")?;
+        debug!("main file added to playlist at index {index}");
         for item in items[index + 1..].iter() {
             mpv.playlist_append(
                 &CString::new(jellyfin.get_video_url(item))
@@ -260,8 +274,6 @@ impl<'j> Player<'j> {
             )?;
         }
         debug!("later files added");
-
-        debug!("mpv finished");
         let mut send_timer = tokio::time::interval(Duration::from_secs(10));
         send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         Ok(Self {
@@ -278,6 +290,8 @@ impl<'j> Player<'j> {
             done: false,
             finished: false,
             id: None,
+            playback_started: false,
+            initial_index: index as i64,
         })
     }
 

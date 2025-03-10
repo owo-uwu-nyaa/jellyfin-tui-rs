@@ -8,6 +8,23 @@ use serde::Serialize;
 use tracing::instrument;
 
 #[derive(Debug, Default, Clone, Serialize)]
+pub struct GetItemsQuery<'a> {
+    pub user_id: Option<&'a str>,
+    pub start_index: Option<u32>,
+    pub limit: Option<u32>,
+    pub parent_id: Option<&'a str>,
+    pub exclude_item_types: Option<&'a str>,
+    pub include_item_types: Option<&'a str>,
+    pub enable_images: Option<bool>,
+    pub enable_image_types: Option<&'a str>,
+    pub image_type_limit: Option<u32>,
+    pub enable_user_data: Option<bool>,
+    pub fields: Option<&'a str>,
+    pub sort_by: Option<&'a str>,
+    pub recursive: Option<bool>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetResumeQuery<'a> {
     pub user_id: Option<&'a str>,
@@ -119,13 +136,14 @@ pub enum ItemType {
         series_name: String,
     },
     Series,
+    Playlist,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
-pub struct UserData{
-    pub playback_position_ticks:u64,
-    pub play_count:u64,
+pub struct UserData {
+    pub playback_position_ticks: u64,
+    pub play_count: u64,
     pub is_favorite: bool,
     pub played: bool,
 }
@@ -137,6 +155,7 @@ pub struct MediaItem {
     pub image_tags: Option<HashMap<ImageType, String>>,
     pub media_type: MediaType,
     pub name: String,
+    pub sort_name: Option<String>,
     #[serde(flatten)]
     #[serde(rename = "type")]
     pub item_type: ItemType,
@@ -165,6 +184,19 @@ impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
         let req = self
             .get(format!("{}Shows/NextUp", self.url))
+            .query(query)
+            .send()
+            .await?;
+        let req = req.error_for_status()?;
+        Ok(req.into())
+    }
+
+    pub async fn get_items(
+        &self,
+        query: &GetItemsQuery<'_>,
+    ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
+        let req = self
+            .get(format!("{}Items", self.url))
             .query(query)
             .send()
             .await?;

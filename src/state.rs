@@ -1,4 +1,11 @@
-use jellyfin::{items::MediaItem, user_views::UserViewType};
+use std::borrow::Cow;
+
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use futures_util::StreamExt;
+use jellyfin::{items::MediaItem, user_views::UserView};
+use log::info;
+use ratatui::widgets::{Block, Paragraph, Wrap};
+use tracing::debug;
 
 use crate::{
     TuiContext,
@@ -6,16 +13,26 @@ use crate::{
         display_home_screen,
         load::{HomeScreenData, load_home_screen},
     },
+    mpv,
+    user_view::{display_user_view, fetch_user_view},
 };
-use color_eyre::Result;
+use color_eyre::{Result, eyre::Context};
 
 #[derive(Debug)]
 pub enum NextScreen {
     LoadHomeScreen,
     HomeScreen(HomeScreenData),
-    ShowUserView { id: String, kind: UserViewType },
+    LoadUserView(UserView),
+    UserView {
+        view: UserView,
+        items: Vec<MediaItem>,
+    },
     LoadPlayItem(MediaItem),
-    PlayItem { items: Vec<MediaItem>, index: usize },
+    PlayItem {
+        items: Vec<MediaItem>,
+        index: usize,
+    },
+    Error(Cow<'static, str>),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -27,6 +44,7 @@ pub enum Navigation {
         next: NextScreen,
     },
     Replace(NextScreen),
+    Exit,
 }
 
 impl NextScreen {
@@ -34,10 +52,13 @@ impl NextScreen {
         match self {
             NextScreen::LoadHomeScreen => load_home_screen(cx).await,
             NextScreen::HomeScreen(data) => display_home_screen(cx, data).await,
+            NextScreen::LoadUserView(view) => fetch_user_view(cx, view).await,
+            NextScreen::UserView { view, items } => display_user_view(cx, view, items).await,
             NextScreen::LoadPlayItem(media_item) => {
-                crate::mpv::fetch_items::fetch_screen(cx, media_item).await
+                mpv::fetch_items::fetch_screen(cx, media_item).await
             }
-            NextScreen::PlayItem { items, index } => crate::mpv::play(cx, items, index).await,
+            NextScreen::PlayItem { items, index } => mpv::play(cx, items, index).await,
+            NextScreen::Error(msg) => render_error(cx, msg).await,
             screen => todo!("{screen:?}"),
         }
     }
@@ -58,6 +79,10 @@ impl State {
                 self.screen_stack.push(current);
                 self.screen_stack.push(next);
             }
+            Navigation::Exit => {
+                debug!("full exit returned");
+                self.screen_stack.clear();
+            }
         }
     }
     pub fn pop(&mut self) -> Option<NextScreen> {
@@ -68,6 +93,29 @@ impl State {
         stack.push(NextScreen::LoadHomeScreen);
         Self {
             screen_stack: stack,
+        }
+    }
+}
+
+async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Navigation> {
+    let msg = Paragraph::new(msg)
+        .wrap(Wrap { trim: false })
+        .block(Block::bordered());
+
+    loop {
+        cx.term
+            .draw(|frame| frame.render_widget(&msg, frame.area()))
+            .context("rendering error")?;
+        match cx.events.next().await {
+            Some(Ok(Event::Key(KeyEvent {
+                code: KeyCode::Char('q') | KeyCode::Esc,
+                modifiers: _,
+                kind: KeyEventKind::Press,
+                state: _,
+            }))) => break Ok(Navigation::PopContext),
+            None => break Ok(Navigation::Exit),
+            Some(Ok(_)) => {}
+            Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
         }
     }
 }

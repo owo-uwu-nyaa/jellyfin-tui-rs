@@ -39,6 +39,7 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
             .query(query)
             .send()
             .await?;
+        let req = req.error_for_status()?;
         Ok(req.into())
     }
 
@@ -52,6 +53,7 @@ impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
             .query(query)
             .send()
             .await?;
+        let req = req.error_for_status()?;
         Ok(req.into())
     }
 }
