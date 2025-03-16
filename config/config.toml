@@ -1,0 +1,9 @@
+
+login_file = "login.toml"
+
+hwdec = "auto-safe"
+mpv_log_level = "info"
+
+# if not set fallback to default keybinds
+#keybinds_file = "path"
+

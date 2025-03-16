@@ -21,6 +21,7 @@ let
     (fileset_src ./.)
     ./.sqlx
     ./migrations
+    ./config
     (fileset_src ./jellyfin-rs)
     (fileset_src ./libmpv-rs)
     ./libmpv-rs/test-data
@@ -61,4 +62,6 @@ rustPlatform.buildRustPackage {
     (lib.optionals use_bindgen [ "use-bindgen" ])
     ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
   SQLX_OFFLINE = "true";
+  # make config parser work
+  XDG_CONFIG_HOME = "/tmp";
 }

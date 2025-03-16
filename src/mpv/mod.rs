@@ -6,23 +6,41 @@ mod player;
 use std::io::Stdout;
 
 use color_eyre::eyre::{Context, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
 use player::{Player, PlayerState};
 use ratatui::{
+    Terminal,
     layout::{Constraint, Layout},
     prelude::CrosstermBackend,
     widgets::{Block, Padding, Paragraph},
-    Terminal,
 };
 use tokio::select;
 use tracing::instrument;
 
 use crate::{
-    state::{Navigation, NextScreen},
-    TuiContext,
+    keybinds::{Command, KeybindEvent, KeybindEventStream}, state::{Navigation, NextScreen}, TuiContext
 };
+
+#[derive(Debug, Clone, Copy)]
+pub enum MpvCommand {
+    Quit,
+}
+
+impl Command for MpvCommand {
+    fn name(self) -> &'static str {
+        match self {
+            MpvCommand::Quit => "quit",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "quit" => Some(MpvCommand::Quit),
+            _ => None,
+        }
+    }
+}
 
 #[instrument(skip_all)]
 pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
@@ -32,6 +50,7 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
         )));
     }
     let mut player = Player::new(cx, &cx.jellyfin, items, index)?;
+    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
         render(&mut cx.term, player.state()?)?;
@@ -41,15 +60,12 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
                     break;
                 }
             }
-            event = cx.events.next() => {
+            event = events.next() => {
                 match event {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code: KeyCode::Char('q') | KeyCode::Esc,
-                        modifiers:_,
-                        kind: KeyEventKind::Press,
-                        state:_,
-                    }))) => {break;}
-                    Some(Ok(_)) => {},
+                    Some(Ok(KeybindEvent::Command(MpvCommand::Quit)))
+                     => {break;}
+                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
+                    Some(Ok(KeybindEvent::Render)) => {},
                     Some(Err(e)) => return Err(e).context("getting key events from terminal"),
                     None => {return Ok(Navigation::Exit);}
                 }

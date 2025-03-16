@@ -1,5 +1,4 @@
 use color_eyre::eyre::Context;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
 use list::EntryList;
@@ -8,10 +7,7 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
-    entry::Entry,
-    image::ImagesAvailable,
-    state::{Navigation, NextScreen},
-    Result, TuiContext,
+    entry::Entry, image::ImagesAvailable, keybinds::{Command, KeybindEvent, KeybindEventStream}, state::{Navigation, NextScreen}, Result, TuiContext
 };
 
 mod list;
@@ -62,6 +58,44 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntrySc
     EntryScreen::new(entries, "Home".to_string())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum HomeScreenCommand {
+    Quit,
+    Reload,
+    Left,
+    Right,
+    Up,
+    Down,
+    Open,
+}
+
+impl Command for HomeScreenCommand {
+    fn name(self) -> &'static str {
+        match self {
+            HomeScreenCommand::Quit => "quit",
+            HomeScreenCommand::Reload => "reload",
+            HomeScreenCommand::Left => "left",
+            HomeScreenCommand::Right => "right",
+            HomeScreenCommand::Up => "up",
+            HomeScreenCommand::Down => "down",
+            HomeScreenCommand::Open => "open",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "quit" => HomeScreenCommand::Quit.into(),
+            "reload" => HomeScreenCommand::Reload.into(),
+            "left" => HomeScreenCommand::Left.into(),
+            "right" => HomeScreenCommand::Right.into(),
+            "up" => HomeScreenCommand::Up.into(),
+            "down" => HomeScreenCommand::Down.into(),
+            "open" => HomeScreenCommand::Open.into(),
+            _ => None,
+        }
+    }
+}
+
 #[instrument(skip_all)]
 pub async fn display_home_screen(
     context: &mut TuiContext,
@@ -69,6 +103,10 @@ pub async fn display_home_screen(
 ) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
     let mut screen = create_home_screen(data, context);
+    let mut events = KeybindEventStream::new(
+        &mut context.events,
+        context.config.keybinds.home_screen.clone(),
+    );
     loop {
         context
             .term
@@ -81,50 +119,45 @@ pub async fn display_home_screen(
                 );
             })
             .context("rendering home screen")?;
-        let code = tokio::select! {
+        let cmd = tokio::select! {
             _ = images_available.wait_available() => {continue;
             }
-            term = context.events.next() => {
+            term = events.next() => {
                 match term {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code,
-                        modifiers:_,
-                        kind: KeyEventKind::Press,
-                        state:_,
-                    }))) => code,
-                    Some(Ok(_)) => continue,
+                    Some(Ok(KeybindEvent::Command(cmd))) => cmd,
+                    Some(Ok(KeybindEvent::Text(_))) => unimplemented!(),
+                    Some(Ok(KeybindEvent::Render)) => continue,
                     Some(Err(e)) => break Err(e).context("getting key events from terminal"),
                     None => break Ok(Navigation::Exit)
                 }
             }
         };
-        debug!("received code {code:?}");
-        match code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+        debug!("received command {cmd:?}");
+        match cmd {
+            HomeScreenCommand::Quit => {
                 break Ok(Navigation::PopContext);
             }
-            KeyCode::Char('r') => {
+            HomeScreenCommand::Reload => {
                 break Ok(Navigation::Replace(NextScreen::LoadHomeScreen));
             }
-            KeyCode::Left => {
+            HomeScreenCommand::Left => {
                 screen.left();
             }
-            KeyCode::Right => {
+            HomeScreenCommand::Right => {
                 screen.right();
             }
-            KeyCode::Up => {
+            HomeScreenCommand::Up => {
                 screen.up();
             }
-            KeyCode::Down => {
+            HomeScreenCommand::Down => {
                 screen.down();
             }
-            KeyCode::Enter => {
+            HomeScreenCommand::Open => {
                 break Ok(Navigation::Push {
                     current: NextScreen::LoadHomeScreen,
                     next: screen.get().get_action(),
                 });
             }
-            _ => {}
         }
     }
 }

@@ -1,0 +1,48 @@
+[fetch_mpv]
+q = "quit"
+
+[play_mpv]
+q = "quit"
+
+[fetch_user_view]
+q = "quit"
+
+[user_view]
+q = "quit"
+r = "reload"
+up = "up"
+down = "down"
+left = "prev"
+back-tab = "prev"
+right = "next"
+tab = "next"
+enter = "open"
+
+[fetch_home_screen]
+q = "quit"
+
+[home_screen]
+q = "quit"
+r = "reload"
+up = "up"
+down = "down"
+left = "left"
+right = "right"
+enter = "open"
+
+
+[fetch_login]
+q = "quit"
+
+[login_info]
+backspace = "delete"
+enter = "submit"
+up = "next"
+tab = "next"
+down = "prev"
+back-tab = "prev"
+q = "quit"
+esc = { name = "cmd-prefix", map = { q ="quit" } }
+
+[error]
+q = "quit"

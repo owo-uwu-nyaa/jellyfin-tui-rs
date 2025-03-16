@@ -1,21 +1,21 @@
 use std::borrow::Cow;
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{items::MediaItem, user_views::UserView};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use tracing::debug;
 
 use crate::{
+    TuiContext,
     home_screen::{
         display_home_screen,
-        load::{load_home_screen, HomeScreenData},
+        load::{HomeScreenData, load_home_screen},
     },
+    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     mpv,
     user_view::{display_user_view, fetch_user_view},
-    TuiContext,
 };
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 
 #[derive(Debug)]
 pub enum NextScreen {
@@ -100,20 +100,18 @@ async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Nav
     let msg = Paragraph::new(msg)
         .wrap(Wrap { trim: false })
         .block(Block::bordered());
-
+    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.error.clone());
     loop {
         cx.term
             .draw(|frame| frame.render_widget(&msg, frame.area()))
             .context("rendering error")?;
-        match cx.events.next().await {
-            Some(Ok(Event::Key(KeyEvent {
-                code: KeyCode::Char('q') | KeyCode::Esc,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }))) => break Ok(Navigation::PopContext),
+        match events.next().await {
+            Some(Ok(KeybindEvent::Render)) => continue,
+            Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
+            Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => {
+                break Ok(Navigation::PopContext);
+            }
             None => break Ok(Navigation::Exit),
-            Some(Ok(_)) => {}
             Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
         }
     }

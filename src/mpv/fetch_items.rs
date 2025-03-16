@@ -1,20 +1,20 @@
 use std::pin::pin;
 
-use color_eyre::{eyre::Context, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use color_eyre::{Result, eyre::Context};
 use futures_util::StreamExt;
 use jellyfin::{
+    Auth, JellyfinClient, JellyfinVec,
     items::{ItemType, MediaItem},
     playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
-    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
 use tracing::warn;
 
 use crate::{
-    state::{Navigation, NextScreen},
     TuiContext,
+    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
+    state::{Navigation, NextScreen},
 };
 
 async fn fetch_items(
@@ -181,6 +181,7 @@ pub async fn fetch_screen(cx: &mut TuiContext, item: MediaItem) -> Result<Naviga
         .centered()
         .block(Block::bordered());
     let mut fetch = pin!(fetch_items(&cx.jellyfin, item));
+    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_mpv.clone());
     loop {
         cx.term
             .draw(|frame| frame.render_widget(&msg, frame.area()))
@@ -190,17 +191,13 @@ pub async fn fetch_screen(cx: &mut TuiContext, item: MediaItem) -> Result<Naviga
                 let (items,index )= data.context("loading home screen data")?;
                 break Ok(Navigation::Replace(NextScreen::PlayItem { items , index  }))
             }
-            term = cx.events.next() => {
+            term = events.next() => {
                 match term {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code: KeyCode::Char('q')| KeyCode::Esc,
-                        modifiers: _,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    }))) => break Ok(Navigation::PopContext),
-                    None => break Ok(Navigation::Exit),
-                    Some(Ok(_)) => {}
+                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => break Ok(Navigation::PopContext),
+                    Some(Ok(KeybindEvent::Render)) => continue,
+                    Some(Ok(KeybindEvent::Text(_))) => unimplemented!(),
                     Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
+                    None => break Ok(Navigation::Exit),
                 }
             }
         }

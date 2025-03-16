@@ -1,21 +1,21 @@
 use std::{collections::HashMap, pin::pin};
 
-use color_eyre::{eyre::Context, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
-use futures_util::{stream, StreamExt, TryStreamExt};
+use color_eyre::{Result, eyre::Context};
+use futures_util::{StreamExt, TryStreamExt, stream};
 use jellyfin::{
+    Auth, JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
     sha::Sha256,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
-    Auth, JellyfinClient,
 };
 use ratatui::widgets::{Block, Paragraph};
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    state::{Navigation, NextScreen},
     TuiContext,
+    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
+    state::{Navigation, NextScreen},
 };
 
 #[derive(Debug)]
@@ -131,28 +131,23 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
         .centered()
         .block(Block::bordered());
     let mut load = pin!(load_data(&cx.jellyfin, &cx.jellyfin.get_auth().user.id));
-    cx.term
-        .draw(|frame| frame.render_widget(&msg, frame.area()))
-        .context("rendering ui")?;
+    let mut events =
+        KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_home_screen.clone());
     loop {
+        cx.term
+            .draw(|frame| frame.render_widget(&msg, frame.area()))
+            .context("rendering ui")?;
         tokio::select! {
             data = &mut load => {
                 break Ok(Navigation::Replace(NextScreen::HomeScreen(data.context("loading home screen data")?)))
             }
-            term = cx.events.next() => {
+            term = events.next() => {
                 match term {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code: KeyCode::Char('q')| KeyCode::Esc,
-                        modifiers: _,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    }))) => break Ok(Navigation::PopContext),
+                    Some(Ok(KeybindEvent::Render)) => continue,
+                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) =>
+                        break Ok(Navigation::PopContext),
+                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
                     None => break Ok(Navigation::Exit),
-                    Some(Ok(_)) => {
-                        cx.term
-                          .draw(|frame| frame.render_widget(&msg, frame.area()))
-                          .context("rendering ui")?;
-                    }
                     Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
                 }
             }

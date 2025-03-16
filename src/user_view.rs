@@ -1,22 +1,22 @@
 use color_eyre::eyre::{Context, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{
+    Auth, JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
     sha::Sha256,
     user_views::UserView,
-    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
 use std::pin::pin;
 use tracing::debug;
 
 use crate::{
+    TuiContext,
     entry::Entry,
     grid::EntryGrid,
     image::ImagesAvailable,
+    keybinds::{Command, KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 async fn fetch_user_view_items(
@@ -57,6 +57,8 @@ pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navi
         .centered()
         .block(Block::bordered());
     let mut fetch = pin!(fetch_user_view_items(&cx.jellyfin, &view));
+    let mut events =
+        KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_user_view.clone());
     loop {
         cx.term
             .draw(|frame| frame.render_widget(&msg, frame.area()))
@@ -66,23 +68,54 @@ pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navi
                 let items = data.with_context(||format!("loading user view {}", view.name))?;
                 break Ok(Navigation::Replace(NextScreen::UserView { view:view.clone() , items  }))
             }
-            term = cx.events.next() => {
+            term = events.next() => {
                 match term {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code: KeyCode::Char('q')| KeyCode::Esc,
-                        modifiers: _,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    })))
-                        | None => break Ok(Navigation::PopContext),
-                    Some(Ok(_)) => {
-                        cx.term
-                          .draw(|frame| frame.render_widget(&msg, frame.area()))
-                          .context("rendering ui")?;
+                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => break Ok(Navigation::PopContext),
+                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
+                    Some(Ok(KeybindEvent::Render)) => {
+                        continue
                     }
                     Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
+                    None => break Ok(Navigation::Exit)
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UserViewCommand {
+    Quit,
+    Reload,
+    Prev,
+    Next,
+    Up,
+    Down,
+    Open,
+}
+
+impl Command for UserViewCommand {
+    fn name(self) -> &'static str {
+        match self {
+            UserViewCommand::Quit => "quit",
+            UserViewCommand::Reload => "reload",
+            UserViewCommand::Prev => "prev",
+            UserViewCommand::Next => "next",
+            UserViewCommand::Up => "up",
+            UserViewCommand::Down => "down",
+            UserViewCommand::Open => "open",
+        }
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "quit" => UserViewCommand::Quit.into(),
+            "reload" => UserViewCommand::Reload.into(),
+            "prev" => UserViewCommand::Prev.into(),
+            "next" => UserViewCommand::Next.into(),
+            "up" => UserViewCommand::Up.into(),
+            "down" => UserViewCommand::Down.into(),
+            "open" => UserViewCommand::Open.into(),
+            _ => None,
         }
     }
 }
@@ -100,6 +133,7 @@ pub async fn display_user_view(
         view.name.clone(),
     );
     let images_available = ImagesAvailable::new();
+    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.user_view.clone());
     loop {
         cx.term
             .draw(|frame| {
@@ -111,50 +145,45 @@ pub async fn display_user_view(
                 );
             })
             .context("drawing user view")?;
-        let code = tokio::select! {
+        let cmd = tokio::select! {
             _ = images_available.wait_available() => {continue;
             }
-            term = cx.events.next() => {
+            term = events.next() => {
                 match term {
-                    Some(Ok(Event::Key(KeyEvent {
-                        code,
-                        modifiers:_,
-                        kind: KeyEventKind::Press,
-                        state:_,
-                    }))) => code,
-                    Some(Ok(_)) => continue,
+                    Some(Ok(KeybindEvent::Command(cmd))) => cmd,
+                    Some(Ok(KeybindEvent::Render)) => continue,
+                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
                     Some(Err(e)) => break Err(e).context("getting key events from terminal"),
                     None => break Ok(Navigation::PopContext)
                 }
             }
         };
-        debug!("received code {code:?}");
-        match code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+        debug!("received command {cmd:?}");
+        match cmd {
+            UserViewCommand::Quit => {
                 break Ok(Navigation::PopContext);
             }
-            KeyCode::Char('r') => {
+            UserViewCommand::Reload => {
                 break Ok(Navigation::Replace(NextScreen::LoadUserView(view)));
             }
-            KeyCode::Left => {
+            UserViewCommand::Prev => {
                 grid.left();
             }
-            KeyCode::Right => {
+            UserViewCommand::Next => {
                 grid.right();
             }
-            KeyCode::Up => {
+            UserViewCommand::Up => {
                 grid.up();
             }
-            KeyCode::Down => {
+            UserViewCommand::Down => {
                 grid.down();
             }
-            KeyCode::Enter => {
+            UserViewCommand::Open => {
                 break Ok(Navigation::Push {
                     current: NextScreen::LoadUserView(view),
                     next: grid.get().get_action(),
                 });
             }
-            _ => {}
         }
     }
 }

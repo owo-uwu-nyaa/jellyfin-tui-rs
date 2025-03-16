@@ -8,7 +8,6 @@ use std::{
 };
 
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use ratatui::{
@@ -24,7 +23,12 @@ use tokio::select;
 use tracing::{error, info, instrument};
 use url::Url;
 
-use crate::Config;
+use crate::{
+    Config,
+    keybinds::{
+        self, Command, KeybindEvent, KeybindEventStream, KeybindEvents, Keybinds, LoadingCommand,
+    },
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct LoginInfo {
@@ -40,13 +44,46 @@ enum LoginSelection {
     Retry,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum LoginInfoCommand {
+    Delete,
+    Submit,
+    Next,
+    Prev,
+    Quit,
+}
+
+impl Command for LoginInfoCommand {
+    fn name(self) -> &'static str {
+        match self {
+            LoginInfoCommand::Delete => "delete",
+            LoginInfoCommand::Submit => "submit",
+            LoginInfoCommand::Next => "next",
+            LoginInfoCommand::Prev => "prev",
+            LoginInfoCommand::Quit => "quit",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "delete" => Some(Self::Delete),
+            "submit" => Some(Self::Submit),
+            "next" => Some(Self::Next),
+            "prev" => Some(Self::Prev),
+            "quit" => Some(Self::Quit),
+            _ => None,
+        }
+    }
+}
+
 #[instrument(skip_all)]
 async fn get_login_info(
     term: &mut DefaultTerminal,
     info: &mut LoginInfo,
     changed: &mut bool,
     error: Report,
-    events: &mut EventStream,
+    events: &mut KeybindEvents,
+    keybinds: &Keybinds,
 ) -> Result<bool> {
     let mut selection = if info.server_url.is_empty() {
         LoginSelection::Server
@@ -62,6 +99,7 @@ async fn get_login_info(
         .border_type(BorderType::Rounded)
         .padding(Padding::uniform(4))
         .title("Enter Jellyfin Server / Login Information");
+    let mut events = KeybindEventStream::new(events, keybinds.login_info.clone());
     loop {
         term.draw(|frame| {
             let server = Paragraph::new(info.server_url.as_str()).block(
@@ -120,79 +158,57 @@ async fn get_login_info(
             frame.render_widget(button, layout_b);
             frame.render_widget(&error, layout_e);
         })?;
+        events.set_text_input(!matches!(selection, LoginSelection::Retry));
         match events.next().await {
-            Some(Ok(Event::Key(KeyEvent {
-                code,
-                modifiers: _,
-                kind: KeyEventKind::Press,
-                state: _,
-            }))) => match code {
-                KeyCode::Backspace => match selection {
-                    LoginSelection::Server => {
-                        info.server_url.pop();
-                        *changed = true;
-                    }
-                    LoginSelection::Username => {
-                        info.username.pop();
-                        *changed = true;
-                    }
-                    LoginSelection::Password => {
-                        info.password.pop();
-                        *changed = true;
-                    }
-                    LoginSelection::Retry => {}
-                },
-                KeyCode::Enter => break Ok(true),
-                KeyCode::Up => {
-                    selection = match selection {
-                        LoginSelection::Server => LoginSelection::Retry,
-                        LoginSelection::Username => LoginSelection::Server,
-                        LoginSelection::Password => LoginSelection::Username,
-                        LoginSelection::Retry => LoginSelection::Password,
-                    }
-                }
-                KeyCode::Down | KeyCode::Tab => {
-                    selection = match selection {
-                        LoginSelection::Server => LoginSelection::Username,
-                        LoginSelection::Username => LoginSelection::Password,
-                        LoginSelection::Password => LoginSelection::Retry,
-                        LoginSelection::Retry => LoginSelection::Server,
-                    }
-                }
-                KeyCode::Char(v) => match selection {
-                    LoginSelection::Server => {
-                        info.server_url.push(v);
-                        *changed = true;
-                    }
-                    LoginSelection::Username => {
-                        info.username.push(v);
-                        *changed = true;
-                    }
-                    LoginSelection::Password => {
-                        info.password.push(v);
-                        *changed = true;
-                    }
-                    LoginSelection::Retry => {}
-                },
-                KeyCode::Esc => break Ok(false),
-                _ => {}
-            },
-            Some(Ok(Event::Paste(v))) => match selection {
+            Some(Ok(KeybindEvent::Command(LoginInfoCommand::Delete))) => match selection {
                 LoginSelection::Server => {
-                    info.server_url += &v;
+                    info.server_url.pop();
                     *changed = true;
                 }
                 LoginSelection::Username => {
-                    info.username += &v;
+                    info.username.pop();
                     *changed = true;
                 }
                 LoginSelection::Password => {
-                    info.password += &v;
+                    info.password.pop();
                     *changed = true;
                 }
                 LoginSelection::Retry => {}
             },
-            Some(Ok(_)) => {}
+            Some(Ok(KeybindEvent::Command(LoginInfoCommand::Submit))) => break Ok(true),
+            Some(Ok(KeybindEvent::Command(LoginInfoCommand::Prev))) => {
+                selection = match selection {
+                    LoginSelection::Server => LoginSelection::Retry,
+                    LoginSelection::Username => LoginSelection::Server,
+                    LoginSelection::Password => LoginSelection::Username,
+                    LoginSelection::Retry => LoginSelection::Password,
+                }
+            }
+            Some(Ok(KeybindEvent::Command(LoginInfoCommand::Next))) => {
+                selection = match selection {
+                    LoginSelection::Server => LoginSelection::Username,
+                    LoginSelection::Username => LoginSelection::Password,
+                    LoginSelection::Password => LoginSelection::Retry,
+                    LoginSelection::Retry => LoginSelection::Server,
+                }
+            }
+            Some(Ok(KeybindEvent::Command(LoginInfoCommand::Quit))) => break Ok(false),
+            Some(Ok(KeybindEvent::Text(text))) => {
+                let dest = match selection {
+                    LoginSelection::Server => &mut info.server_url,
+                    LoginSelection::Username => &mut info.username,
+                    LoginSelection::Password => &mut info.password,
+                    LoginSelection::Retry => {
+                        unreachable!("selecting reply should disable text input")
+                    }
+                };
+                match text {
+                    keybinds::Text::Char(c) => dest.push(c),
+                    keybinds::Text::Str(s) => dest.push_str(&s),
+                }
+                *changed = true;
+            }
+            Some(Ok(KeybindEvent::Render)) => {}
             Some(Err(e)) => break Err(e).context("receiving terminal events"),
             None => break Ok(false),
         }
@@ -203,7 +219,7 @@ async fn get_login_info(
 pub async fn login(
     term: &mut DefaultTerminal,
     config: &Config,
-    events: &mut EventStream,
+    events: &mut KeybindEvents,
     cache: &SqlitePool,
 ) -> Result<Option<JellyfinClient<Auth>>> {
     let mut login_info: LoginInfo;
@@ -244,15 +260,20 @@ pub async fn login(
     let client = 'connect: loop {
         if let Some(e) = error.take() {
             error!("Error logging in: {e:?}");
-            if !get_login_info(term, &mut login_info, &mut info_chainged, e, events)
-                .await
-                .context("getting login information")?
+            if !get_login_info(
+                term,
+                &mut login_info,
+                &mut info_chainged,
+                e,
+                events,
+                &config.keybinds,
+            )
+            .await
+            .context("getting login information")?
             {
                 return Ok(None);
             }
         }
-        term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
-            .context("rendering ui")?;
 
         match Url::parse(&login_info.server_url).context("parsing server base url") {
             Ok(url) => {
@@ -269,21 +290,17 @@ pub async fn login(
             &login_info.username,
             &login_info.password,
         ));
+
+        let mut events = KeybindEventStream::new(events, config.keybinds.fetch_login.clone());
         loop {
+            term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
+                .context("rendering ui")?;
             tokio::select! {
                 event = events.next() => {
                     match event {
-                        Some(Ok(Event::Key(KeyEvent {
-                            code: KeyCode::Char('q'),
-                            modifiers: _,
-                            kind: KeyEventKind::Press,
-                            state: _,
-                        })))
-                            | None => return Ok(None),
-                        Some(Ok(_)) => {
-                            term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
-                                .context("rendering ui")?;
-                        }
+                        Some(Ok(KeybindEvent::Command(LoadingCommand::Quit)))|None => return Ok(None),
+                        Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
+                        Some(Ok(KeybindEvent::Render)) => continue,
                         Some(Err(e)) => return Err(e).context("Error getting key events from terminal"),
                     }
                 }
