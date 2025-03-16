@@ -211,9 +211,9 @@ fn parse_image(
         Ok(image) => {
             trace!("image parsed");
             if let Some(out) = out.upgrade() {
+                *out.value.lock() = ImageStateInnerState::ImageReady(image, key);
                 out.ready.store(true, Ordering::SeqCst);
                 wake.wake();
-                *out.value.lock() = ImageStateInnerState::ImageReady(image, key);
             } else {
                 cache.store_image(image, key);
             }
@@ -438,8 +438,8 @@ fn resize_image(
             protocol.resize_encode(&resize, protocol.background_color(), area);
             trace!("resized");
         } else {
-            error!("tried to resize invalid state");
             *value = ImageStateInnerState::Invalid;
+            panic!("tried to resize invalid state");
         }
         out.ready.store(true, Ordering::SeqCst);
         wake.wake();
@@ -480,8 +480,8 @@ impl JellyfinImage {
     ) {
         if let Some(area) = image.needs_resize(&self.resize, area) {
             trace!("image needs resize");
-            *state_mut = ImageStateInnerState::Image(image, key);
             state.inner.ready.store(false, Ordering::SeqCst);
+            *state_mut = ImageStateInnerState::Image(image, key);
             let resize = self.resize;
             let out = Arc::downgrade(&state.inner);
             let wake = availabe.inner.clone();
