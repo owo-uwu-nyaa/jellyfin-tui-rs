@@ -37,11 +37,7 @@ use tracing_error::ErrorLayer;
 use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[instrument(skip_all)]
-async fn run_app(
-    mut term: DefaultTerminal,
-    config: Config,
-    cache: SqlitePool,
-) -> Result<()> {
+async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = KeybindEvents::new()?;
     if let Some(client) = login::login(&mut term, &config, &mut events, &cache).await? {
@@ -64,11 +60,7 @@ async fn run_app(
 
 #[tokio::main(flavor = "current_thread")]
 #[instrument(skip_all)]
-async fn run(
-    term: DefaultTerminal,
-    config: Config,
-    paniced: oneshot::Receiver<()>,
-) -> Result<()> {
+async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<()>) -> Result<()> {
     let cache = cache::initialize_cache().await?;
     let res = tokio::select! {
         res = tokio::spawn(run_app(term, config, cache.clone())) => {
@@ -147,7 +139,7 @@ fn main() -> Result<()> {
     color_eyre::install().expect("installing color eyre format handler");
     let args = Args::try_parse()?;
     match args.action {
-        Action::Print { what } => {
+        Some(Action::Print { what }) => {
             match what {
                 PrintAction::ConfigDir => println!(
                     "{}",
@@ -164,15 +156,15 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Action::CheckKeybinds { file } => {
+        Some(Action::CheckKeybinds { file }) => {
             log_stdout()?;
             keybinds::check_file(file)
         }
-        Action::Run { config_file } => {
+        None => {
             log_file()?;
             #[cfg(feature = "attach")]
             debug();
-            let config = init_config(config_file)?;
+            let config = init_config(args.config_file)?;
             let (send_panic, paniced) = oneshot::channel();
             let send_panic = Mutex::new(Some(send_panic));
             ThreadPoolBuilder::new()
@@ -210,7 +202,9 @@ fn main() -> Result<()> {
 #[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
-    action: Action,
+    action: Option<Action>,
+    /// alternative config file
+    config_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -223,10 +217,6 @@ enum Action {
         /// what should be printed
         #[command(subcommand)]
         what: PrintAction,
-    },
-    Run {
-        /// alternative config file
-        config_file: Option<PathBuf>,
     },
 }
 
@@ -316,16 +306,15 @@ fn init_config(config_file: Option<PathBuf>) -> Result<Config> {
 }
 
 #[cfg(test)]
-mod tests{
-    use color_eyre::Result;
+mod tests {
     use crate::init_config;
+    use color_eyre::Result;
     #[test]
-    fn check_default_config()->Result<()>{
+    fn check_default_config() -> Result<()> {
         init_config(None)?;
         Ok(())
     }
 }
-
 
 struct TuiContext {
     pub jellyfin: JellyfinClient<Auth>,
