@@ -79,7 +79,9 @@ impl EntryGrid {
                 } else {
                     BorderType::Rounded
                 };
-                self.entries[entry].render_entry(area, buf, availabe, picker, border_type);
+                if let Some(entry)=self.entries.get_mut(entry){
+                    entry.render_entry(area, buf, availabe, picker, border_type);
+                }
             }
         }
         for entry in self
