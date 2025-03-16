@@ -1,20 +1,20 @@
 use std::pin::pin;
 
-use color_eyre::{Result, eyre::Context};
+use color_eyre::{eyre::Context, Result};
 use futures_util::StreamExt;
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
     items::{ItemType, MediaItem},
     playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
+    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
 use tracing::warn;
 
 use crate::{
-    TuiContext,
     keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
 async fn fetch_items(

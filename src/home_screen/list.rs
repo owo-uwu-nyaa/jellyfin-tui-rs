@@ -2,7 +2,10 @@ use std::{cmp::min, iter::repeat_n};
 
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
-    widgets::{Block, BorderType, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget, Wrap},
+    widgets::{
+        Block, BorderType, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget,
+        Wrap,
+    },
 };
 use ratatui_image::{picker::Picker, FontSize};
 use tracing::{instrument, trace};
@@ -50,8 +53,10 @@ impl EntryList {
         let main = outer.inner(area);
         outer.render(area, buf);
         let visible = self.visible(area.width);
-        if visible == 0{
-            Paragraph::new("insufficient space").wrap(Wrap{ trim: true }).render(main, buf);
+        if visible == 0 {
+            Paragraph::new("insufficient space")
+                .wrap(Wrap { trim: true })
+                .render(main, buf);
             return;
         }
         let mut entries = self.entries.as_mut_slice();

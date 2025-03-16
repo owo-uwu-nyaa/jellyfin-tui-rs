@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    fs::{OpenOptions, create_dir_all},
+    fs::{create_dir_all, OpenOptions},
     io::Write,
     os::unix::fs::OpenOptionsExt,
     pin::pin,
@@ -11,23 +11,23 @@ use color_eyre::eyre::{Context, OptionExt, Report, Result};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use ratatui::{
-    DefaultTerminal,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, BorderType, Padding, Paragraph, Wrap},
+    DefaultTerminal,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, query, query_scalar};
+use sqlx::{query, query_scalar, SqlitePool};
 use tokio::select;
 use tracing::{error, info, instrument};
 use url::Url;
 
 use crate::{
-    Config,
     keybinds::{
         self, Command, KeybindEvent, KeybindEventStream, KeybindEvents, Keybinds, LoadingCommand,
     },
+    Config,
 };
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -2,7 +2,7 @@ pub mod parse_config;
 pub mod stream;
 pub mod widget;
 
-use color_eyre::{Result, eyre::Context};
+use color_eyre::{eyre::Context, Result};
 use crossterm::event::{EventStream, KeyCode};
 use parse_config::Config;
 use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};

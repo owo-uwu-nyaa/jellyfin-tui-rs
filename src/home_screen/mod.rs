@@ -7,7 +7,11 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
-    entry::Entry, image::ImagesAvailable, keybinds::{Command, KeybindEvent, KeybindEventStream}, state::{Navigation, NextScreen}, Result, TuiContext
+    entry::Entry,
+    image::ImagesAvailable,
+    keybinds::{Command, KeybindEvent, KeybindEventStream},
+    state::{Navigation, NextScreen},
+    Result, TuiContext,
 };
 
 mod list;

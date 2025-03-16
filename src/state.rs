@@ -6,16 +6,16 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use tracing::debug;
 
 use crate::{
-    TuiContext,
     home_screen::{
         display_home_screen,
-        load::{HomeScreenData, load_home_screen},
+        load::{load_home_screen, HomeScreenData},
     },
     keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     mpv,
     user_view::{display_user_view, fetch_user_view},
+    TuiContext,
 };
-use color_eyre::{Result, eyre::Context};
+use color_eyre::{eyre::Context, Result};
 
 #[derive(Debug)]
 pub enum NextScreen {

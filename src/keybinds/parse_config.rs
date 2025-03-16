@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::{
+    eyre::{eyre, Context},
     Result,
-    eyre::{Context, eyre},
 };
 use crossterm::event::KeyCode;
 use serde::Deserialize;
@@ -145,4 +145,3 @@ fn do_parse_binding<T: Command>(
         }
     }
 }
-
