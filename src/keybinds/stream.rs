@@ -1,6 +1,6 @@
 use std::task::Poll;
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures_util::{stream::FusedStream, Stream, StreamExt};
 use tracing::warn;
 
@@ -34,6 +34,24 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                     }
                     Some(Err(e)) => break Some(Err(e.into())),
                     Some(Ok(Event::Key(KeyEvent {
+                        code: KeyCode::Right,
+                        modifiers: KeyModifiers::CONTROL,
+                        kind: KeyEventKind::Press,
+                        state: _,
+                    }))) => {
+                        self.current_view = self.current_view.saturating_add(1);
+                        break Some(Ok(KeybindEvent::Render));
+                    }
+                    Some(Ok(Event::Key(KeyEvent {
+                        code: KeyCode::Left,
+                        modifiers: KeyModifiers::CONTROL,
+                        kind: KeyEventKind::Press,
+                        state: _,
+                    }))) => {
+                        self.current_view = self.current_view.saturating_sub(1);
+                        break Some(Ok(KeybindEvent::Render));
+                    }
+                    Some(Ok(Event::Key(KeyEvent {
                         code,
                         modifiers: _,
                         kind: KeyEventKind::Press,
@@ -49,7 +67,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                             break Some(Ok(KeybindEvent::Render));
                         }
                         let current = self.current.as_ref().unwrap_or(&self.top).clone();
-                        match current.get(&code) {
+                        match current.get(&code.into()) {
                             Some(KeyBinding::Command(c)) => {
                                 self.current = None;
                                 break Some(Ok(KeybindEvent::Command(*c)));

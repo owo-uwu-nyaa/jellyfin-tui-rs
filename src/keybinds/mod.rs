@@ -5,7 +5,12 @@ pub mod widget;
 use color_eyre::{eyre::Context, Result};
 use crossterm::event::{EventStream, KeyCode};
 use parse_config::Config;
-use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display},
+    path::Path,
+    sync::Arc,
+};
 
 use crate::{
     home_screen::HomeScreenCommand, login::LoginInfoCommand, mpv::MpvCommand,
@@ -19,7 +24,39 @@ pub trait Command: Clone + Copy + Debug {
     fn from_name(name: &str) -> Option<Self>;
 }
 
-pub type BindingMap<T> = Arc<HashMap<KeyCode, KeyBinding<T>>>;
+#[derive(PartialEq, Eq)]
+pub struct Key {
+    inner: KeyCode,
+}
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.inner.to_string().cmp(&other.inner.to_string())
+    }
+}
+
+impl Debug for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.inner, f)
+    }
+}
+impl Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+impl From<KeyCode> for Key {
+    fn from(value: KeyCode) -> Self {
+        Key { inner: value }
+    }
+}
+
+pub type BindingMap<T> = Arc<BTreeMap<Key, KeyBinding<T>>>;
 
 #[derive(Debug, Clone)]
 pub enum KeyBinding<T: Command> {
@@ -136,6 +173,7 @@ pub struct KeybindEventStream<'e, T: Command> {
     top: BindingMap<T>,
     current: Option<BindingMap<T>>,
     text_input: bool,
+    current_view: usize,
 }
 
 impl<'e, T: Command> KeybindEventStream<'e, T> {
@@ -145,6 +183,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
             top: map,
             current: None,
             text_input: false,
+            current_view: 0,
         }
     }
     pub fn set_text_input(&mut self, text_input: bool) {

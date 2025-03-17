@@ -3,6 +3,7 @@ use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
 use list::EntryList;
 use load::HomeScreenData;
+use ratatui::widgets::Widget;
 use screen::EntryScreen;
 use tracing::{debug, instrument};
 
@@ -115,12 +116,14 @@ pub async fn display_home_screen(
         context
             .term
             .draw(|frame| {
+                let area = events.inner(frame.area());
                 screen.render_screen(
-                    frame.area(),
+                    area,
                     frame.buffer_mut(),
                     &images_available,
                     &context.image_picker,
                 );
+                events.render(frame.area(), frame.buffer_mut());
             })
             .context("rendering home screen")?;
         let cmd = tokio::select! {

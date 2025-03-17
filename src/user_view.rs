@@ -61,7 +61,10 @@ pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navi
         KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_user_view.clone());
     loop {
         cx.term
-            .draw(|frame| frame.render_widget(&msg, frame.area()))
+            .draw(|frame| {
+                frame.render_widget(&msg, events.inner(frame.area()));
+                frame.render_widget(&mut events, frame.area());
+            })
             .context("rendering ui")?;
         tokio::select! {
             data = &mut fetch => {
@@ -138,11 +141,12 @@ pub async fn display_user_view(
         cx.term
             .draw(|frame| {
                 grid.render(
-                    frame.area(),
+                    events.inner(frame.area()),
                     frame.buffer_mut(),
                     &images_available,
                     &cx.image_picker,
                 );
+                frame.render_widget(&mut events, frame.area());
             })
             .context("drawing user view")?;
         let cmd = tokio::select! {

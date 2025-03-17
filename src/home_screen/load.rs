@@ -135,7 +135,10 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
         KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_home_screen.clone());
     loop {
         cx.term
-            .draw(|frame| frame.render_widget(&msg, frame.area()))
+            .draw(|frame| {
+                frame.render_widget(&msg, events.inner(frame.area()));
+                frame.render_widget(&mut events, frame.area());
+            })
             .context("rendering ui")?;
         tokio::select! {
             data = &mut load => {

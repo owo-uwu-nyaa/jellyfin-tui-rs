@@ -103,7 +103,10 @@ async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Nav
     let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.error.clone());
     loop {
         cx.term
-            .draw(|frame| frame.render_widget(&msg, frame.area()))
+            .draw(|frame| {
+                frame.render_widget(&msg, events.inner(frame.area()));
+                frame.render_widget(&mut events, frame.area());
+            })
             .context("rendering error")?;
         match events.next().await {
             Some(Ok(KeybindEvent::Render)) => continue,

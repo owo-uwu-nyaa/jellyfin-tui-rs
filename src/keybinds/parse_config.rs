@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use color_eyre::{
     eyre::{eyre, Context},
@@ -9,7 +12,7 @@ use serde::Deserialize;
 
 use crate::keybinds::BindingMap;
 
-use super::{Command, KeyBinding};
+use super::{Command, Key, KeyBinding};
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -33,16 +36,17 @@ pub struct Config {
 
 impl Config {
     pub fn parse<T: Command>(&self, name: &str, strict: bool) -> Result<BindingMap<T>> {
-        let empty_template = HashMap::with_capacity(0);
+        let empty_template = HashMap::new();
         let template = self.template.as_ref().unwrap_or(&empty_template);
-        let map: Result<HashMap<KeyCode, KeyBinding<T>>> = self
+        let map: Result<BTreeMap<Key, KeyBinding<T>>> = self
             .maps
             .get(name)
             .ok_or_else(|| eyre!("missing map '{name}'"))?
             .iter()
-            .map(|(key_name, binding)| -> Result<(KeyCode, KeyBinding<T>)> {
+            .map(|(key_name, binding)| -> Result<(Key, KeyBinding<T>)> {
                 let key = parse_key_code(key_name.as_str())
-                    .ok_or_else(|| eyre!("key code '{key_name}' is invalid"))?;
+                    .ok_or_else(|| eyre!("key code '{key_name}' is invalid"))?
+                    .into();
                 let binding = do_parse_binding(template, &Seen::Empty, binding, strict)
                     .with_context(|| format!("key '{key_name}'"))?;
                 Ok((key, binding))
@@ -108,11 +112,12 @@ fn do_parse_binding<T: Command>(
             }
         }
         ParseKeybinding::Group { map, name } => {
-            let map: Result<HashMap<KeyCode, KeyBinding<T>>> = map
+            let map: Result<BTreeMap<Key, KeyBinding<T>>> = map
                 .iter()
-                .map(|(key_name, binding)| -> Result<(KeyCode, KeyBinding<T>)> {
+                .map(|(key_name, binding)| -> Result<(Key, KeyBinding<T>)> {
                     let key = parse_key_code(key_name.as_str())
-                        .ok_or_else(|| eyre!("key code '{key_name}' is invalid"))?;
+                        .ok_or_else(|| eyre!("key code '{key_name}' is invalid"))?
+                        .into();
                     let binding = do_parse_binding(templates, seen, binding, strict)
                         .with_context(|| format!("key '{key_name}'"))?;
                     Ok((key, binding))

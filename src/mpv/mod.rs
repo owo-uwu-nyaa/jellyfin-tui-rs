@@ -55,7 +55,7 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
     let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
-        render(&mut cx.term, player.state()?)?;
+        render(&mut cx.term, player.state()?, &mut events)?;
         select! {
             res = player.try_next() => {
                 if res?.is_none(){
@@ -79,21 +79,30 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
     Ok(Navigation::PopContext)
 }
 
-fn render(term: &mut Terminal<CrosstermBackend<Stdout>>, state: PlayerState<'_>) -> Result<()> {
+fn render(
+    term: &mut Terminal<CrosstermBackend<Stdout>>,
+    state: PlayerState<'_>,
+    events: &mut KeybindEventStream<'_, MpvCommand>,
+) -> Result<()> {
     match state {
         PlayerState::Initializing => {
             term.draw(|frame| {
-                frame.render_widget(Paragraph::new("loading").centered(), frame.area());
+                frame.render_widget(
+                    Paragraph::new("loading").centered(),
+                    events.inner(frame.area()),
+                );
+                frame.render_widget(events, frame.area());
             })
             .context("rendering loading screen")?;
         }
         PlayerState::Playing(media_item) => {
             term.draw(|frame| {
+                let block_area = events.inner(frame.area());
                 let block = Block::bordered()
                     .title("Now playing")
                     .padding(Padding::uniform(1));
-                let area = block.inner(frame.area());
-                frame.render_widget(block, frame.area());
+                let area = block.inner(block_area);
+                frame.render_widget(block, block_area);
                 match &media_item.item_type {
                     jellyfin::items::ItemType::Movie { container: _ } => {
                         frame.render_widget(
@@ -143,12 +152,17 @@ fn render(term: &mut Terminal<CrosstermBackend<Stdout>>, state: PlayerState<'_>)
                         panic!("unexpected media item type: {media_item:#?}");
                     }
                 }
+                frame.render_widget(events, frame.area());
             })
             .context("rendering playing item")?;
         }
         PlayerState::Exiting => {
             term.draw(|frame| {
-                frame.render_widget(Paragraph::new("quitting").centered(), frame.area());
+                frame.render_widget(
+                    Paragraph::new("quitting").centered(),
+                    events.inner(frame.area()),
+                );
+                frame.render_widget(events, frame.area());
             })
             .context("rendering exit screen")?;
         }

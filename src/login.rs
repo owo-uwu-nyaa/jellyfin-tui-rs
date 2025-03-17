@@ -134,7 +134,7 @@ async fn get_login_info(
                 }
                 .title("Password"),
             );
-
+            let outer_area = events.inner(frame.area());
             let button =
                 Paragraph::new("Connect").block(if let LoginSelection::Retry = selection {
                     current_block.clone()
@@ -150,13 +150,14 @@ async fn get_login_info(
                 Constraint::Min(3),
             ])
             .vertical_margin(1)
-            .areas(outer_block.inner(frame.area()));
-            frame.render_widget(&outer_block, frame.area());
+            .areas(outer_block.inner(outer_area));
+            frame.render_widget(&outer_block, outer_area);
             frame.render_widget(server, layout_s);
             frame.render_widget(username, layout_u);
             frame.render_widget(password, layout_p);
             frame.render_widget(button, layout_b);
             frame.render_widget(&error, layout_e);
+            frame.render_widget(&mut events, frame.area());
         })?;
         events.set_text_input(!matches!(selection, LoginSelection::Retry));
         match events.next().await {
