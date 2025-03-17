@@ -1,13 +1,13 @@
 use std::{ffi::CString, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{stream::FusedStream, Stream, StreamExt};
-use jellyfin::{items::MediaItem, playback_status::ProgressBody, Auth, JellyfinClient};
+use futures_util::{Stream, StreamExt, stream::FusedStream};
+use jellyfin::{Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody};
 use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
 use tokio::{
     task::JoinSet,
     time::{Interval, MissedTickBehavior},
 };
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::TuiContext;
 
@@ -22,7 +22,7 @@ pub struct Player<'j> {
     id: Option<Arc<String>>,
     position: Option<f64>,
     send_timer: Interval,
-    join: JoinSet<Result<()>>,
+    join: JoinSet<()>,
     jellyfin: &'j JellyfinClient<Auth>,
     was_running: bool,
     last_position: Option<f64>,
@@ -44,12 +44,9 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
     let res = 'res: {
         while let Poll::Ready(res) = state.join.poll_join_next(cx) {
             match res {
-                Some(Ok(Ok(()))) => {}
-                Some(Ok(Err(e))) => {
-                    state.finished = true;
-                    return Err(e);
-                }
+                Some(Ok(())) => {}
                 Some(Err(e)) => {
+                    state.finished = true;
                     return Err(Report::new(e));
                 }
                 None => {
@@ -101,8 +98,9 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                         state.id = Some(id.clone());
                         let started = state.jellyfin.prepare_set_playing();
                         state.join.spawn(async move {
-                            started.send(&id).await?;
-                            Ok(())
+                            if let Err(e) = started.send(&id).await {
+                                error!("error sending playback started: {e:?}")
+                            }
                         });
                         break 'res Poll::Ready(Some(()));
                     }
@@ -159,13 +157,15 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                     let progress = state.jellyfin.prepare_set_playing_progress();
                     let id = id.clone();
                     state.join.spawn(async move {
-                        progress
+                        if let Err(e) = progress
                             .send(&ProgressBody {
                                 item_id: &id,
                                 position_ticks: (pos * 10000000.0) as u64,
                             })
-                            .await?;
-                        Ok(())
+                            .await
+                        {
+                            error!("error updating playback progress: {e:?}")
+                        }
                     });
                 }
             }
@@ -179,19 +179,21 @@ fn send_playing_stopped(
     id: Option<&Arc<String>>,
     position: Option<f64>,
     jellyfin: &JellyfinClient<Auth>,
-    join: &mut JoinSet<Result<()>>,
+    join: &mut JoinSet<()>,
 ) {
     if let (Some(id), Some(pos)) = (id, position) {
         let finished = jellyfin.prepare_set_playing_stopped();
         let id = id.clone();
         join.spawn(async move {
-            finished
+            if let Err(e) = finished
                 .send(&ProgressBody {
                     item_id: &id,
                     position_ticks: (pos * 10000000.0) as u64,
                 })
-                .await?;
-            Ok(())
+                .await
+            {
+                error!("error sending stop message: {e:?}")
+            }
         });
     }
 }
