@@ -35,7 +35,7 @@ async fn fetch_user_view_items(
                 exclude_item_types: None,
                 include_item_types: None,
                 enable_images: true.into(),
-                enable_image_types: "Primary, Backdrop, Thumb".into(),
+                enable_image_types: "Thumb, Backdrop, Primary".into(),
                 image_type_limit: 1.into(),
                 enable_user_data: true.into(),
                 fields: None,
