@@ -1,18 +1,22 @@
+use std::borrow::Cow;
+
 use jellyfin::{
     items::{ItemType, MediaItem},
     user_views::UserView,
 };
 use ratatui::{
     layout::Rect,
-    widgets::{Block, BorderType, Widget},
+    style::Color,
+    text::Span,
+    widgets::{Block, BorderType, Paragraph, Widget},
 };
-use ratatui_image::{picker::Picker, FontSize};
-use tracing::instrument;
+use ratatui_image::{FontSize, picker::Picker};
+use tracing::{info, instrument};
 
 use crate::{
+    TuiContext,
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
     state::NextScreen,
-    TuiContext,
 };
 
 pub struct Entry {
@@ -20,6 +24,7 @@ pub struct Entry {
     title: String,
     subtitle: Option<String>,
     action: NextScreen,
+    watch_status: Option<Cow<'static, str>>,
 }
 
 const IMAGE_WIDTH: u16 = 32;
@@ -55,6 +60,20 @@ impl Entry {
         }
         let inner = outer.inner(area);
         outer.render(area, buf);
+        if let Some(watch_status) = self.watch_status.as_ref() {
+            info!("rendering watch status");
+            Paragraph::new(Span::styled(watch_status.clone(), Color::LightBlue))
+                .right_aligned()
+                .render(
+                    Rect {
+                        x: area.x,
+                        y: area.y,
+                        width: area.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+        }
         if let Some(state) = &mut self.image {
             JellyfinImage::default().render_image(inner, buf, state, availabe, picker);
         }
@@ -72,12 +91,14 @@ impl Entry {
         title: String,
         subtitle: Option<String>,
         action: NextScreen,
+        watch_status: Option<Cow<'static, str>>,
     ) -> Self {
         Self {
             image,
             title,
             subtitle,
             action,
+            watch_status
         }
     }
 
@@ -113,7 +134,18 @@ impl Entry {
                     context.image_cache.clone(),
                 )
             });
-        Self::new(image, title, subtitle, NextScreen::LoadPlayItem(item))
+        let watch_status = if let Some(user_data) = item.user_data.as_ref(){
+            if let Some(num@ 1..) = user_data.unplayed_item_count{
+                Some(format!("{num}").into())
+            }else if user_data.played{
+                Some("✓".into())
+            }else{
+                None
+            }
+        }else{
+            None
+        };
+        Self::new(image, title, subtitle, NextScreen::LoadPlayItem(item), watch_status)
     }
 
     pub fn from_user_view(item: UserView, context: &TuiContext) -> Self {
@@ -133,7 +165,7 @@ impl Entry {
                     context.image_cache.clone(),
                 )
             });
-        Self::new(image, title, None, NextScreen::LoadUserView(item))
+        Self::new(image, title, None, NextScreen::LoadUserView(item),None)
     }
 
     pub fn get_action(self) -> NextScreen {

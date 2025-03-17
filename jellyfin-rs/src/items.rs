@@ -145,7 +145,8 @@ pub enum ItemType {
 #[serde(rename_all = "PascalCase")]
 pub struct UserData {
     pub playback_position_ticks: u64,
-    pub play_count: u64,
+    pub unplayed_item_count: Option<u64>,
+
     pub is_favorite: bool,
     pub played: bool,
 }
