@@ -27,8 +27,8 @@ pub struct Entry {
     watch_status: Option<Cow<'static, str>>,
 }
 
-const IMAGE_WIDTH: u16 = 32;
-fn image_height(font: FontSize) -> u16 {
+pub const IMAGE_WIDTH: u16 = 32;
+pub fn image_height(font: FontSize) -> u16 {
     let width = IMAGE_WIDTH * font.0;
     let width: f64 = width.into();
     let height = (width / 16.0) * 9.0;

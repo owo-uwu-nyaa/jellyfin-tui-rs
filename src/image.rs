@@ -1,14 +1,7 @@
 use std::{
-    collections::HashMap,
-    future::Future,
-    io::Cursor,
-    ops::DerefMut,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Weak,
-    },
-    task::{self, Poll, Waker},
-    time::Duration,
+    cmp::min, collections::HashMap, future::Future, io::Cursor, ops::DerefMut, sync::{
+        atomic::{AtomicBool, Ordering}, Arc, Weak
+    }, task::{self, Poll, Waker}, time::Duration
 };
 
 use bytes::Bytes;
@@ -16,20 +9,20 @@ use color_eyre::eyre::Context;
 use either::Either;
 use image::{DynamicImage, ImageFormat, ImageReader};
 use jellyfin::{
+    AuthStatus, JellyfinClient,
     image::{GetImage, GetImageQuery},
     items::ImageType,
     sha::Sha256,
-    AuthStatus, JellyfinClient,
 };
 use log::trace;
-use ratatui::layout::Rect;
-use ratatui_image::{picker::Picker, protocol::StatefulProtocol, FilterType, Resize};
-use sqlx::{query, query_scalar, SqlitePool};
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui_image::{FilterType, Resize, picker::Picker, protocol::StatefulProtocol};
+use sqlx::{SqlitePool, query, query_scalar};
 use tokio::select;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::Result;
+use crate::{entry::{image_height, IMAGE_WIDTH}, Result};
 
 #[instrument(skip_all)]
 pub async fn clean_image_cache(db: SqlitePool) {
@@ -131,14 +124,14 @@ struct ImageProtocolKey {
 #[derive(Clone)]
 pub struct ImageProtocolCache {
     protocols:
-        Arc<parking_lot::Mutex<HashMap<ImageProtocolKey, Either<StatefulProtocol, DynamicImage>>>>,
+        Arc<parking_lot::Mutex<HashMap<ImageProtocolKey, Either<(StatefulProtocol,u16), DynamicImage>>>>,
 }
 
 impl ImageProtocolCache {
     #[instrument(level = "trace", skip_all)]
-    fn store_protocol(&self, protocol: StatefulProtocol, key: ImageProtocolKey) {
+    fn store_protocol(&self, protocol: StatefulProtocol, key: ImageProtocolKey, width: u16) {
         trace!("storing image protocol in cache");
-        self.protocols.lock().insert(key, Either::Left(protocol));
+        self.protocols.lock().insert(key, Either::Left((protocol, width)));
     }
     #[instrument(level = "trace", skip_all)]
     fn store_image(&self, image: DynamicImage, key: ImageProtocolKey) {
@@ -166,7 +159,7 @@ enum ImageStateInnerState {
     },
     Invalid,
     ImageReady(DynamicImage, ImageProtocolKey),
-    Image(StatefulProtocol, ImageProtocolKey),
+    Image(StatefulProtocol, ImageProtocolKey, u16),
 }
 
 impl Default for ImageStateInnerState {
@@ -186,7 +179,7 @@ impl Drop for ImageStateInner {
     fn drop(&mut self) {
         match std::mem::take(self.value.get_mut()) {
             ImageStateInnerState::ImageReady(image, key) => self.cache.store_image(image, key),
-            ImageStateInnerState::Image(protocol, key) => self.cache.store_protocol(protocol, key),
+            ImageStateInnerState::Image(protocol, key, width) => self.cache.store_protocol(protocol, key, width),
             _ => {}
         }
     }
@@ -351,7 +344,7 @@ impl JellyfinImageState {
         if let Some(cached) = cached {
             trace!("got image from cache");
             let state = match cached {
-                Either::Left(protocol) => ImageStateInnerState::Image(protocol, key),
+                Either::Left((protocol, width)) => ImageStateInnerState::Image(protocol, key,width),
                 Either::Right(image) => ImageStateInnerState::ImageReady(image, key),
             };
             Self {
@@ -415,7 +408,7 @@ impl JellyfinImageState {
                         self.inner.cache.clone(),
                     ));
                 }
-                val @ ImageStateInnerState::Image(_, _)
+                val @ ImageStateInnerState::Image(_, _, _)
                 | val @ ImageStateInnerState::ImageReady(_, _) => {
                     *value_ref = val;
                 }
@@ -434,7 +427,7 @@ fn resize_image(
     trace!("resizing image");
     if let Some(out) = out.upgrade() {
         let mut value = out.value.lock();
-        if let ImageStateInnerState::Image(protocol, _) = value.deref_mut() {
+        if let ImageStateInnerState::Image(protocol, _, _) = value.deref_mut() {
             protocol.resize_encode(&resize, protocol.background_color(), area);
             trace!("resized");
         } else {
@@ -477,18 +470,20 @@ impl JellyfinImage {
         state_mut: &mut ImageStateInnerState,
         state: &JellyfinImageState,
         availabe: &ImagesAvailable,
+        width: u16,
     ) {
+        let [area] = Layout::horizontal([Constraint::Length(width)]).flex(Flex::Center).areas(area);
         if let Some(area) = image.needs_resize(&self.resize, area) {
             trace!("image needs resize");
             state.inner.ready.store(false, Ordering::SeqCst);
-            *state_mut = ImageStateInnerState::Image(image, key);
+            *state_mut = ImageStateInnerState::Image(image, key, width);
             let resize = self.resize;
             let out = Arc::downgrade(&state.inner);
             let wake = availabe.inner.clone();
             rayon::spawn(move || resize_image(resize, area, &out, &wake));
         } else {
             image.render(area, buf);
-            *state_mut = ImageStateInnerState::Image(image, key);
+            *state_mut = ImageStateInnerState::Image(image, key, width);
         }
     }
 
@@ -508,6 +503,13 @@ impl JellyfinImage {
                 ImageStateInnerState::Invalid => panic!("image in invalid state"),
                 ImageStateInnerState::ImageReady(dynamic_image, key) => {
                     trace!("image ready");
+                    let image_height = image_height(picker.font_size());
+                    let height = image_height * picker.font_size().1;
+                    let height: f64 = height.into();
+                    let width =
+                        (height / (dynamic_image.height() as f64)) * (dynamic_image.width() as f64);
+                    let width = width / (picker.font_size().0 as f64);
+                    let width = min( width.ceil() as u16, IMAGE_WIDTH);
                     let image = picker.new_resize_protocol(dynamic_image);
                     self.render_image_inner(
                         area,
@@ -517,9 +519,10 @@ impl JellyfinImage {
                         value_ref.deref_mut(),
                         state,
                         availabe,
+                        width,
                     );
                 }
-                ImageStateInnerState::Image(image, key) => {
+                ImageStateInnerState::Image(image, key, width) => {
                     self.render_image_inner(
                         area,
                         buf,
@@ -528,6 +531,7 @@ impl JellyfinImage {
                         value_ref.deref_mut(),
                         state,
                         availabe,
+                        width,
                     );
                 }
                 ImageStateInnerState::Lazy {
