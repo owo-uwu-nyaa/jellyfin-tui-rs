@@ -1,21 +1,21 @@
 use std::{collections::HashMap, pin::pin};
 
-use color_eyre::{eyre::Context, Result};
-use futures_util::{stream, StreamExt, TryStreamExt};
+use color_eyre::{Result, eyre::Context};
+use futures_util::{StreamExt, TryStreamExt, stream};
 use jellyfin::{
+    Auth, JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
     sha::Sha256,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
-    Auth, JellyfinClient,
 };
 use ratatui::widgets::{Block, Paragraph};
-use tracing::{debug, instrument, trace};
+use tracing::{debug, error, instrument, trace};
 
 use crate::{
+    TuiContext,
     keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 #[derive(Debug)]
@@ -142,7 +142,15 @@ pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
             .context("rendering ui")?;
         tokio::select! {
             data = &mut load => {
-                break Ok(Navigation::Replace(NextScreen::HomeScreen(data.context("loading home screen data")?)))
+                break match data{
+                    Err(e) => {
+                        error!("Error loading home screen data: {e:?}");
+                        Ok(Navigation::Push{current: NextScreen::LoadHomeScreen, next: NextScreen::Error("error loading home screen".into())})
+                    }
+                    Ok(data) => {
+                      Ok(Navigation::Replace(NextScreen::HomeScreen(data)))
+                    }
+                }
             }
             term = events.next() => {
                 match term {

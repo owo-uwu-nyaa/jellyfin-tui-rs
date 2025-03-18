@@ -8,7 +8,7 @@ use jellyfin::{
 };
 use ratatui::widgets::{Block, Paragraph};
 use std::pin::pin;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{
     entry::Entry,
@@ -68,8 +68,13 @@ pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navi
             .context("rendering ui")?;
         tokio::select! {
             data = &mut fetch => {
-                let items = data.with_context(||format!("loading user view {}", view.name))?;
-                break Ok(Navigation::Replace(NextScreen::UserView { view:view.clone() , items  }))
+                break match data{
+                    Err(e) => {
+                        error!("Error loading user view {}: {e:?}", view.name);
+                        Ok(Navigation::Replace(NextScreen::Error(format!("Error loading user view {}", view.name).into())))
+                    }
+                    Ok(items) => Ok(Navigation::Replace(NextScreen::UserView { view:view.clone() , items  }))
+                }
             }
             term = events.next() => {
                 match term {
