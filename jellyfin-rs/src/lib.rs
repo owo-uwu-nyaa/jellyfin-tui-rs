@@ -7,7 +7,7 @@ use reqwest::{
 };
 use sealed::AuthSealed;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sha::Sha256;
+use sha::ShaImpl;
 use url::Url;
 use user::User;
 
@@ -24,10 +24,11 @@ pub mod shows;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
+pub mod socket;
 pub use reqwest;
 
 #[derive(Debug, Clone)]
-pub struct JellyfinClient<AuthS: AuthStatus = Auth, Sha: Sha256 = sha::Default> {
+pub struct JellyfinClient<AuthS: AuthStatus = Auth, Sha: ShaImpl = sha::Default> {
     url: Url,
     client: Client,
     client_info: ClientInfo,
@@ -41,11 +42,13 @@ pub struct Auth {
     pub user: User,
     pub access_token: String,
     pub header: HeaderValue,
+    pub device_id: String,
 }
 
 pub struct KeyAuth {
     pub access_key: String,
     pub header: HeaderValue,
+    pub device_id: String,
 }
 
 mod sealed {
@@ -89,7 +92,7 @@ pub struct ClientInfo {
     pub version: Cow<'static, str>,
 }
 
-impl<AuthS: AuthStatus, Sha: Sha256> JellyfinClient<AuthS, Sha> {
+impl<AuthS: AuthStatus, Sha: ShaImpl> JellyfinClient<AuthS, Sha> {
     /// Creates a new `JellyfinConnection`
     /// * `url` The base jellyfin server url, without a trailing "/"
     pub fn new(
@@ -154,13 +157,13 @@ impl<AuthS: AuthStatus, Sha: Sha256> JellyfinClient<AuthS, Sha> {
     }
 }
 
-impl<Sha: Sha256> JellyfinClient<NoAuth, Sha> {
+impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
     pub fn get_base_url_mut(&mut self) -> &mut Url {
         &mut self.url
     }
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     fn get(&self, url: impl IntoUrl) -> RequestBuilder {
         self.client
             .get(url)

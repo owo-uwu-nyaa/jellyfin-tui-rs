@@ -1,7 +1,7 @@
 use std::task::Poll;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use futures_util::{stream::FusedStream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream::FusedStream};
 use tracing::warn;
 
 use super::{Command, KeyBinding, KeybindEvent, KeybindEventStream, Text};
@@ -22,13 +22,16 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
     ) -> Poll<Option<Self::Item>> {
         if self.inner.finished {
             Poll::Ready(None)
-        } else if self.inner.exit.poll_recv(cx).is_ready() {
-            self.inner.finished = true;
-            Poll::Ready(None)
         } else {
             Poll::Ready(loop {
                 match std::task::ready!(self.inner.events.poll_next_unpin(cx)) {
-                    None => {
+                    None
+                    | Some(Ok(Event::Key(KeyEvent {
+                        code: KeyCode::Char('c'),
+                        modifiers: KeyModifiers::CONTROL,
+                        kind: KeyEventKind::Press,
+                        state: _,
+                    }))) => {
                         self.inner.finished = true;
                         break None;
                     }

@@ -46,3 +46,4 @@ esc = { name = "cmd-prefix", map = { q ="quit" } }
 
 [error]
 q = "quit"
+k = "kill"

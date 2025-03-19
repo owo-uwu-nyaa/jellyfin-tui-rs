@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::session::SessionInfo;
-use crate::sha::Sha256;
+use crate::sha::ShaImpl;
 use crate::AuthStatus;
 use crate::Authed;
 use crate::JellyfinClient;
@@ -641,7 +641,7 @@ struct AuthUserStdQuery {
     password: String,
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     /// Gets a list of all users that the `UserAuth` has access to, given some filters.
     pub async fn get_users(
         &self,
@@ -778,7 +778,7 @@ pub struct ForgotPasswordResponse {
     pin_expiration_date: Option<String>,
 }
 
-impl<Auth: AuthStatus, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: AuthStatus, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub async fn user_forgot_password(
         &self,
         username: impl AsRef<str>,

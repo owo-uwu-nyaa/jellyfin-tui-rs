@@ -2,7 +2,7 @@ pub mod parse_config;
 pub mod stream;
 pub mod widget;
 
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 use crossterm::event::{EventStream, KeyCode};
 use parse_config::Config;
 use std::{
@@ -13,11 +13,10 @@ use std::{
 };
 
 use crate::{
-    home_screen::HomeScreenCommand, login::LoginInfoCommand, mpv::MpvCommand,
+    home_screen::HomeScreenCommand, login::LoginInfoCommand, mpv::MpvCommand, state::ErrorCommand,
     user_view::UserViewCommand,
 };
 
-use self::ctrl_c::Signal;
 
 pub trait Command: Clone + Copy + Debug {
     fn name(self) -> &'static str;
@@ -75,7 +74,7 @@ pub struct Keybinds {
     pub home_screen: BindingMap<HomeScreenCommand>,
     pub fetch_login: BindingMap<LoadingCommand>,
     pub login_info: BindingMap<LoginInfoCommand>,
-    pub error: BindingMap<LoadingCommand>,
+    pub error: BindingMap<ErrorCommand>,
 }
 
 impl Keybinds {
@@ -154,7 +153,6 @@ pub enum KeybindEvent<T: Command> {
 
 pub struct KeybindEvents {
     events: EventStream,
-    exit: Signal,
     finished: bool,
 }
 
@@ -162,7 +160,6 @@ impl KeybindEvents {
     pub fn new() -> Result<Self> {
         Ok(Self {
             events: EventStream::new(),
-            exit: ctrl_c::listen()?,
             finished: false,
         })
     }
@@ -188,23 +185,6 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
     }
     pub fn set_text_input(&mut self, text_input: bool) {
         self.text_input = text_input;
-    }
-}
-
-mod ctrl_c {
-    #[cfg(unix)]
-    pub type Signal = tokio::signal::unix::Signal;
-    #[cfg(windows)]
-    pub type Signal = tokio::signal::windows::CtrlC;
-    #[cfg(unix)]
-    pub fn listen() -> color_eyre::Result<Signal> {
-        Ok(tokio::signal::unix::signal(
-            tokio::signal::unix::SignalKind::interrupt(),
-        )?)
-    }
-    #[cfg(windows)]
-    pub fn listen() -> color_eyre::Result<Signal> {
-        Ok(tokio::signal::windows::ctrl_c()?)
     }
 }
 

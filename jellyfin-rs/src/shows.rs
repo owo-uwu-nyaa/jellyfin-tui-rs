@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::{
-    items::MediaItem, sha::Sha256, Authed, JellyfinClient, JellyfinVec, JsonResponse, Result,
+    items::MediaItem, sha::ShaImpl, Authed, JellyfinClient, JellyfinVec, JsonResponse, Result,
 };
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -30,7 +30,7 @@ pub struct GetSeasonsQuery<'s> {
     pub enable_user_data: Option<bool>,
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub async fn get_episodes(
         &self,
         series_id: &str,

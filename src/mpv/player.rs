@@ -1,7 +1,10 @@
 use std::{ffi::CString, sync::Arc, task::Poll, time::Duration};
 
 use futures_util::{Stream, StreamExt, stream::FusedStream};
-use jellyfin::{Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody};
+use jellyfin::{
+    Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody,
+    socket::JellyfinWebSocket,
+};
 use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
 use tokio::{
     task::JoinSet,
@@ -21,9 +24,11 @@ pub struct Player<'j> {
     index: Option<usize>,
     id: Option<Arc<String>>,
     position: Option<f64>,
+    paused: bool,
     send_timer: Interval,
     join: JoinSet<()>,
     jellyfin: &'j JellyfinClient<Auth>,
+    jellyfin_socket: Option<JellyfinWebSocket>,
     was_running: bool,
     last_position: Option<f64>,
     last_index: Option<usize>,
@@ -41,6 +46,20 @@ impl FusedStream for Player<'_> {
 
 #[inline]
 fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result<Poll<Option<()>>> {
+    if let Some(socket) = state.jellyfin_socket.as_mut() {
+        loop {
+            match socket.poll_next_unpin(cx) {
+                Poll::Pending => break,
+                Poll::Ready(None) => {
+                    state.jellyfin_socket=None;
+                    break
+                }
+                Poll::Ready(Some(v)) => {
+                    info!("websocket message: {v:#?}");
+                }
+            }
+        }
+    }
     let res = 'res: {
         while let Poll::Ready(res) = state.join.poll_join_next(cx) {
             match res {
@@ -81,6 +100,7 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                         send_playing_stopped(
                             state.id.as_ref(),
                             state.position,
+                            state.paused,
                             state.jellyfin,
                             &mut state.join,
                         );
@@ -115,6 +135,7 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                                 send_playing_stopped(
                                     state.id.as_ref(),
                                     state.position,
+                                    state.paused,
                                     state.jellyfin,
                                     &mut state.join,
                                 );
@@ -129,12 +150,17 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                             state.was_running = true;
                         }
                     }
+                    Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Pause(pause)))) => {
+                        state.paused = pause;
+                    }
+
                     Some(Err(e)) => return Err(e),
                     None => {
                         info!("player quit");
                         send_playing_stopped(
                             state.id.as_ref(),
                             state.position,
+                            state.paused,
                             state.jellyfin,
                             &mut state.join,
                         );
@@ -156,10 +182,12 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                     state.last_position = state.position;
                     let progress = state.jellyfin.prepare_set_playing_progress();
                     let id = id.clone();
+                    let paused = state.paused;
                     state.join.spawn(async move {
                         if let Err(e) = progress
                             .send(&ProgressBody {
                                 item_id: &id,
+                                is_paused: paused,
                                 position_ticks: (pos * 10000000.0) as u64,
                             })
                             .await
@@ -178,6 +206,7 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
 fn send_playing_stopped(
     id: Option<&Arc<String>>,
     position: Option<f64>,
+    paused: bool,
     jellyfin: &JellyfinClient<Auth>,
     join: &mut JoinSet<()>,
 ) {
@@ -189,6 +218,7 @@ fn send_playing_stopped(
                 .send(&ProgressBody {
                     item_id: &id,
                     position_ticks: (pos * 10000000.0) as u64,
+                    is_paused: paused,
                 })
                 .await
             {
@@ -229,7 +259,7 @@ pub enum PlayerState<'p> {
 
 impl<'j> Player<'j> {
     #[instrument(skip_all)]
-    pub fn new(
+    pub async fn new(
         cx: &TuiContext,
         jellyfin: &'j JellyfinClient<Auth>,
         items: Vec<MediaItem>,
@@ -251,7 +281,6 @@ impl<'j> Player<'j> {
             )?;
         }
         debug!("previous files added");
-
         mpv.command(&[
             c"loadfile".to_node(),
             CString::new(jellyfin.get_video_url(&items[index]))
@@ -277,6 +306,7 @@ impl<'j> Player<'j> {
         }
         debug!("later files added");
         let mut send_timer = tokio::time::interval(Duration::from_secs(10));
+        let jellyfin_socket = jellyfin.get_socket().await?;
         send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         Ok(Self {
             mpv: Some(mpv),
@@ -286,6 +316,7 @@ impl<'j> Player<'j> {
             send_timer,
             join: JoinSet::new(),
             jellyfin,
+            jellyfin_socket: Some(jellyfin_socket),
             was_running: false,
             last_position: None,
             last_index: None,
@@ -294,6 +325,7 @@ impl<'j> Player<'j> {
             id: None,
             playback_started: false,
             initial_index: index as i64,
+            paused: true,
         })
     }
 

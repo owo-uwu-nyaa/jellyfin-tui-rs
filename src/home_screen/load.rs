@@ -5,7 +5,7 @@ use futures_util::{StreamExt, TryStreamExt, stream};
 use jellyfin::{
     Auth, JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
-    sha::Sha256,
+    sha::ShaImpl,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
 };
@@ -28,7 +28,7 @@ pub struct HomeScreenData {
 
 #[instrument(skip_all)]
 pub async fn load_data(
-    client: &JellyfinClient<Auth, impl Sha256>,
+    client: &JellyfinClient<Auth, impl ShaImpl>,
     user_id: &str,
 ) -> Result<HomeScreenData> {
     debug!("collecting main screen information");

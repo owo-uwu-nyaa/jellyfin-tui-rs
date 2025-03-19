@@ -4,7 +4,7 @@ use bytes::Bytes;
 use reqwest::Client;
 use serde::Serialize;
 
-use crate::{items::ImageType, sha::Sha256, AuthStatus, JellyfinClient, Result};
+use crate::{items::ImageType, sha::ShaImpl, AuthStatus, JellyfinClient, Result};
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +32,7 @@ impl GetImage {
     }
 }
 
-impl<Auth: AuthStatus, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: AuthStatus, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub fn prepare_get_image(&self, item_id: impl Display, image_type: ImageType) -> GetImage {
         GetImage {
             client: self.client.clone(),

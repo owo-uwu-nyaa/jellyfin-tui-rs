@@ -3,25 +3,25 @@ mod log;
 mod mpv_stream;
 mod player;
 
-use std::io::Stdout;
+use std::{borrow::Cow, io::Stdout};
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
 use player::{Player, PlayerState};
 use ratatui::{
+    Terminal,
     layout::{Constraint, Layout},
     prelude::CrosstermBackend,
     widgets::{Block, Padding, Paragraph},
-    Terminal,
 };
 use tokio::select;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
+    TuiContext,
     keybinds::{Command, KeybindEvent, KeybindEventStream},
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +51,7 @@ pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> R
             "Unable to play, item is empty".into(),
         )));
     }
-    let mut player = Player::new(cx, &cx.jellyfin, items, index)?;
+    let mut player = Player::new(cx, &cx.jellyfin, items, index).await?;
     let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
@@ -101,8 +101,8 @@ fn render(
                 let block = Block::bordered()
                     .title("Now playing")
                     .padding(Padding::uniform(1));
+
                 let area = block.inner(block_area);
-                frame.render_widget(block, block_area);
                 match &media_item.item_type {
                     jellyfin::items::ItemType::Movie { container: _ } => {
                         frame.render_widget(
@@ -116,12 +116,27 @@ fn render(
                         season_name: None,
                         series_id: _,
                         series_name,
+                        episode_index,
+                        seasion_index,
                     } => {
                         let [series, episode] =
                             Layout::vertical([Constraint::Fill(1), Constraint::Fill(1)])
                                 .vertical_margin(3)
                                 .areas(area);
-                        frame.render_widget(Paragraph::new(series_name.clone()).centered(), series);
+                        let mut series_str = Cow::from(series_name.as_str());
+                        if episode_index.is_some() || seasion_index.is_some() {
+                            series_str.to_mut().push(' ');
+                            if let Some(season) = seasion_index {
+                                series_str.to_mut().push('S');
+                                series_str.to_mut().push_str(&season.to_string());
+                            }
+                            if let Some(episode) = episode_index {
+                                series_str.to_mut().push('E');
+                                series_str.to_mut().push_str(&episode.to_string());
+                            }
+                        }
+
+                        frame.render_widget(Paragraph::new(series_str).centered(), series);
                         frame.render_widget(
                             Paragraph::new(media_item.name.clone()).centered(),
                             episode,
@@ -133,6 +148,8 @@ fn render(
                         season_name: Some(season_name),
                         series_id: _,
                         series_name,
+                        episode_index,
+                        seasion_index,
                     } => {
                         let [series, season, episode] = Layout::vertical([
                             Constraint::Fill(1),
@@ -141,7 +158,19 @@ fn render(
                         ])
                         .vertical_margin(3)
                         .areas(area);
-                        frame.render_widget(Paragraph::new(series_name.clone()).centered(), series);
+                        let mut series_str = Cow::from(series_name.as_str());
+                        if episode_index.is_some() || seasion_index.is_some() {
+                            series_str.to_mut().push(' ');
+                            if let Some(season) = seasion_index {
+                                series_str.to_mut().push('S');
+                                series_str.to_mut().push_str(&season.to_string());
+                            }
+                            if let Some(episode) = episode_index {
+                                series_str.to_mut().push('E');
+                                series_str.to_mut().push_str(&episode.to_string());
+                            }
+                        }
+                        frame.render_widget(Paragraph::new(series_str).centered(), series);
                         frame.render_widget(Paragraph::new(season_name.clone()).centered(), season);
                         frame.render_widget(
                             Paragraph::new(media_item.name.clone()).centered(),
@@ -152,6 +181,7 @@ fn render(
                         panic!("unexpected media item type: {media_item:#?}");
                     }
                 }
+                frame.render_widget(block, block_area);
                 frame.render_widget(events, frame.area());
             })
             .context("rendering playing item")?;

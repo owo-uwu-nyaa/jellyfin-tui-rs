@@ -87,6 +87,8 @@ async fn fetch_items(
                     season_name: _,
                     series_id,
                     series_name: _,
+                    episode_index:_,
+                    seasion_index:_,
                 },
             sort_name: _,
         } => {

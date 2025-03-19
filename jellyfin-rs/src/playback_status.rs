@@ -1,7 +1,7 @@
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 
-use crate::{Auth, JellyfinClient, Result, Sha256};
+use crate::{Auth, JellyfinClient, Result, ShaImpl};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -14,6 +14,7 @@ struct PlayingBody<'s> {
 pub struct ProgressBody<'s> {
     pub item_id: &'s str,
     pub position_ticks: u64,
+    pub is_paused: bool,
 }
 
 pub struct SetPlaying {
@@ -50,7 +51,7 @@ impl SetPlayingStopped {
     }
 }
 
-impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub fn prepare_set_playing(&self) -> SetPlaying {
         SetPlaying {
             inner: self.post(format!("{}Sessions/Playing", self.url)),

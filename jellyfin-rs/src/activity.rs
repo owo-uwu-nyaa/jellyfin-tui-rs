@@ -2,7 +2,7 @@ use super::err::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::sha::Sha256;
+use crate::sha::ShaImpl;
 use crate::Authed;
 use crate::JellyfinClient;
 use crate::JellyfinVec;
@@ -31,7 +31,7 @@ struct GetActivityLogEntriesQuery<'s> {
     has_user_id: bool,
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub async fn get_activity_log_entries(
         &self,
         start_index: Option<u32>,

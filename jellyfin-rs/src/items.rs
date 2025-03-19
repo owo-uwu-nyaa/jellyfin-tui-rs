@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::{sha::Sha256, Auth, JellyfinClient, Result};
+use crate::{sha::ShaImpl, Auth, JellyfinClient, Result};
 use crate::{JellyfinVec, JsonResponse};
 use serde::Deserialize;
 use serde::Serialize;
@@ -131,6 +131,10 @@ pub enum ItemType {
         season_name: Option<String>,
         series_id: String,
         series_name: String,
+        #[serde(rename = "index_number")]
+        episode_index: Option<u64>,
+        #[serde(rename = "parent_index_number")]
+        seasion_index: Option<u64>,
     },
     #[serde(rename_all = "PascalCase")]
     Season {
@@ -165,7 +169,7 @@ pub struct MediaItem {
     pub user_data: Option<UserData>,
 }
 
-impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     #[instrument(skip(self))]
     pub async fn get_user_items_resume(
         &self,

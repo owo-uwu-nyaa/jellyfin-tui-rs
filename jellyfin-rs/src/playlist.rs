@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{items::MediaItem, sha::Sha256, Authed, JellyfinClient, JellyfinVec, JsonResponse};
+use crate::{items::MediaItem, sha::ShaImpl, Authed, JellyfinClient, JellyfinVec, JsonResponse};
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct GetPlaylistItemsQuery<'s> {
@@ -13,7 +13,7 @@ pub struct GetPlaylistItemsQuery<'s> {
     pub enable_user_data: Option<bool>,
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     pub async fn get_playlist_items(
         &self,
         playlist_id: &str,

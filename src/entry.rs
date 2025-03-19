@@ -61,7 +61,6 @@ impl Entry {
         let inner = outer.inner(area);
         outer.render(area, buf);
         if let Some(watch_status) = self.watch_status.as_ref() {
-            info!("rendering watch status");
             Paragraph::new(Span::styled(watch_status.clone(), Color::LightBlue))
                 .right_aligned()
                 .render(
@@ -111,6 +110,8 @@ impl Entry {
                 season_name: _,
                 series_id: _,
                 series_name,
+                seasion_index:_,
+                episode_index:_,
             } => (series_name.clone(), item.name.clone().into()),
             ItemType::Season {
                 series_id: _,

@@ -6,16 +6,16 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use tracing::debug;
 
 use crate::{
+    TuiContext,
     home_screen::{
         display_home_screen,
-        load::{load_home_screen, HomeScreenData},
+        load::{HomeScreenData, load_home_screen},
     },
-    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
+    keybinds::{Command, KeybindEvent, KeybindEventStream},
     mpv,
     user_view::{display_user_view, fetch_user_view},
-    TuiContext,
 };
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 
 #[derive(Debug)]
 pub enum NextScreen {
@@ -96,6 +96,28 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ErrorCommand {
+    Quit,
+    Kill,
+}
+impl Command for ErrorCommand {
+    fn name(self) -> &'static str {
+        match self {
+            ErrorCommand::Quit => "quit",
+            ErrorCommand::Kill => "kill",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "quit" => ErrorCommand::Quit.into(),
+            "kill" => ErrorCommand::Kill.into(),
+            _ => None,
+        }
+    }
+}
+
 async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Navigation> {
     let msg = Paragraph::new(msg)
         .wrap(Wrap { trim: false })
@@ -111,10 +133,12 @@ async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Nav
         match events.next().await {
             Some(Ok(KeybindEvent::Render)) => continue,
             Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
-            Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => {
+            Some(Ok(KeybindEvent::Command(ErrorCommand::Quit))) => {
                 break Ok(Navigation::PopContext);
             }
-            None => break Ok(Navigation::Exit),
+            Some(Ok(KeybindEvent::Command(ErrorCommand::Kill))) | None => {
+                break Ok(Navigation::Exit);
+            }
             Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
         }
     }

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tracing::instrument;
 
-use crate::{items::MediaItem, sha::Sha256, Authed, JellyfinClient, JsonResponse};
+use crate::{items::MediaItem, sha::ShaImpl, Authed, JellyfinClient, JsonResponse};
 
 use super::err::Result;
 
@@ -21,7 +21,7 @@ pub struct GetLatestQuery<'a> {
     pub group_items: Option<bool>,
 }
 
-impl<Auth: Authed, Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     #[instrument(skip(self))]
     pub async fn get_user_library_latest_media(
         &self,

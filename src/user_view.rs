@@ -2,7 +2,7 @@ use color_eyre::eyre::{Context, Result};
 use futures_util::StreamExt;
 use jellyfin::{
     items::{GetItemsQuery, MediaItem},
-    sha::Sha256,
+    sha::ShaImpl,
     user_views::UserView,
     Auth, JellyfinClient, JellyfinVec,
 };
@@ -20,7 +20,7 @@ use crate::{
 };
 
 async fn fetch_user_view_items(
-    jellyfin: &JellyfinClient<Auth, impl Sha256>,
+    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
     view: &UserView,
 ) -> Result<Vec<MediaItem>> {
     let user_id = jellyfin.get_auth().user.id.as_str();

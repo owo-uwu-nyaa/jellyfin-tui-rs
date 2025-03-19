@@ -1,17 +1,17 @@
 use std::{
     ffi::CString,
     ops::Deref,
-    task::{ready, Poll},
+    task::{Poll, ready},
 };
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::Stream;
 use libmpv::{
+    Format, Mpv,
     events::{
-        mpv_event_id, Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData,
+        Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData, mpv_event_id,
     },
     node::{BorrowingMpvNodeList, ToNode},
-    Format, Mpv,
 };
 use tracing::{info, instrument, trace, warn};
 
@@ -23,6 +23,7 @@ use super::log::log_message;
 pub enum ObservedProperty {
     Position(f64),
     Idle(bool),
+    Pause(bool),
 }
 
 #[derive(Debug)]
@@ -80,6 +81,11 @@ impl Stream for MpvStream {
                     ("idle-active", PropertyData::Flag(idle), 2) => {
                         break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Idle(idle))));
                     }
+                    ("pause", PropertyData::Flag(pause), 3) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Pause(
+                            pause,
+                        ))));
+                    }
                     (name, val, id) => {
                         warn!(name, ?val, id, "received unrequested property change event");
                     }
@@ -128,6 +134,7 @@ impl MpvStream {
         mpv.enable_event(mpv_event_id::StartFile)?;
         mpv.observe_property("time-pos", Format::Double, 1)?;
         mpv.observe_property("idle-active", Format::Flag, 2)?;
+        mpv.observe_property("pause", Format::Flag, 3)?;
         info!("mpv initialized");
         Ok(Self { mpv })
     }

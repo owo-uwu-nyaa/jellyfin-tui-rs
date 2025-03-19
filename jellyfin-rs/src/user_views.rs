@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 use crate::{
-    items::ImageType, sha::Sha256, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result,
+    items::ImageType, sha::ShaImpl, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result,
 };
 
 #[derive(Debug, Serialize, Default)]
@@ -16,7 +16,7 @@ pub struct GetUserViewsQuery<'s> {
     pub include_hidden: Option<bool>,
 }
 
-impl<Sha: Sha256> JellyfinClient<Auth, Sha> {
+impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
     #[instrument(skip(self))]
     pub async fn get_user_views(
         &self,
