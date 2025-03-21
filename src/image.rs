@@ -215,8 +215,16 @@ fn parse_image(
     cache: ImageProtocolCache,
 ) {
     trace!("parsing image");
-    let mut reader = ImageReader::new(Cursor::new(val));
-    reader.set_format(ImageFormat::WebP);
+    let reader = match ImageReader::new(Cursor::new(val)).with_guessed_format(){
+        Ok(reader)=> reader,
+        Err(e) => {
+            warn!("error guessing image format: {e:?}");
+            if let Some(out) = out.upgrade() {
+                *out.value.lock() = ImageStateInnerState::Invalid;
+            };
+            return
+        }
+    };
     match reader.decode().context("decoding image") {
         Ok(image) => {
             trace!("image parsed");
