@@ -33,7 +33,7 @@ tokio = { version = "1.44.0", default-features = false, optional = true, feature
 tracing = { version = "0.1.41", optional = true, default-features = false }
 
 [dev-dependencies]
-crossbeam = "0.7"
+crossbeam = "0.8"
 
 [features]
 default = ["render", "tokio"]

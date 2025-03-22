@@ -15,7 +15,7 @@ use std::{
 use bytes::Bytes;
 use color_eyre::eyre::Context;
 use either::Either;
-use image::{DynamicImage, ImageFormat, ImageReader};
+use image::{DynamicImage, ImageReader};
 use jellyfin::{
     image::{GetImage, GetImageQuery},
     items::ImageType,

@@ -1,9 +1,9 @@
-use std::{ffi::CString, sync::Arc, task::Poll, time::Duration};
+use std::{ffi::CString, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{stream::FusedStream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream::FusedStream};
 use jellyfin::{
-    items::MediaItem, playback_status::ProgressBody, socket::JellyfinWebSocket, Auth,
-    JellyfinClient,
+    Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody,
+    socket::JellyfinWebSocket,
 };
 use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
 use tokio::{
@@ -12,7 +12,7 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, trace};
 
-use crate::TuiContext;
+use crate::Config;
 
 use super::mpv_stream::{MpvEvent, MpvStream, ObservedProperty};
 
@@ -28,7 +28,7 @@ pub struct Player<'j> {
     send_timer: Interval,
     join: JoinSet<()>,
     jellyfin: &'j JellyfinClient<Auth>,
-    jellyfin_socket: Option<JellyfinWebSocket>,
+    jellyfin_socket: Pin<&'j mut JellyfinWebSocket>,
     was_running: bool,
     last_position: Option<f64>,
     last_index: Option<usize>,
@@ -46,17 +46,14 @@ impl FusedStream for Player<'_> {
 
 #[inline]
 fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result<Poll<Option<()>>> {
-    if let Some(socket) = state.jellyfin_socket.as_mut() {
-        loop {
-            match socket.poll_next_unpin(cx) {
-                Poll::Pending => break,
-                Poll::Ready(None) => {
-                    state.jellyfin_socket = None;
-                    break;
-                }
-                Poll::Ready(Some(v)) => {
-                    info!("websocket message: {v:#?}");
-                }
+    loop {
+        match state.jellyfin_socket.as_mut().poll_next_unpin(cx) {
+            Poll::Pending => break,
+            Poll::Ready(None) => {
+                break;
+            }
+            Poll::Ready(Some(v)) => {
+                info!("websocket message: {v:#?}");
             }
         }
     }
@@ -260,12 +257,13 @@ pub enum PlayerState<'p> {
 impl<'j> Player<'j> {
     #[instrument(skip_all)]
     pub async fn new(
-        cx: &TuiContext,
-        jellyfin: &'j JellyfinClient<Auth>,
+        jellyfin: &'j JellyfinClient,
+        jellyfin_socket: Pin<&'j mut JellyfinWebSocket>,
+        config: &Config,
         items: Vec<MediaItem>,
         index: usize,
     ) -> Result<Self> {
-        let mpv = MpvStream::new(cx)?;
+        let mpv = MpvStream::new(jellyfin, config)?;
 
         let position = items[index]
             .user_data
@@ -306,7 +304,6 @@ impl<'j> Player<'j> {
         }
         debug!("later files added");
         let mut send_timer = tokio::time::interval(Duration::from_secs(10));
-        let jellyfin_socket = jellyfin.get_socket().await?;
         send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         Ok(Self {
             mpv: Some(mpv),
@@ -316,7 +313,7 @@ impl<'j> Player<'j> {
             send_timer,
             join: JoinSet::new(),
             jellyfin,
-            jellyfin_socket: Some(jellyfin_socket),
+            jellyfin_socket,
             was_running: false,
             last_position: None,
             last_index: None,

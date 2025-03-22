@@ -1,22 +1,22 @@
 use color_eyre::eyre::{Context, Result};
 use futures_util::StreamExt;
 use jellyfin::{
+    Auth, JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
     sha::ShaImpl,
     user_views::UserView,
-    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
-use std::pin::pin;
+use std::pin::{Pin, pin};
 use tracing::{debug, error};
 
 use crate::{
+    TuiContext,
     entry::Entry,
     grid::EntryGrid,
     image::ImagesAvailable,
     keybinds::{Command, KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 async fn fetch_user_view_items(
@@ -52,13 +52,13 @@ async fn fetch_user_view_items(
     Ok(items)
 }
 
-pub async fn fetch_user_view(cx: &mut TuiContext, view: UserView) -> Result<Navigation> {
+pub async fn fetch_user_view(cx: Pin<&mut TuiContext>, view: UserView) -> Result<Navigation> {
+    let cx = cx.project();
     let msg = Paragraph::new(format!("Loading user view {}", view.name))
         .centered()
         .block(Block::bordered());
-    let mut fetch = pin!(fetch_user_view_items(&cx.jellyfin, &view));
-    let mut events =
-        KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_user_view.clone());
+    let mut fetch = pin!(fetch_user_view_items(cx.jellyfin, &view));
+    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_user_view.clone());
     loop {
         cx.term
             .draw(|frame| {
@@ -129,19 +129,20 @@ impl Command for UserViewCommand {
 }
 
 pub async fn display_user_view(
-    cx: &mut TuiContext,
+    cx: Pin<&mut TuiContext>,
     view: UserView,
     items: Vec<MediaItem>,
 ) -> Result<Navigation> {
     let mut grid = EntryGrid::new(
         items
             .into_iter()
-            .map(|item| Entry::from_media_item(item, cx))
+            .map(|item| Entry::from_media_item(item, &cx))
             .collect(),
         view.name.clone(),
     );
     let images_available = ImagesAvailable::new();
-    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.user_view.clone());
+    let cx = cx.project();
+    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.user_view.clone());
     loop {
         cx.term
             .draw(|frame| {
@@ -149,7 +150,7 @@ pub async fn display_user_view(
                     events.inner(frame.area()),
                     frame.buffer_mut(),
                     &images_available,
-                    &cx.image_picker,
+                    cx.image_picker,
                 );
                 frame.render_widget(&mut events, frame.area());
             })

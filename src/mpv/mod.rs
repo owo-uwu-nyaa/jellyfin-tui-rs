@@ -3,7 +3,7 @@ mod log;
 mod mpv_stream;
 mod player;
 
-use std::{borrow::Cow, io::Stdout};
+use std::{borrow::Cow, io::Stdout, pin::Pin};
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::{StreamExt, TryStreamExt};
@@ -16,7 +16,7 @@ use ratatui::{
     Terminal,
 };
 use tokio::select;
-use tracing::{info, instrument};
+use tracing::instrument;
 
 use crate::{
     keybinds::{Command, KeybindEvent, KeybindEventStream},
@@ -45,17 +45,18 @@ impl Command for MpvCommand {
 }
 
 #[instrument(skip_all)]
-pub async fn play(cx: &mut TuiContext, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
+pub async fn play(cx: Pin<&mut TuiContext>, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
     if items.is_empty() {
         return Ok(Navigation::Replace(NextScreen::Error(
             "Unable to play, item is empty".into(),
         )));
     }
-    let mut player = Player::new(cx, &cx.jellyfin, items, index).await?;
-    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.play_mpv.clone());
+    let mut cx = cx.project();
+    let mut player = Player::new(cx.jellyfin, cx.jellyfin_socket.as_mut(),  cx.config, items, index).await?;
+    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
-        render(&mut cx.term, player.state()?, &mut events)?;
+        render(cx.term, player.state()?, &mut events)?;
         select! {
             res = player.try_next() => {
                 if res?.is_none(){

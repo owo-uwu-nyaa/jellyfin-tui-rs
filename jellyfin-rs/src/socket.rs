@@ -19,7 +19,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use tokio::time::{interval, sleep, Interval, Sleep};
 use tokio_websockets::{Message, WebSocketStream};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     err::JellyfinError,
@@ -27,10 +27,12 @@ use crate::{
     Auth, JellyfinClient, Result,
 };
 
+type SocketFuture = dyn Future<Output = Result<Upgraded>> + Send;
+
 pin_project! {
     pub struct JellyfinWebSocket<Sha: ShaImpl = crate::sha::Default> {
         connect: ConnectInfo<Sha>,
-        socket_future: Option<Pin<Box<dyn Future<Output = Result<Upgraded>>>>>,
+        socket_future: Option<Pin<Box<SocketFuture>>>,
         #[pin]
         socket: Option<WebSocketStream<Upgraded>>,
         send_keep_alive: bool,
@@ -70,7 +72,7 @@ enum JellyfinMessageInternal {
 }
 
 impl JellyfinMessageInternal {
-#[inline(always)]
+    #[inline(always)]
     fn into_public<Sha: ShaImpl>(
         self,
         state: Pin<&mut JellyfinWebSocket<Sha>>,
@@ -277,6 +279,7 @@ impl<Sha: ShaImpl> Stream for JellyfinWebSocket<Sha> {
             }
             match ready!(poll_message(self.as_mut(), cx)) {
                 Some(Ok(message)) => {
+                    debug!("internal message: {message:#?}");
                     if let Some(message) = message.into_public(self.as_mut()) {
                         break Poll::Ready(Some(Ok(message)));
                     }
@@ -303,7 +306,7 @@ struct ConnectInfo<Sha: ShaImpl> {
 }
 
 impl<Sha: ShaImpl> ConnectInfo<Sha> {
-    fn new_connection(&self) -> Pin<Box<dyn Future<Output = Result<Upgraded>>>> {
+    fn new_connection(&self) -> Pin<Box<SocketFuture>> {
         let request = self.client.get(&self.url);
         let access_token = self.access_token.clone();
         let deviceid = self.deviceid.clone();
@@ -330,8 +333,8 @@ impl<Sha: ShaImpl> ConnectInfo<Sha> {
             let mut accept = <Sha::S1 as Sha1>::new();
             accept.update(nonce.as_bytes());
             accept.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-            let accept = accept.finalize();
-            let accept = BASE64_STANDARD.encode(accept);
+            let accept_bytes = accept.finalize();
+            let accept = BASE64_STANDARD.encode(accept_bytes);
             if res
                 .headers()
                 .get(SEC_WEBSOCKET_ACCEPT)
@@ -351,7 +354,7 @@ impl<Sha: ShaImpl> ConnectInfo<Sha> {
 }
 
 impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
-    pub async fn get_socket(&self) -> JellyfinWebSocket<Sha> {
+    pub fn get_socket(&self) -> JellyfinWebSocket<Sha> {
         let connect = ConnectInfo {
             url: format!("{}socket", self.url),
             client: self.client.clone(),

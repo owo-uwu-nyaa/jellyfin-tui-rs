@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use color_eyre::eyre::Context;
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
@@ -8,11 +10,11 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
+    Result, TuiContext,
     entry::Entry,
     image::ImagesAvailable,
     keybinds::{Command, KeybindEvent, KeybindEventStream},
     state::{Navigation, NextScreen},
-    Result, TuiContext,
 };
 
 mod list;
@@ -103,15 +105,14 @@ impl Command for HomeScreenCommand {
 
 #[instrument(skip_all)]
 pub async fn display_home_screen(
-    context: &mut TuiContext,
+    context: Pin<&mut TuiContext>,
     data: HomeScreenData,
 ) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
-    let mut screen = create_home_screen(data, context);
-    let mut events = KeybindEventStream::new(
-        &mut context.events,
-        context.config.keybinds.home_screen.clone(),
-    );
+    let mut screen = create_home_screen(data, &context);
+    let context = context.project();
+    let mut events =
+        KeybindEventStream::new(context.events, context.config.keybinds.home_screen.clone());
     loop {
         context
             .term
@@ -121,7 +122,7 @@ pub async fn display_home_screen(
                     area,
                     frame.buffer_mut(),
                     &images_available,
-                    &context.image_picker,
+                    context.image_picker,
                 );
                 events.render(frame.area(), frame.buffer_mut());
             })

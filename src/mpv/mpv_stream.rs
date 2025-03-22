@@ -1,21 +1,22 @@
 use std::{
     ffi::CString,
     ops::Deref,
-    task::{ready, Poll},
+    task::{Poll, ready},
 };
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::Stream;
+use jellyfin::JellyfinClient;
 use libmpv::{
+    Format, Mpv,
     events::{
-        mpv_event_id, Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData,
+        Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData, mpv_event_id,
     },
     node::{BorrowingMpvNodeList, ToNode},
-    Format, Mpv,
 };
 use tracing::{info, instrument, trace, warn};
 
-use crate::TuiContext;
+use crate::Config;
 
 use super::log::log_message;
 
@@ -98,7 +99,7 @@ impl Stream for MpvStream {
 
 impl MpvStream {
     #[instrument(skip_all)]
-    pub fn new(cx: &TuiContext) -> Result<Self> {
+    pub fn new(jellyfin: &JellyfinClient, config: &Config) -> Result<Self> {
         let mpv = Mpv::with_initializer(|mpv| -> Result<()> {
             mpv.set_option(c"title", c"jellyfin-tui-player")?;
             mpv.set_option(c"fullscreen", true)?;
@@ -106,7 +107,7 @@ impl MpvStream {
             mpv.set_option(c"osc", true)?;
             mpv.set_option(c"terminal", false)?;
             let mut header = b"authorization: ".to_vec();
-            header.extend_from_slice(cx.jellyfin.get_auth().header.as_bytes());
+            header.extend_from_slice(jellyfin.get_auth().header.as_bytes());
             mpv.set_option(
                 c"http-header-fields",
                 &BorrowingMpvNodeList::new(&[CString::new(header)
@@ -117,7 +118,7 @@ impl MpvStream {
             mpv.set_option(c"input-vo-keyboard", true)?;
             mpv.set_option(
                 c"hwdec",
-                CString::new(cx.config.hwdec.as_str())
+                CString::new(config.hwdec.as_str())
                     .context("converting hwdec to cstr")?
                     .as_c_str(),
             )?;
@@ -125,8 +126,7 @@ impl MpvStream {
         })?
         .enable_async();
         mpv.set_log_level(
-            &CString::new(cx.config.mpv_log_level.clone())
-                .context("converting log level to cstr")?,
+            &CString::new(config.mpv_log_level.clone()).context("converting log level to cstr")?,
         )?;
         mpv.enable_event(mpv_event_id::PropertyChange)?;
         mpv.enable_event(mpv_event_id::LogMessage)?;

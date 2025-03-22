@@ -1,4 +1,4 @@
-use std::{collections::HashMap, pin::pin};
+use std::{collections::HashMap, pin::{pin, Pin}};
 
 use color_eyre::{eyre::Context, Result};
 use futures_util::{stream, StreamExt, TryStreamExt};
@@ -126,13 +126,14 @@ pub async fn load_data(
 }
 
 #[instrument(skip_all)]
-pub async fn load_home_screen(cx: &mut TuiContext) -> Result<Navigation> {
+pub async fn load_home_screen(cx: Pin<&mut TuiContext>) -> Result<Navigation> {
+    let cx = cx.project();
     let msg = Paragraph::new("Loading home screen")
         .centered()
         .block(Block::bordered());
-    let mut load = pin!(load_data(&cx.jellyfin, &cx.jellyfin.get_auth().user.id));
+    let mut load = pin!(load_data(cx.jellyfin, &cx.jellyfin.get_auth().user.id));
     let mut events =
-        KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_home_screen.clone());
+        KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_home_screen.clone());
     loop {
         cx.term
             .draw(|frame| {

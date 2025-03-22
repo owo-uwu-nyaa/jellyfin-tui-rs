@@ -9,7 +9,7 @@ pub trait Sha256 {
     fn finalize(self) -> [u8; 32];
 }
 
-pub trait Sha1 {
+pub trait Sha1: Send {
     fn new() -> Self;
     fn update(&mut self, buf: &[u8]);
     fn finalize(self) -> [u8; 20];

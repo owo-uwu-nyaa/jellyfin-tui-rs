@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget},
 };
 use ratatui_image::{picker::Picker, FontSize};
-use tracing::{info, instrument};
+use tracing::instrument;
 
 use crate::{
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},

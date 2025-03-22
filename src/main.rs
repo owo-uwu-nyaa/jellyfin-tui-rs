@@ -10,21 +10,19 @@ mod state;
 mod user_view;
 
 use std::{
-    fs::File,
-    io::{stdout, Write},
-    path::PathBuf,
-    sync::Mutex,
+    fs::File, io::{stdout, Write}, path::PathBuf, pin::pin, sync::Mutex
 };
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{eyre, Context, OptionExt, Result};
+use color_eyre::eyre::{Context, OptionExt, Result, eyre};
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
 };
 use image::ImageProtocolCache;
-use jellyfin::{Auth, JellyfinClient};
+use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
 use keybinds::{KeybindEvents, Keybinds};
+use pin_project_lite::pin_project;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use rayon::ThreadPoolBuilder;
@@ -34,15 +32,17 @@ use state::State;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = KeybindEvents::new()?;
     if let Some(client) = login::login(&mut term, &config, &mut events, &cache).await? {
+        let jellyfin_socket = client.get_socket();
         let mut context = TuiContext {
             jellyfin: client,
+            jellyfin_socket,
             term,
             config,
             events,
@@ -50,9 +50,10 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
             cache,
             image_cache: ImageProtocolCache::new(),
         };
+        let mut context = pin!(context);
         let mut state = State::new();
         while let Some(screen) = state.pop() {
-            state.navigate(screen.show(&mut context).await?);
+            state.navigate(screen.show(context.as_mut()).await?);
         }
     }
     Ok(())
@@ -316,12 +317,16 @@ mod tests {
     }
 }
 
-struct TuiContext {
-    pub jellyfin: JellyfinClient<Auth>,
-    pub term: DefaultTerminal,
-    pub config: Config,
-    pub events: KeybindEvents,
-    pub image_picker: Picker,
-    pub cache: SqlitePool,
-    pub image_cache: ImageProtocolCache,
+pin_project! {
+    struct TuiContext {
+        pub jellyfin: JellyfinClient<Auth>,
+        #[pin]
+        pub jellyfin_socket: JellyfinWebSocket,
+        pub term: DefaultTerminal,
+        pub config: Config,
+        pub events: KeybindEvents,
+        pub image_picker: Picker,
+        pub cache: SqlitePool,
+        pub image_cache: ImageProtocolCache,
+    }
 }

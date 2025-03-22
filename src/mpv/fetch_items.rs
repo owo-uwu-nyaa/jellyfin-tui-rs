@@ -1,4 +1,4 @@
-use std::pin::pin;
+use std::pin::{pin, Pin};
 
 use color_eyre::{eyre::Context, Result};
 use futures_util::StreamExt;
@@ -178,12 +178,13 @@ async fn fetch_series(cx: &JellyfinClient<Auth>, series_id: &str) -> Result<Vec<
     Ok(res)
 }
 
-pub async fn fetch_screen(cx: &mut TuiContext, item: MediaItem) -> Result<Navigation> {
+pub async fn fetch_screen(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<Navigation> {
+    let cx = cx.project();
     let msg = Paragraph::new("Loading related items for playlist")
         .centered()
         .block(Block::bordered());
-    let mut fetch = pin!(fetch_items(&cx.jellyfin, item));
-    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.fetch_mpv.clone());
+    let mut fetch = pin!(fetch_items(cx.jellyfin, item));
+    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_mpv.clone());
     loop {
         cx.term
             .draw(|frame| {

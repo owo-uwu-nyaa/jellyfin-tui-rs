@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, pin::Pin};
 
 use futures_util::StreamExt;
 use jellyfin::{items::MediaItem, user_views::UserView};
@@ -47,7 +47,7 @@ pub enum Navigation {
 }
 
 impl NextScreen {
-    pub async fn show(self, cx: &mut TuiContext) -> Result<Navigation> {
+    pub async fn show(self, cx: Pin<&mut TuiContext>) -> Result<Navigation> {
         match self {
             NextScreen::LoadHomeScreen => load_home_screen(cx).await,
             NextScreen::HomeScreen(data) => display_home_screen(cx, data).await,
@@ -118,11 +118,12 @@ impl Command for ErrorCommand {
     }
 }
 
-async fn render_error(cx: &mut TuiContext, msg: Cow<'static, str>) -> Result<Navigation> {
+async fn render_error(cx: Pin<&mut TuiContext>, msg: Cow<'static, str>) -> Result<Navigation> {
+    let cx = cx.project();
     let msg = Paragraph::new(msg)
         .wrap(Wrap { trim: false })
         .block(Block::bordered());
-    let mut events = KeybindEventStream::new(&mut cx.events, cx.config.keybinds.error.clone());
+    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.error.clone());
     loop {
         cx.term
             .draw(|frame| {
