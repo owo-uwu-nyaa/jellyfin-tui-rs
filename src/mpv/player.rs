@@ -1,9 +1,9 @@
 use std::{ffi::CString, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{Stream, StreamExt, stream::FusedStream};
+use futures_util::{stream::FusedStream, Stream, StreamExt};
 use jellyfin::{
-    Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody,
-    socket::JellyfinWebSocket,
+    items::MediaItem, playback_status::ProgressBody, socket::JellyfinWebSocket, Auth,
+    JellyfinClient,
 };
 use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
 use tokio::{
@@ -51,8 +51,8 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
             match socket.poll_next_unpin(cx) {
                 Poll::Pending => break,
                 Poll::Ready(None) => {
-                    state.jellyfin_socket=None;
-                    break
+                    state.jellyfin_socket = None;
+                    break;
                 }
                 Poll::Ready(Some(v)) => {
                     info!("websocket message: {v:#?}");

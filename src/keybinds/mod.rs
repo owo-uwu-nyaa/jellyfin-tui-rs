@@ -2,7 +2,7 @@ pub mod parse_config;
 pub mod stream;
 pub mod widget;
 
-use color_eyre::{Result, eyre::Context};
+use color_eyre::{eyre::Context, Result};
 use crossterm::event::{EventStream, KeyCode};
 use parse_config::Config;
 use std::{
@@ -16,7 +16,6 @@ use crate::{
     home_screen::HomeScreenCommand, login::LoginInfoCommand, mpv::MpvCommand, state::ErrorCommand,
     user_view::UserViewCommand,
 };
-
 
 pub trait Command: Clone + Copy + Debug {
     fn name(self) -> &'static str;

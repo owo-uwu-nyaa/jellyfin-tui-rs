@@ -1448,6 +1448,7 @@ dependencies = [
  "futures-sink",
  "getrandom 0.3.2",
  "openssl",
+ "pin-project-lite",
  "reqwest",
  "ring",
  "serde",

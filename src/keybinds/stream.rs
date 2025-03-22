@@ -1,7 +1,7 @@
 use std::task::Poll;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use futures_util::{Stream, StreamExt, stream::FusedStream};
+use futures_util::{stream::FusedStream, Stream, StreamExt};
 use tracing::warn;
 
 use super::{Command, KeyBinding, KeybindEvent, KeybindEventStream, Text};

@@ -10,18 +10,18 @@ use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
 use player::{Player, PlayerState};
 use ratatui::{
-    Terminal,
     layout::{Constraint, Layout},
     prelude::CrosstermBackend,
     widgets::{Block, Padding, Paragraph},
+    Terminal,
 };
 use tokio::select;
 use tracing::{info, instrument};
 
 use crate::{
-    TuiContext,
     keybinds::{Command, KeybindEvent, KeybindEventStream},
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
 #[derive(Debug, Clone, Copy)]

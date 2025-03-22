@@ -5,8 +5,8 @@ use std::{
     io::Cursor,
     ops::DerefMut,
     sync::{
-        Arc, Weak,
         atomic::{AtomicBool, Ordering},
+        Arc, Weak,
     },
     task::{self, Poll, Waker},
     time::Duration,
@@ -17,23 +17,23 @@ use color_eyre::eyre::Context;
 use either::Either;
 use image::{DynamicImage, ImageFormat, ImageReader};
 use jellyfin::{
-    AuthStatus, JellyfinClient,
     image::{GetImage, GetImageQuery},
     items::ImageType,
     sha::ShaImpl,
+    AuthStatus, JellyfinClient,
 };
 use log::trace;
 use parking_lot::Mutex;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui_image::{FilterType, Resize, picker::Picker, protocol::StatefulProtocol};
-use sqlx::{SqlitePool, query, query_scalar};
+use ratatui_image::{picker::Picker, protocol::StatefulProtocol, FilterType, Resize};
+use sqlx::{query, query_scalar, SqlitePool};
 use tokio::select;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
+    entry::{image_height, IMAGE_WIDTH},
     Result,
-    entry::{IMAGE_WIDTH, image_height},
 };
 
 #[instrument(skip_all)]
@@ -215,14 +215,14 @@ fn parse_image(
     cache: ImageProtocolCache,
 ) {
     trace!("parsing image");
-    let reader = match ImageReader::new(Cursor::new(val)).with_guessed_format(){
-        Ok(reader)=> reader,
+    let reader = match ImageReader::new(Cursor::new(val)).with_guessed_format() {
+        Ok(reader) => reader,
         Err(e) => {
             warn!("error guessing image format: {e:?}");
             if let Some(out) = out.upgrade() {
                 *out.value.lock() = ImageStateInnerState::Invalid;
             };
-            return
+            return;
         }
     };
     match reader.decode().context("decoding image") {

@@ -41,6 +41,7 @@ getrandom = "0.3.2"
 futures-core = "0.3.31"
 tokio = { version = "1.28.2", features = ["time"] }
 futures-sink = "0.3.31"
+pin-project-lite = "0.2.16"
 
 [dev-dependencies]
 tokio = { version = "1.28.2", features = ["macros"] }

@@ -10,13 +10,13 @@ use ratatui::{
     text::Span,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use ratatui_image::{FontSize, picker::Picker};
+use ratatui_image::{picker::Picker, FontSize};
 use tracing::{info, instrument};
 
 use crate::{
-    TuiContext,
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
     state::NextScreen,
+    TuiContext,
 };
 
 pub struct Entry {
@@ -97,7 +97,7 @@ impl Entry {
             title,
             subtitle,
             action,
-            watch_status
+            watch_status,
         }
     }
 
@@ -110,8 +110,8 @@ impl Entry {
                 season_name: _,
                 series_id: _,
                 series_name,
-                seasion_index:_,
-                episode_index:_,
+                seasion_index: _,
+                episode_index: _,
             } => (series_name.clone(), item.name.clone().into()),
             ItemType::Season {
                 series_id: _,
@@ -135,18 +135,24 @@ impl Entry {
                     context.image_cache.clone(),
                 )
             });
-        let watch_status = if let Some(user_data) = item.user_data.as_ref(){
-            if let Some(num@ 1..) = user_data.unplayed_item_count{
+        let watch_status = if let Some(user_data) = item.user_data.as_ref() {
+            if let Some(num @ 1..) = user_data.unplayed_item_count {
                 Some(format!("{num}").into())
-            }else if user_data.played{
+            } else if user_data.played {
                 Some("✓".into())
-            }else{
+            } else {
                 None
             }
-        }else{
+        } else {
             None
         };
-        Self::new(image, title, subtitle, NextScreen::LoadPlayItem(item), watch_status)
+        Self::new(
+            image,
+            title,
+            subtitle,
+            NextScreen::LoadPlayItem(item),
+            watch_status,
+        )
     }
 
     pub fn from_user_view(item: UserView, context: &TuiContext) -> Self {
@@ -166,7 +172,7 @@ impl Entry {
                     context.image_cache.clone(),
                 )
             });
-        Self::new(image, title, None, NextScreen::LoadUserView(item),None)
+        Self::new(image, title, None, NextScreen::LoadUserView(item), None)
     }
 
     pub fn get_action(self) -> NextScreen {

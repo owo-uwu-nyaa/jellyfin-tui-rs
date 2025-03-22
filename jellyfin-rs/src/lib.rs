@@ -21,10 +21,10 @@ pub mod playlist;
 pub mod session;
 pub mod sha;
 pub mod shows;
+pub mod socket;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
-pub mod socket;
 pub use reqwest;
 
 #[derive(Debug, Clone)]

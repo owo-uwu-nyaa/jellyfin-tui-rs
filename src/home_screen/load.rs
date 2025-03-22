@@ -1,21 +1,21 @@
 use std::{collections::HashMap, pin::pin};
 
-use color_eyre::{Result, eyre::Context};
-use futures_util::{StreamExt, TryStreamExt, stream};
+use color_eyre::{eyre::Context, Result};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use jellyfin::{
-    Auth, JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
     sha::ShaImpl,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
+    Auth, JellyfinClient,
 };
 use ratatui::widgets::{Block, Paragraph};
 use tracing::{debug, error, instrument, trace};
 
 use crate::{
-    TuiContext,
     keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
 #[derive(Debug)]
