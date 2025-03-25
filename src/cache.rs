@@ -9,13 +9,15 @@ use color_eyre::{
 };
 use tracing::{info, instrument};
 
+#[instrument]
 async fn open_db() -> Result<SqlitePool> {
     let mut db_path = dirs::cache_dir().ok_or_eyre("unable to detect cache dir")?;
     db_path.push("jellyfin-tui.sqlite");
     let create = async || {
         info!("opening sqlite db at {}", db_path.display());
         SqlitePoolOptions::new()
-            .min_connections(1)
+            .min_connections(0)
+            .max_connections(2)
             .acquire_time_level(log::LevelFilter::Debug)
             .connect_with(
                 SqliteConnectOptions::new()

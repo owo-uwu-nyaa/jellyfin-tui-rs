@@ -10,11 +10,11 @@ use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
-    Result, TuiContext,
     entry::Entry,
     image::ImagesAvailable,
     keybinds::{Command, KeybindEvent, KeybindEventStream},
     state::{Navigation, NextScreen},
+    Result, TuiContext,
 };
 
 mod list;
@@ -118,7 +118,7 @@ pub async fn display_home_screen(
             .term
             .draw(|frame| {
                 let area = events.inner(frame.area());
-                screen.render_screen(
+                screen.render(
                     area,
                     frame.buffer_mut(),
                     &images_available,

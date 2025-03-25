@@ -61,9 +61,8 @@
                   pkgs.sqlx-cli
                   pkgs.pkg-config
                   pkgs.openssl
-                  pkgs.fd
                   pkgs.sqlite
-                  (pkgs.mpv-unwrapped.overrideAttrs { mesonBuildType = "debugoptimized"; dontStrip = true; })
+                  pkgs.mpv-unwrapped
                   toolchain_dev
                   platform_dev.bindgenHook
                 ];

@@ -27,8 +27,8 @@ impl EntryScreen {
             title,
         }
     }
-    #[instrument(skip_all)]
-    pub fn render_screen(
+    #[instrument(skip_all, name = "render_screen")]
+    pub fn render(
         &mut self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
@@ -64,7 +64,7 @@ impl EntryScreen {
             .flex(Flex::Start)
             .split(main);
         for i in 0..areas.len() {
-            entries[i].render_list(areas[i], buf, availabe, picker, i == current)
+            entries[i].render(areas[i], buf, availabe, picker, i == current)
         }
         if visible < entries.len() {
             entries[visible].prefetch(availabe, areas[0]);

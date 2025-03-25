@@ -1,22 +1,22 @@
 use color_eyre::eyre::{Context, Result};
 use futures_util::StreamExt;
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
     sha::ShaImpl,
     user_views::UserView,
+    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
-use std::pin::{Pin, pin};
+use std::pin::{pin, Pin};
 use tracing::{debug, error};
 
 use crate::{
-    TuiContext,
     entry::Entry,
     grid::EntryGrid,
     image::ImagesAvailable,
     keybinds::{Command, KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
 async fn fetch_user_view_items(

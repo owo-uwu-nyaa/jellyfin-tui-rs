@@ -16,7 +16,7 @@ use ratatui::{
     Terminal,
 };
 use tokio::select;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     keybinds::{Command, KeybindEvent, KeybindEventStream},
@@ -45,14 +45,25 @@ impl Command for MpvCommand {
 }
 
 #[instrument(skip_all)]
-pub async fn play(cx: Pin<&mut TuiContext>, items: Vec<MediaItem>, index: usize) -> Result<Navigation> {
+pub async fn play(
+    cx: Pin<&mut TuiContext>,
+    items: Vec<MediaItem>,
+    index: usize,
+) -> Result<Navigation> {
     if items.is_empty() {
         return Ok(Navigation::Replace(NextScreen::Error(
             "Unable to play, item is empty".into(),
         )));
     }
     let mut cx = cx.project();
-    let mut player = Player::new(cx.jellyfin, cx.jellyfin_socket.as_mut(),  cx.config, items, index).await?;
+    let mut player = Player::new(
+        cx.jellyfin,
+        cx.jellyfin_socket.as_mut(),
+        cx.config,
+        items,
+        index,
+    )
+    .await?;
     let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
@@ -117,21 +128,19 @@ fn render(
                         season_name: None,
                         series_id: _,
                         series_name,
-                        episode_index,
-                        seasion_index,
                     } => {
                         let [series, episode] =
                             Layout::vertical([Constraint::Fill(1), Constraint::Fill(1)])
                                 .vertical_margin(3)
                                 .areas(area);
                         let mut series_str = Cow::from(series_name.as_str());
-                        if episode_index.is_some() || seasion_index.is_some() {
+                        if media_item.episode_index.is_some() || media_item.season_index.is_some() {
                             series_str.to_mut().push(' ');
-                            if let Some(season) = seasion_index {
+                            if let Some(season) = media_item.season_index {
                                 series_str.to_mut().push('S');
                                 series_str.to_mut().push_str(&season.to_string());
                             }
-                            if let Some(episode) = episode_index {
+                            if let Some(episode) = media_item.episode_index {
                                 series_str.to_mut().push('E');
                                 series_str.to_mut().push_str(&episode.to_string());
                             }
@@ -149,8 +158,6 @@ fn render(
                         season_name: Some(season_name),
                         series_id: _,
                         series_name,
-                        episode_index,
-                        seasion_index,
                     } => {
                         let [series, season, episode] = Layout::vertical([
                             Constraint::Fill(1),
@@ -160,13 +167,14 @@ fn render(
                         .vertical_margin(3)
                         .areas(area);
                         let mut series_str = Cow::from(series_name.as_str());
-                        if episode_index.is_some() || seasion_index.is_some() {
+                        info!("index: {:?} {:?}", media_item.season_index, media_item.episode_index);
+                        if media_item.episode_index.is_some() || media_item.season_index.is_some() {
                             series_str.to_mut().push(' ');
-                            if let Some(season) = seasion_index {
+                            if let Some(season) = media_item.season_index {
                                 series_str.to_mut().push('S');
                                 series_str.to_mut().push_str(&season.to_string());
                             }
-                            if let Some(episode) = episode_index {
+                            if let Some(episode) = media_item.episode_index {
                                 series_str.to_mut().push('E');
                                 series_str.to_mut().push_str(&episode.to_string());
                             }

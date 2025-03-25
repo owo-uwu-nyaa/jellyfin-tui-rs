@@ -30,7 +30,7 @@ impl EntryList {
         }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(skip_all, name = "prefetch_list")]
     pub fn prefetch(&mut self, availabe: &ImagesAvailable, area: Rect) {
         let visible = self.visible(area.width);
         for entry in self.entries.iter_mut().take(visible) {
@@ -38,8 +38,8 @@ impl EntryList {
         }
     }
 
-    #[instrument(skip_all)]
-    pub fn render_list(
+    #[instrument(skip_all, name = "render_list")]
+    pub fn render(
         &mut self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
@@ -79,7 +79,7 @@ impl EntryList {
             } else {
                 BorderType::Rounded
             };
-            entries[i].render_entry(areas[i], buf, availabe, picker, border_type)
+            entries[i].render(areas[i], buf, availabe, picker, border_type)
         }
         if visible < entries.len() {
             entries[visible].prefetch(availabe);

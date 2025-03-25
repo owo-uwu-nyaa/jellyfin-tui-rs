@@ -407,7 +407,7 @@ impl JellyfinImageState {
             }
         }
     }
-    #[instrument(skip_all)]
+    #[instrument(skip_all, name = "prefetch_image")]
     pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
         if self.inner.ready.load(Ordering::SeqCst) {
             let mut value_ref = self.inner.value.lock();
@@ -516,8 +516,8 @@ impl JellyfinImage {
         }
     }
 
-    #[instrument(skip_all)]
-    pub fn render_image(
+    #[instrument(skip_all, name = "render_image")]
+    pub fn render(
         self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,

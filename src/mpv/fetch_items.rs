@@ -1,20 +1,20 @@
-use std::pin::{pin, Pin};
+use std::pin::{Pin, pin};
 
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 use futures_util::StreamExt;
 use jellyfin::{
+    Auth, JellyfinClient, JellyfinVec,
     items::{ItemType, MediaItem},
     playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
-    Auth, JellyfinClient, JellyfinVec,
 };
 use ratatui::widgets::{Block, Paragraph};
 use tracing::warn;
 
 use crate::{
+    TuiContext,
     keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 async fn fetch_items(
@@ -27,17 +27,23 @@ async fn fetch_items(
             image_tags: _,
             media_type: _,
             name: _,
+            description: _,
             user_data: _,
             sort_name: _,
             item_type: ItemType::Series,
+            episode_index: _,
+            season_index: _,
         } => (fetch_series(cx, &id).await?, 0),
         MediaItem {
             id,
             image_tags: _,
             media_type: _,
             name: _,
+            description: _,
             user_data: _,
             sort_name: _,
+            episode_index: _,
+            season_index: _,
             item_type:
                 ItemType::Season {
                     series_id,
@@ -79,6 +85,7 @@ async fn fetch_items(
             image_tags: _,
             media_type: _,
             name: _,
+            description: _,
             user_data: _,
             item_type:
                 ItemType::Episode {
@@ -87,10 +94,10 @@ async fn fetch_items(
                     season_name: _,
                     series_id,
                     series_name: _,
-                    episode_index: _,
-                    seasion_index: _,
                 },
             sort_name: _,
+            episode_index: _,
+            season_index: _,
         } => {
             let all = fetch_series(cx, &series_id).await?;
             let position = item_position(&id, &all);
@@ -101,9 +108,12 @@ async fn fetch_items(
             image_tags: _,
             media_type: _,
             name: _,
+            description: _,
             sort_name: _,
             item_type: ItemType::Playlist,
             user_data: _,
+            episode_index: _,
+            season_index: _,
         } => {
             let user_id = cx.get_auth().user.id.as_str();
             let items = JellyfinVec::collect(async |start| {
@@ -134,8 +144,11 @@ async fn fetch_items(
             image_tags: _,
             media_type: _,
             name: _,
+            description: _,
             user_data: _,
             sort_name: _,
+            episode_index: _,
+            season_index: _,
             item_type: ItemType::Movie { container: _ },
         } => (vec![item], 0),
     })

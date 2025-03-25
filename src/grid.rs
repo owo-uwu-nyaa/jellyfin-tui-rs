@@ -30,6 +30,7 @@ impl EntryGrid {
         }
     }
 
+    #[instrument(name = "render_grid", skip_all)]
     pub fn render(
         &mut self,
         area: Rect,
@@ -85,7 +86,7 @@ impl EntryGrid {
                     BorderType::Rounded
                 };
                 if let Some(entry) = self.entries.get_mut(entry) {
-                    entry.render_entry(area, buf, availabe, picker, border_type);
+                    entry.render(area, buf, availabe, picker, border_type);
                 }
             }
         }

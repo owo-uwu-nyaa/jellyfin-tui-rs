@@ -19,7 +19,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use tokio::time::{interval, sleep, Interval, Sleep};
 use tokio_websockets::{Message, WebSocketStream};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{
     err::JellyfinError,
@@ -165,6 +165,7 @@ fn poll_close<Sha: ShaImpl>(
         .as_pin_mut()
         .expect("filled by previous function")
         .poll_close(cx));
+    debug!("socket closed successfully");
     state.socket.set(None);
     *state.keep_alive_timer = None;
     Poll::Ready(())
@@ -197,7 +198,7 @@ fn poll_keep_alive<Sha: ShaImpl>(
         match socket.as_mut().poll_ready(cx) {
             Poll::Pending => false,
             Poll::Ready(Err(e)) => {
-                warn!("error sending message: {e:?}");
+                warn!("error waiting for socket to be ready: {e:?}");
                 *state.closing = true;
                 true
             }
@@ -205,7 +206,7 @@ fn poll_keep_alive<Sha: ShaImpl>(
                 *state.send_keep_alive = false;
                 if let Err(e) = socket.start_send(Message::text("{\"MessageType\":\"KeepAlive\"}"))
                 {
-                    warn!("error sending message: {e:?}");
+                    warn!("error sending keep alive message: {e:?}");
                     *state.closing = true;
                     true
                 } else {
@@ -264,6 +265,7 @@ fn poll_message<Sha: ShaImpl>(
 impl<Sha: ShaImpl> Stream for JellyfinWebSocket<Sha> {
     type Item = Result<JellyfinMessage>;
 
+    #[instrument(skip_all, name = "poll_jellyfin_web_socket")]
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,

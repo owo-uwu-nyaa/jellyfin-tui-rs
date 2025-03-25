@@ -43,8 +43,8 @@ pub fn entry_height(font: FontSize) -> u16 {
 }
 
 impl Entry {
-    #[instrument(skip_all)]
-    pub fn render_entry(
+    #[instrument(skip_all, name = "render_entry")]
+    pub fn render(
         &mut self,
         area: Rect,
         buf: &mut ratatui::prelude::Buffer,
@@ -74,11 +74,11 @@ impl Entry {
                 );
         }
         if let Some(state) = &mut self.image {
-            JellyfinImage::default().render_image(inner, buf, state, availabe, picker);
+            JellyfinImage::default().render(inner, buf, state, availabe, picker);
         }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(skip_all, name = "prefetch_entry")]
     pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
         if let Some(image) = self.image.as_mut() {
             image.prefetch(availabe);
@@ -110,8 +110,6 @@ impl Entry {
                 season_name: _,
                 series_id: _,
                 series_name,
-                seasion_index: _,
-                episode_index: _,
             } => (series_name.clone(), item.name.clone().into()),
             ItemType::Season {
                 series_id: _,

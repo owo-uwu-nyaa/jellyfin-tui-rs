@@ -10,17 +10,21 @@ mod state;
 mod user_view;
 
 use std::{
-    fs::File, io::{stdout, Write}, path::PathBuf, pin::pin, sync::Mutex
+    fs::File,
+    io::{stdout, Write},
+    path::PathBuf,
+    pin::pin,
+    sync::Mutex,
 };
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{Context, OptionExt, Result, eyre};
+use color_eyre::eyre::{eyre, Context, OptionExt, Result};
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
 };
 use image::ImageProtocolCache;
-use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
+use jellyfin::{socket::JellyfinWebSocket, Auth, JellyfinClient};
 use keybinds::{KeybindEvents, Keybinds};
 use pin_project_lite::pin_project;
 use ratatui::DefaultTerminal;
@@ -32,7 +36,7 @@ use state::State;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 #[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {

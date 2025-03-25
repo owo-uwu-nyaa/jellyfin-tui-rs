@@ -1,4 +1,7 @@
-use std::{collections::HashMap, pin::{pin, Pin}};
+use std::{
+    collections::HashMap,
+    pin::{pin, Pin},
+};
 
 use color_eyre::{eyre::Context, Result};
 use futures_util::{stream, StreamExt, TryStreamExt};

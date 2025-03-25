@@ -1,11 +1,17 @@
-use std::{ffi::CString, pin::Pin, sync::Arc, task::Poll, time::Duration};
+use std::{ffi::CString, fmt::Display, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
 use futures_util::{Stream, StreamExt, stream::FusedStream};
 use jellyfin::{
-    Auth, JellyfinClient, items::MediaItem, playback_status::ProgressBody,
+    Auth, JellyfinClient,
+    items::{ItemType, MediaItem},
+    playback_status::ProgressBody,
     socket::JellyfinWebSocket,
 };
-use libmpv::node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode};
+use libmpv::{
+    Mpv,
+    events::EventContextAsync,
+    node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode},
+};
 use tokio::{
     task::JoinSet,
     time::{Interval, MissedTickBehavior},
@@ -16,7 +22,7 @@ use crate::Config;
 
 use super::mpv_stream::{MpvEvent, MpvStream, ObservedProperty};
 
-use color_eyre::eyre::{Context, OptionExt, Report, Result};
+use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
 
 pub struct Player<'j> {
     mpv: Option<MpvStream>,
@@ -273,10 +279,7 @@ impl<'j> Player<'j> {
             / 10000000;
 
         for item in items[0..index].iter() {
-            mpv.playlist_append(
-                &CString::new(jellyfin.get_video_url(item))
-                    .context("converting video url to cstr")?,
-            )?;
+            append(&mpv, jellyfin, item)?
         }
         debug!("previous files added");
         mpv.command(&[
@@ -287,20 +290,23 @@ impl<'j> Player<'j> {
             c"append-play".to_node(),
             0i64.to_node(),
             BorrowingMpvNodeMap::new(
-                &[BorrowingCPtr::new(c"start")],
-                &[CString::new(format!("{position}"))
-                    .context("converting start to cstr")?
-                    .to_node()],
+                &[
+                    BorrowingCPtr::new(c"start"),
+                    BorrowingCPtr::new(c"force-media-title"),
+                ],
+                &[
+                    CString::new(position.to_string())
+                        .context("converting start to cstr")?
+                        .to_node(),
+                    name(&items[index])?.to_node(),
+                ],
             )
             .to_node(),
         ])
         .context("added main item")?;
         debug!("main file added to playlist at index {index}");
         for item in items[index + 1..].iter() {
-            mpv.playlist_append(
-                &CString::new(jellyfin.get_video_url(item))
-                    .context("converting video url to cstr")?,
-            )?;
+            append(&mpv, jellyfin, item)?
         }
         debug!("later files added");
         let mut send_timer = tokio::time::interval(Duration::from_secs(10));
@@ -335,4 +341,63 @@ impl<'j> Player<'j> {
             PlayerState::Initializing
         })
     }
+}
+
+fn append(mpv: &Mpv<EventContextAsync>, jellyfin: &JellyfinClient, item: &MediaItem) -> Result<()> {
+    mpv.command(&[
+        c"loadfile".to_node(),
+        CString::new(jellyfin.get_video_url(item))
+            .context("converting video url to cstr")?
+            .to_node(),
+        c"append".to_node(),
+        0i64.to_node(),
+        BorrowingMpvNodeMap::new(
+            &[BorrowingCPtr::new(c"force-media-title")],
+            &[name(item)?.to_node()],
+        )
+        .to_node(),
+    ])?;
+
+    Ok(())
+}
+
+fn name(item: &MediaItem) -> Result<CString> {
+    let name = match &item.item_type {
+        ItemType::Movie { container: _ } => item.name.clone(),
+        ItemType::Episode {
+            container: _,
+            season_id: _,
+            season_name: _,
+            series_id: _,
+            series_name,
+        } => {
+            if let Some(i) = item.episode_index {
+                let index = i.to_string();
+                //dumb check if name is usefull
+                let (mut string, episode) = if item.name.contains(&index) {
+                    (series_name.clone(), false)
+                } else {
+                    (item.name.clone(), true)
+                };
+                string.push(' ');
+                if episode {
+                    string.push('(');
+                }
+                if let Some(i) = item.season_index {
+                    string.push('S');
+                    string += &i.to_string();
+                }
+                string.push('E');
+                string += &index;
+                if episode {
+                    string.push(')');
+                }
+                string
+            } else {
+                item.name.clone()
+            }
+        }
+        t => return Err(eyre!("unsupported item type: {t:?}")),
+    };
+    Ok(CString::new(name)?)
 }

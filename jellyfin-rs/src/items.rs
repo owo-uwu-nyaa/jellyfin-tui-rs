@@ -131,10 +131,6 @@ pub enum ItemType {
         season_name: Option<String>,
         series_id: String,
         series_name: String,
-        #[serde(rename = "index_number")]
-        episode_index: Option<u64>,
-        #[serde(rename = "parent_index_number")]
-        seasion_index: Option<u64>,
     },
     #[serde(rename_all = "PascalCase")]
     Season {
@@ -155,6 +151,15 @@ pub struct UserData {
     pub played: bool,
 }
 
+#[derive(Debug, Default, Clone, Copy, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct SetUserData {
+    pub playback_position_ticks: Option<u64>,
+    pub unplayed_item_count: Option<u64>,
+    pub is_favorite: Option<bool>,
+    pub played: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct MediaItem {
@@ -163,10 +168,15 @@ pub struct MediaItem {
     pub media_type: MediaType,
     pub name: String,
     pub sort_name: Option<String>,
+    pub description: Option<String>,
     #[serde(flatten)]
     #[serde(rename = "type")]
     pub item_type: ItemType,
     pub user_data: Option<UserData>,
+    #[serde(rename = "IndexNumber")]
+    pub episode_index: Option<u64>,
+    #[serde(rename = "ParentIndexNumber")]
+    pub season_index: Option<u64>,
 }
 
 impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
@@ -209,6 +219,16 @@ impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
             .await?;
         let req = req.error_for_status()?;
         Ok(req.into())
+    }
+
+    pub async fn set_user_data(&self, item: &str, data: &SetUserData) -> Result<()> {
+        let _ = self
+            .post(format!("{}UserItems/{item}/UserData", self.url))
+            .json(data)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
     }
 
     pub fn get_video_url(&self, item: &MediaItem) -> String {
