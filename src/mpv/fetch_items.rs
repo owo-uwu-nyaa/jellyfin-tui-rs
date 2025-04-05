@@ -1,55 +1,31 @@
-use std::pin::{Pin, pin};
+use std::pin::Pin;
 
-use color_eyre::{Result, eyre::Context};
-use futures_util::StreamExt;
+use color_eyre::{eyre::Context, Result};
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
-    items::{ItemType, MediaItem},
-    playlist::GetPlaylistItemsQuery,
-    shows::GetEpisodesQuery,
+    items::MediaItem, playlist::GetPlaylistItemsQuery, shows::GetEpisodesQuery, Auth,
+    JellyfinClient, JellyfinVec,
 };
-use ratatui::widgets::{Block, Paragraph};
 use tracing::warn;
 
 use crate::{
-    TuiContext,
-    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
     state::{Navigation, NextScreen},
+    TuiContext,
 };
 
-async fn fetch_items(
-    cx: &JellyfinClient<Auth>,
-    item: MediaItem,
-) -> Result<(Vec<MediaItem>, usize)> {
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum LoadPlay {
+    Movie(MediaItem),
+    Series { id: String },
+    Season { series_id: String, id: String },
+    Episode { series_id: String, id: String },
+    Playlist { id: String },
+}
+
+async fn fetch_items(cx: &JellyfinClient<Auth>, item: LoadPlay) -> Result<(Vec<MediaItem>, usize)> {
     Ok(match item {
-        MediaItem {
-            id,
-            image_tags: _,
-            media_type: _,
-            name: _,
-            description: _,
-            user_data: _,
-            sort_name: _,
-            item_type: ItemType::Series,
-            episode_index: _,
-            season_index: _,
-        } => (fetch_series(cx, &id).await?, 0),
-        MediaItem {
-            id,
-            image_tags: _,
-            media_type: _,
-            name: _,
-            description: _,
-            user_data: _,
-            sort_name: _,
-            episode_index: _,
-            season_index: _,
-            item_type:
-                ItemType::Season {
-                    series_id,
-                    series_name: _,
-                },
-        } => {
+        LoadPlay::Series { id } => (fetch_series(cx, &id).await?, 0),
+        LoadPlay::Season { series_id, id } => {
             let all = fetch_series(cx, &series_id).await?;
             let user_id = cx.get_auth().user.id.as_str();
             let season_items = cx
@@ -80,41 +56,12 @@ async fn fetch_items(
             };
             (all, position)
         }
-        MediaItem {
-            id,
-            image_tags: _,
-            media_type: _,
-            name: _,
-            description: _,
-            user_data: _,
-            item_type:
-                ItemType::Episode {
-                    container: _,
-                    season_id: _,
-                    season_name: _,
-                    series_id,
-                    series_name: _,
-                },
-            sort_name: _,
-            episode_index: _,
-            season_index: _,
-        } => {
+        LoadPlay::Episode { series_id, id } => {
             let all = fetch_series(cx, &series_id).await?;
             let position = item_position(&id, &all);
             (all, position)
         }
-        MediaItem {
-            id,
-            image_tags: _,
-            media_type: _,
-            name: _,
-            description: _,
-            sort_name: _,
-            item_type: ItemType::Playlist,
-            user_data: _,
-            episode_index: _,
-            season_index: _,
-        } => {
+        LoadPlay::Playlist { id } => {
             let user_id = cx.get_auth().user.id.as_str();
             let items = JellyfinVec::collect(async |start| {
                 cx.get_playlist_items(
@@ -138,19 +85,7 @@ async fn fetch_items(
             .await?;
             (items, 0)
         }
-
-        item @ MediaItem {
-            id: _,
-            image_tags: _,
-            media_type: _,
-            name: _,
-            description: _,
-            user_data: _,
-            sort_name: _,
-            episode_index: _,
-            season_index: _,
-            item_type: ItemType::Movie { container: _ },
-        } => (vec![item], 0),
+        LoadPlay::Movie(item) => (vec![item], 0),
     })
 }
 
@@ -191,34 +126,20 @@ async fn fetch_series(cx: &JellyfinClient<Auth>, series_id: &str) -> Result<Vec<
     Ok(res)
 }
 
-pub async fn fetch_screen(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<Navigation> {
+pub async fn fetch_screen(cx: Pin<&mut TuiContext>, item: LoadPlay) -> Result<Navigation> {
     let cx = cx.project();
-    let msg = Paragraph::new("Loading related items for playlist")
-        .centered()
-        .block(Block::bordered());
-    let mut fetch = pin!(fetch_items(cx.jellyfin, item));
-    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_mpv.clone());
-    loop {
-        cx.term
-            .draw(|frame| {
-                frame.render_widget(&msg, events.inner(frame.area()));
-                frame.render_widget(&mut events, frame.area());
-            })
-            .context("rendering ui")?;
-        tokio::select! {
-            data = &mut fetch => {
-                let (items,index )= data.context("loading home screen data")?;
-                break Ok(Navigation::Replace(NextScreen::PlayItem { items , index  }))
-            }
-            term = events.next() => {
-                match term {
-                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => break Ok(Navigation::PopContext),
-                    Some(Ok(KeybindEvent::Render)) => continue,
-                    Some(Ok(KeybindEvent::Text(_))) => unimplemented!(),
-                    Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
-                    None => break Ok(Navigation::Exit),
-                }
-            }
-        }
-    }
+    let jellyfin = cx.jellyfin;
+    crate::fetch::fetch_screen(
+        "Loading related items for playlist",
+        async {
+            let (items, index) = fetch_items(jellyfin, item)
+                .await
+                .context("loading home screen data")?;
+            Ok(Navigation::Replace(NextScreen::PlayItem { items, index }))
+        },
+        cx.events,
+        cx.config.keybinds.fetch.clone(),
+        cx.term,
+    )
+    .await
 }

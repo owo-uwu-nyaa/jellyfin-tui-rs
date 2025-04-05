@@ -6,18 +6,18 @@ use jellyfin::{
     user_views::UserView,
     Auth, JellyfinClient, JellyfinVec,
 };
-use ratatui::widgets::{Block, Paragraph};
-use std::pin::{pin, Pin};
-use tracing::{debug, error};
+use std::pin::Pin;
+use tracing::debug;
 
 use crate::{
     entry::Entry,
+    fetch::fetch_screen,
     grid::EntryGrid,
     image::ImagesAvailable,
-    keybinds::{Command, KeybindEvent, KeybindEventStream, LoadingCommand},
-    state::{Navigation, NextScreen},
+    state::{Navigation, NextScreen, ToNavigation},
     TuiContext,
 };
+use keybinds::{Command, KeybindEvent, KeybindEventStream};
 
 async fn fetch_user_view_items(
     jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
@@ -54,44 +54,23 @@ async fn fetch_user_view_items(
 
 pub async fn fetch_user_view(cx: Pin<&mut TuiContext>, view: UserView) -> Result<Navigation> {
     let cx = cx.project();
-    let msg = Paragraph::new(format!("Loading user view {}", view.name))
-        .centered()
-        .block(Block::bordered());
-    let mut fetch = pin!(fetch_user_view_items(cx.jellyfin, &view));
-    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_user_view.clone());
-    loop {
-        cx.term
-            .draw(|frame| {
-                frame.render_widget(&msg, events.inner(frame.area()));
-                frame.render_widget(&mut events, frame.area());
-            })
-            .context("rendering ui")?;
-        tokio::select! {
-            data = &mut fetch => {
-                break match data{
-                    Err(e) => {
-                        error!("Error loading user view {}: {e:?}", view.name);
-                        Ok(Navigation::Replace(NextScreen::Error(format!("Error loading user view {}", view.name).into())))
-                    }
-                    Ok(items) => Ok(Navigation::Replace(NextScreen::UserView { view:view.clone() , items  }))
-                }
-            }
-            term = events.next() => {
-                match term {
-                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) => break Ok(Navigation::PopContext),
-                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
-                    Some(Ok(KeybindEvent::Render)) => {
-                        continue
-                    }
-                    Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
-                    None => break Ok(Navigation::Exit)
-                }
-            }
-        }
-    }
+    let jellyfin = cx.jellyfin;
+    fetch_screen(
+        &format!("Loading user view {}", view.name),
+        async move {
+            Ok(fetch_user_view_items(jellyfin, &view)
+                .await
+                .map(move |items| Navigation::Replace(NextScreen::UserView { view, items }))
+                .to_nav())
+        },
+        cx.events,
+        cx.config.keybinds.fetch.clone(),
+        cx.term,
+    )
+    .await
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Command)]
 pub enum UserViewCommand {
     Quit,
     Reload,
@@ -100,32 +79,10 @@ pub enum UserViewCommand {
     Up,
     Down,
     Open,
-}
-
-impl Command for UserViewCommand {
-    fn name(self) -> &'static str {
-        match self {
-            UserViewCommand::Quit => "quit",
-            UserViewCommand::Reload => "reload",
-            UserViewCommand::Prev => "prev",
-            UserViewCommand::Next => "next",
-            UserViewCommand::Up => "up",
-            UserViewCommand::Down => "down",
-            UserViewCommand::Open => "open",
-        }
-    }
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "quit" => UserViewCommand::Quit.into(),
-            "reload" => UserViewCommand::Reload.into(),
-            "prev" => UserViewCommand::Prev.into(),
-            "next" => UserViewCommand::Next.into(),
-            "up" => UserViewCommand::Up.into(),
-            "down" => UserViewCommand::Down.into(),
-            "open" => UserViewCommand::Open.into(),
-            _ => None,
-        }
-    }
+    Play,
+    OpenEpisode,
+    OpenSeason,
+    OpenSeries,
 }
 
 pub async fn display_user_view(
@@ -156,15 +113,14 @@ pub async fn display_user_view(
             })
             .context("drawing user view")?;
         let cmd = tokio::select! {
-            _ = images_available.wait_available() => {continue;
-            }
+            _ = images_available.wait_available() => {continue          }
             term = events.next() => {
                 match term {
                     Some(Ok(KeybindEvent::Command(cmd))) => cmd,
-                    Some(Ok(KeybindEvent::Render)) => continue,
+                    Some(Ok(KeybindEvent::Render)) => continue ,
                     Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
-                    Some(Err(e)) => break Err(e).context("getting key events from terminal"),
-                    None => break Ok(Navigation::PopContext)
+                    Some(Err(e)) => break  Err(e).context("getting key events from terminal"),
+                    None => break  Ok(Navigation::PopContext)
                 }
             }
         };
@@ -188,11 +144,53 @@ pub async fn display_user_view(
             UserViewCommand::Down => {
                 grid.down();
             }
+            UserViewCommand::Play => {
+                if let Some(entry) = grid.get() {
+                    if let Some(next) = entry.play() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadUserView(view),
+                            next,
+                        });
+                    }
+                }
+            }
             UserViewCommand::Open => {
-                break Ok(Navigation::Push {
-                    current: NextScreen::LoadUserView(view),
-                    next: grid.get().get_action(),
-                });
+                if let Some(entry) = grid.get() {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadUserView(view),
+                        next: entry.open(),
+                    });
+                }
+            }
+            UserViewCommand::OpenEpisode => {
+                if let Some(entry) = grid.get() {
+                    if let Some(next) = entry.episode() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            UserViewCommand::OpenSeason => {
+                if let Some(entry) = grid.get() {
+                    if let Some(next) = entry.season() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            UserViewCommand::OpenSeries => {
+                if let Some(entry) = grid.get() {
+                    if let Some(next) = entry.series() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
             }
         }
     }

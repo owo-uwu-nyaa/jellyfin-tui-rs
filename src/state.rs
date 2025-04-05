@@ -1,21 +1,27 @@
-use std::{borrow::Cow, pin::Pin};
+use std::pin::Pin;
 
-use futures_util::StreamExt;
 use jellyfin::{items::MediaItem, user_views::UserView};
-use ratatui::widgets::{Block, Paragraph, Wrap};
 use tracing::debug;
 
 use crate::{
+    error::display_error,
     home_screen::{
         display_home_screen,
         load::{load_home_screen, HomeScreenData},
     },
-    keybinds::{Command, KeybindEvent, KeybindEventStream},
-    mpv,
+    item_details::{display_fetch_episode, display_item_details},
+    item_list_details::{
+        display_fetch_item_list, display_fetch_item_list_ref, display_fetch_season,
+        display_item_list_details,
+    },
+    mpv::{
+        self,
+        fetch_items::{fetch_screen, LoadPlay},
+    },
     user_view::{display_user_view, fetch_user_view},
     TuiContext,
 };
-use color_eyre::{eyre::Context, Result};
+use color_eyre::eyre::{Report, Result};
 
 #[derive(Debug)]
 pub enum NextScreen {
@@ -26,12 +32,18 @@ pub enum NextScreen {
         view: UserView,
         items: Vec<MediaItem>,
     },
-    LoadPlayItem(MediaItem),
+    LoadPlayItem(LoadPlay),
     PlayItem {
         items: Vec<MediaItem>,
         index: usize,
     },
-    Error(Cow<'static, str>),
+    Error(Report),
+    ItemDetails(MediaItem),
+    ItemListDetails(MediaItem, Vec<MediaItem>),
+    FetchItemListDetails(MediaItem),
+    FetchItemListDetailsRef(String),
+    FetchEpisodeDetails(String),
+    FetchSeasonDetailsRef(String),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -53,12 +65,19 @@ impl NextScreen {
             NextScreen::HomeScreen(data) => display_home_screen(cx, data).await,
             NextScreen::LoadUserView(view) => fetch_user_view(cx, view).await,
             NextScreen::UserView { view, items } => display_user_view(cx, view, items).await,
-            NextScreen::LoadPlayItem(media_item) => {
-                mpv::fetch_items::fetch_screen(cx, media_item).await
-            }
+            NextScreen::LoadPlayItem(media_item) => fetch_screen(cx, media_item).await,
             NextScreen::PlayItem { items, index } => mpv::play(cx, items, index).await,
-            NextScreen::Error(msg) => render_error(cx, msg).await,
-            screen => todo!("{screen:?}"),
+            NextScreen::Error(msg) => display_error(cx, msg).await,
+            NextScreen::FetchItemListDetails(item) => display_fetch_item_list(cx, item).await,
+            NextScreen::FetchItemListDetailsRef(item) => {
+                display_fetch_item_list_ref(cx, &item).await
+            }
+            NextScreen::ItemListDetails(item, children) => {
+                display_item_list_details(cx, item, children).await
+            }
+            NextScreen::FetchSeasonDetailsRef(series) => display_fetch_season(cx, &series).await,
+            NextScreen::FetchEpisodeDetails(id) => display_fetch_episode(cx, &id).await,
+            NextScreen::ItemDetails(episode) => display_item_details(cx, episode).await,
         }
     }
 }
@@ -96,51 +115,15 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ErrorCommand {
-    Quit,
-    Kill,
+pub trait ToNavigation {
+    fn to_nav(self) -> Navigation;
 }
-impl Command for ErrorCommand {
-    fn name(self) -> &'static str {
+
+impl ToNavigation for Result<Navigation> {
+    fn to_nav(self) -> Navigation {
         match self {
-            ErrorCommand::Quit => "quit",
-            ErrorCommand::Kill => "kill",
-        }
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "quit" => ErrorCommand::Quit.into(),
-            "kill" => ErrorCommand::Kill.into(),
-            _ => None,
-        }
-    }
-}
-
-async fn render_error(cx: Pin<&mut TuiContext>, msg: Cow<'static, str>) -> Result<Navigation> {
-    let cx = cx.project();
-    let msg = Paragraph::new(msg)
-        .wrap(Wrap { trim: false })
-        .block(Block::bordered());
-    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.error.clone());
-    loop {
-        cx.term
-            .draw(|frame| {
-                frame.render_widget(&msg, events.inner(frame.area()));
-                frame.render_widget(&mut events, frame.area());
-            })
-            .context("rendering error")?;
-        match events.next().await {
-            Some(Ok(KeybindEvent::Render)) => continue,
-            Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
-            Some(Ok(KeybindEvent::Command(ErrorCommand::Quit))) => {
-                break Ok(Navigation::PopContext);
-            }
-            Some(Ok(KeybindEvent::Command(ErrorCommand::Kill))) | None => {
-                break Ok(Navigation::Exit);
-            }
-            Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
+            Ok(v) => v,
+            Err(e) => Navigation::Replace(NextScreen::Error(e)),
         }
     }
 }

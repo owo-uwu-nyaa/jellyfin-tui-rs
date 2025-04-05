@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    pin::{pin, Pin},
-};
+use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::{eyre::Context, Result};
 use futures_util::{stream, StreamExt, TryStreamExt};
@@ -12,11 +9,10 @@ use jellyfin::{
     user_views::{GetUserViewsQuery, UserView, UserViewType},
     Auth, JellyfinClient,
 };
-use ratatui::widgets::{Block, Paragraph};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, instrument, trace};
 
 use crate::{
-    keybinds::{KeybindEvent, KeybindEventStream, LoadingCommand},
+    fetch::fetch_screen,
     state::{Navigation, NextScreen},
     TuiContext,
 };
@@ -131,41 +127,24 @@ pub async fn load_data(
 #[instrument(skip_all)]
 pub async fn load_home_screen(cx: Pin<&mut TuiContext>) -> Result<Navigation> {
     let cx = cx.project();
-    let msg = Paragraph::new("Loading home screen")
-        .centered()
-        .block(Block::bordered());
-    let mut load = pin!(load_data(cx.jellyfin, &cx.jellyfin.get_auth().user.id));
-    let mut events =
-        KeybindEventStream::new(cx.events, cx.config.keybinds.fetch_home_screen.clone());
-    loop {
-        cx.term
-            .draw(|frame| {
-                frame.render_widget(&msg, events.inner(frame.area()));
-                frame.render_widget(&mut events, frame.area());
-            })
-            .context("rendering ui")?;
-        tokio::select! {
-            data = &mut load => {
-                break match data{
-                    Err(e) => {
-                        error!("Error loading home screen data: {e:?}");
-                        Ok(Navigation::Push{current: NextScreen::LoadHomeScreen, next: NextScreen::Error("error loading home screen".into())})
-                    }
-                    Ok(data) => {
-                      Ok(Navigation::Replace(NextScreen::HomeScreen(data)))
-                    }
-                }
+    let jellyfin = cx.jellyfin;
+    fetch_screen(
+        "Loading home screen",
+        async {
+            match load_data(jellyfin, &jellyfin.get_auth().user.id)
+                .await
+                .context("Loading home screen data")
+            {
+                Err(e) => Ok(Navigation::Push {
+                    current: NextScreen::LoadHomeScreen,
+                    next: NextScreen::Error(e),
+                }),
+                Ok(data) => Ok(Navigation::Replace(NextScreen::HomeScreen(data))),
             }
-            term = events.next() => {
-                match term {
-                    Some(Ok(KeybindEvent::Render)) => continue,
-                    Some(Ok(KeybindEvent::Command(LoadingCommand::Quit))) =>
-                        break Ok(Navigation::PopContext),
-                    Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
-                    None => break Ok(Navigation::Exit),
-                    Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
-                }
-            }
-        }
-    }
+        },
+        cx.events,
+        cx.config.keybinds.fetch.clone(),
+        cx.term,
+    )
+    .await
 }

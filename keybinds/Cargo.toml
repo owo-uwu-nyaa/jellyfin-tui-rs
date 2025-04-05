@@ -1,0 +1,13 @@
+[package]
+name = "keybinds"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+eyre = "0.6.12"
+futures-util = "0.3.31"
+ratatui = "0.29.0"
+serde = { version = "1.0.219", features = ["derive"] }
+tracing = "0.1.41"
+keybinds-derive = {path = "../keybinds-derive"}

@@ -137,7 +137,11 @@ impl EntryGrid {
         trace!("current: {}, length: {}", self.current, self.entries.len());
     }
 
-    pub fn get(mut self) -> Entry {
-        self.entries.swap_remove(self.current)
+    pub fn get(&self) -> Option<&Entry> {
+        if self.entries.is_empty() {
+            None
+        } else {
+            Some(&self.entries[self.current])
+        }
     }
 }

@@ -15,11 +15,11 @@ pub enum JellyfinError {
     #[error("error in json serialization")]
     JsonError(#[from] serde_json::Error),
     #[error("{}",.0)]
-    Jellyfin( &'static str),
+    Jellyfin(&'static str),
 }
 
-impl From<getrandom::Error> for JellyfinError{
+impl From<getrandom::Error> for JellyfinError {
     fn from(value: getrandom::Error) -> Self {
-       Self::GetrandomError(value)
+        Self::GetrandomError(value)
     }
 }

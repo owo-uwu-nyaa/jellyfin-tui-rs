@@ -1,38 +1,30 @@
-[fetch_mpv]
+#injected into every map as key that shows the maps keybinds
+#including Esc is useful as prefix for commands while text input mode is active
+help_prefixes = ["?", "esc"]
+
+[fetch]
 q = "quit"
 
 [play_mpv]
 q = "quit"
 
-[fetch_user_view]
-q = "quit"
-
 [user_view]
-q = "quit"
+template = ["ud", "q", "o"]
 r = "reload"
-up = "up"
-down = "down"
 left = "prev"
 back-tab = "prev"
 right = "next"
 tab = "next"
-enter = "open"
-
-[fetch_home_screen]
-q = "quit"
+enter = "play"
 
 [home_screen]
-q = "quit"
+template = ["m", "o"]
 r = "reload"
-up = "up"
-down = "down"
-left = "left"
-right = "right"
-enter = "open"
+enter = "play-open"
 
-
-[fetch_login]
-q = "quit"
+[item_list_details]
+template = ["m", "o"]
+enter = "play"
 
 [login_info]
 backspace = "delete"
@@ -42,8 +34,31 @@ tab = "next"
 down = "prev"
 back-tab = "prev"
 q = "quit"
-esc = { name = "cmd-prefix", map = { q ="quit" } }
 
 [error]
-q = "quit"
+template = ["m"]
 k = "kill"
+
+[item_details]
+template = ["ud", "q"]
+p = "play"
+enter = "play"
+
+[template.q]
+q = "quit"
+
+[template.ud]
+up = "up"
+down = "down"
+
+[template.lr]
+left = "left"
+right = "right"
+
+[template.m]
+template = ["q", "ud", "lr"]
+
+[template.o]
+o = "open"
+p = "play"
+O = {name = "open-", e = "open-episode", S = "open-season", s = "open-series"}

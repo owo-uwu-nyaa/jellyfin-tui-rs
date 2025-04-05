@@ -53,7 +53,7 @@ impl EntryList {
         let main = outer.inner(area);
         outer.render(area, buf);
         let visible = self.visible(area.width);
-        if visible == 0 {
+        if visible == 0 && !self.entries.is_empty() {
             Paragraph::new("insufficient space")
                 .wrap(Wrap { trim: true })
                 .render(main, buf);
@@ -116,8 +116,12 @@ impl EntryList {
         trace!("current: {}, length: {}", self.current, self.entries.len());
     }
 
-    pub fn get(mut self) -> Entry {
-        self.entries.swap_remove(self.current)
+    pub fn get(&self) -> Option<&Entry> {
+        if self.entries.is_empty() {
+            None
+        } else {
+            Some(&self.entries[self.current])
+        }
     }
 }
 

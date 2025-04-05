@@ -139,6 +139,7 @@ pub enum ItemType {
     },
     Series,
     Playlist,
+    Folder,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

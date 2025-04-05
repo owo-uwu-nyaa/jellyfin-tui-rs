@@ -26,6 +26,8 @@ let
     (fileset_src ./libmpv-rs)
     ./libmpv-rs/test-data
     (fileset_src ./libmpv-rs/libmpv-sys)
+    (fileset_src ./keybinds-derive)
+    (fileset_src ./keybinds)
   ];
 
   src = lib.fileset.toSource {

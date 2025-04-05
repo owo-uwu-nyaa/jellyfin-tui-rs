@@ -405,8 +405,6 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
 
     /// Seek forward relatively from current position in seconds.
     /// This is less exact than `seek_absolute`, see [mpv manual]
-    /// (https://mpv.io/manual/master/#command-interface-
-    /// [relative|absolute|absolute-percent|relative-percent|exact|keyframes]).
     pub fn seek_forward(&self, secs: f64) -> Result<()> {
         self.seek(secs, c"relative")
     }
@@ -466,7 +464,7 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     /// "Save the video image, in its original resolution, and with subtitles.
     /// Some video outputs may still include the OSD in the output under certain circumstances.".
     ///
-    /// "[O]ptionally save it to a given file. The format of the file will be
+    /// "Optionally save it to a given file. The format of the file will be
     /// guessed by the extension (and --screenshot-format is ignored - the behaviour when the
     /// extension is missing or unknown is arbitrary). If the file already exists, it's overwritten.
     /// Like all input command parameters, the filename is subject to property expansion as
@@ -659,7 +657,7 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
 
     /// See `AddSelect`. "Select the subtitle. If a subtitle with the same file name was
     /// already added, that one is selected, instead of loading a duplicate entry.
-    /// (In this case, title/language are ignored, and if the [sub] was changed since it was loaded,
+    /// (In this case, title/language are ignored, and if the sub was changed since it was loaded,
     /// these changes won't be reflected.)".
     pub fn subtitle_add_cached(&self, path: &CStr) -> Result<()> {
         self.command(&[c"sub-add".to_node(), path.to_node(), c"cached".to_node()])

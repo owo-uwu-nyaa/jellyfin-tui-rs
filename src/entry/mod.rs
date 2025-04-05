@@ -1,3 +1,5 @@
+pub mod media_item;
+
 use std::borrow::Cow;
 
 use jellyfin::{
@@ -23,7 +25,7 @@ pub struct Entry {
     image: Option<JellyfinImageState>,
     title: String,
     subtitle: Option<String>,
-    action: NextScreen,
+    inner: EntryInner,
     watch_status: Option<Cow<'static, str>>,
 }
 
@@ -89,14 +91,14 @@ impl Entry {
         image: Option<JellyfinImageState>,
         title: String,
         subtitle: Option<String>,
-        action: NextScreen,
+        inner: EntryInner,
         watch_status: Option<Cow<'static, str>>,
     ) -> Self {
         Self {
             image,
             title,
             subtitle,
-            action,
+            inner,
             watch_status,
         }
     }
@@ -116,7 +118,7 @@ impl Entry {
                 series_name,
             } => (series_name.clone(), item.name.clone().into()),
             ItemType::Series => (item.name.clone(), None),
-            ItemType::Playlist => (item.name.clone(), None),
+            ItemType::Playlist | ItemType::Folder => (item.name.clone(), None),
         };
         let image = item
             .image_tags
@@ -144,13 +146,7 @@ impl Entry {
         } else {
             None
         };
-        Self::new(
-            image,
-            title,
-            subtitle,
-            NextScreen::LoadPlayItem(item),
-            watch_status,
-        )
+        Self::new(image, title, subtitle, EntryInner::Item(item), watch_status)
     }
 
     pub fn from_user_view(item: UserView, context: &TuiContext) -> Self {
@@ -170,10 +166,49 @@ impl Entry {
                     context.image_cache.clone(),
                 )
             });
-        Self::new(image, title, None, NextScreen::LoadUserView(item), None)
+        Self::new(image, title, None, EntryInner::View(item), None)
     }
 
-    pub fn get_action(self) -> NextScreen {
-        self.action
+    pub fn play(&self) -> Option<NextScreen> {
+        match &self.inner {
+            EntryInner::View(_) => None,
+            EntryInner::Item(item) => Some(NextScreen::LoadPlayItem(media_item::play(item))),
+        }
     }
+    pub fn open(&self) -> NextScreen {
+        match &self.inner {
+            EntryInner::View(view) => NextScreen::LoadUserView(view.clone()),
+            EntryInner::Item(item) => media_item::open(item),
+        }
+    }
+    pub fn play_open(&self) -> NextScreen {
+        match &self.inner {
+            EntryInner::View(view) => NextScreen::LoadUserView(view.clone()),
+            EntryInner::Item(item) => NextScreen::LoadPlayItem(media_item::play(item)),
+        }
+    }
+    pub fn episode(&self) -> Option<NextScreen> {
+        match &self.inner {
+            EntryInner::Item(i) => Some(media_item::episode(i)),
+            _ => None,
+        }
+    }
+    pub fn season(&self) -> Option<NextScreen> {
+        match &self.inner {
+            EntryInner::Item(i) => media_item::season(i),
+            _ => None,
+        }
+    }
+    pub fn series(&self) -> Option<NextScreen> {
+        match &self.inner {
+            EntryInner::Item(i) => media_item::series(i),
+            _ => None,
+        }
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+pub enum EntryInner {
+    Item(MediaItem),
+    View(UserView),
 }

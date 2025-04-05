@@ -10,6 +10,7 @@ use std::{
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
+use keybinds::{Command, KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
@@ -24,9 +25,7 @@ use tracing::{error, info, instrument};
 use url::Url;
 
 use crate::{
-    keybinds::{
-        self, Command, KeybindEvent, KeybindEventStream, KeybindEvents, Keybinds, LoadingCommand,
-    },
+    keybinds::{Keybinds, LoadingCommand},
     Config,
 };
 
@@ -44,36 +43,13 @@ enum LoginSelection {
     Retry,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Command)]
 pub enum LoginInfoCommand {
     Delete,
     Submit,
     Next,
     Prev,
     Quit,
-}
-
-impl Command for LoginInfoCommand {
-    fn name(self) -> &'static str {
-        match self {
-            LoginInfoCommand::Delete => "delete",
-            LoginInfoCommand::Submit => "submit",
-            LoginInfoCommand::Next => "next",
-            LoginInfoCommand::Prev => "prev",
-            LoginInfoCommand::Quit => "quit",
-        }
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "delete" => Some(Self::Delete),
-            "submit" => Some(Self::Submit),
-            "next" => Some(Self::Next),
-            "prev" => Some(Self::Prev),
-            "quit" => Some(Self::Quit),
-            _ => None,
-        }
-    }
 }
 
 #[instrument(skip_all)]
@@ -292,7 +268,7 @@ pub async fn login(
             &login_info.password,
         ));
 
-        let mut events = KeybindEventStream::new(events, config.keybinds.fetch_login.clone());
+        let mut events = KeybindEventStream::new(events, config.keybinds.fetch.clone());
         loop {
             term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
                 .context("rendering ui")?;

@@ -99,7 +99,7 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                 (0u16..usable_height as u16).flat_map(|y| (0..width).map(move |x| (x, y)));
             for ((key, binding), (x, y)) in items.zip(position) {
                 let binding = match binding {
-                    super::KeyBinding::Command(c) => Span::styled(c.name(), Color::Green),
+                    super::KeyBinding::Command(c) => Span::styled(c.to_name(), Color::Green),
                     super::KeyBinding::Group { map: _, name } => {
                         Span::styled(name.as_str(), Color::Blue)
                     }

@@ -1,11 +1,13 @@
 use std::task::Poll;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use futures_util::{stream::FusedStream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream::FusedStream};
 use tracing::warn;
 
+use crate::Key;
+
 use super::{Command, KeyBinding, KeybindEvent, KeybindEventStream, Text};
-use color_eyre::Result;
+use eyre::Result;
 
 impl<T: Command> FusedStream for KeybindEventStream<'_, T> {
     fn is_terminated(&self) -> bool {
@@ -56,21 +58,26 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                     }
                     Some(Ok(Event::Key(KeyEvent {
                         code,
-                        modifiers: _,
+                        modifiers,
                         kind: KeyEventKind::Press,
                         state: _,
                     }))) => {
-                        if self.text_input && self.current.is_none() {
+                        if self.text_input
+                            && self.current.is_none()
+                            && modifiers
+                                .intersection(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                                .is_empty()
+                        {
                             if let KeyCode::Char(c) = code {
                                 break Some(Ok(KeybindEvent::Text(Text::Char(c))));
                             }
                         }
-                        if self.current.is_none() && matches!(code, KeyCode::Char('?')) {
-                            self.current = self.top.clone().into();
-                            break Some(Ok(KeybindEvent::Render));
-                        }
                         let current = self.current.as_ref().unwrap_or(&self.top).clone();
-                        match current.get(&code.into()) {
+                        match current.get(&Key {
+                            inner: code,
+                            control: modifiers.contains(KeyModifiers::CONTROL),
+                            alt: modifiers.contains(KeyModifiers::ALT),
+                        }) {
                             Some(KeyBinding::Command(c)) => {
                                 self.current = None;
                                 break Some(Ok(KeybindEvent::Command(*c)));

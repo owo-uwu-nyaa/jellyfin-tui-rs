@@ -27,6 +27,7 @@ impl EntryScreen {
             title,
         }
     }
+
     #[instrument(skip_all, name = "render_screen")]
     pub fn render(
         &mut self,
@@ -42,7 +43,7 @@ impl EntryScreen {
         outer.render(area, buf);
         let entry_height = entry_list_height(picker.font_size());
         let visible = self.visible(area.height, entry_height);
-        if visible == 0 {
+        if visible == 0 && !self.entries.is_empty() {
             Paragraph::new("insufficient space")
                 .wrap(Wrap { trim: true })
                 .render(main, buf);
@@ -105,8 +106,12 @@ impl EntryScreen {
         self.entries[self.current].right();
     }
 
-    pub fn get(mut self) -> Entry {
-        self.entries.swap_remove(self.current).get()
+    pub fn get(&self) -> Option<&Entry> {
+        if self.entries.is_empty() {
+            None
+        } else {
+            self.entries[self.current].get()
+        }
     }
 
     fn visible(&self, height: u16, entry_height: u16) -> usize {

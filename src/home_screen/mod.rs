@@ -1,25 +1,23 @@
 use std::pin::Pin;
 
+use crate::list::EntryList;
+use crate::screen::EntryScreen;
 use color_eyre::eyre::Context;
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
-use list::EntryList;
 use load::HomeScreenData;
 use ratatui::widgets::Widget;
-use screen::EntryScreen;
 use tracing::{debug, instrument};
 
 use crate::{
     entry::Entry,
     image::ImagesAvailable,
-    keybinds::{Command, KeybindEvent, KeybindEventStream},
     state::{Navigation, NextScreen},
     Result, TuiContext,
 };
+use keybinds::{Command, KeybindEvent, KeybindEventStream};
 
-mod list;
 pub mod load;
-mod screen;
 
 fn create_from_media_item_vec(
     items: Vec<MediaItem>,
@@ -65,7 +63,7 @@ fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntrySc
     EntryScreen::new(entries, "Home".to_string())
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Command)]
 pub enum HomeScreenCommand {
     Quit,
     Reload,
@@ -74,33 +72,11 @@ pub enum HomeScreenCommand {
     Up,
     Down,
     Open,
-}
-
-impl Command for HomeScreenCommand {
-    fn name(self) -> &'static str {
-        match self {
-            HomeScreenCommand::Quit => "quit",
-            HomeScreenCommand::Reload => "reload",
-            HomeScreenCommand::Left => "left",
-            HomeScreenCommand::Right => "right",
-            HomeScreenCommand::Up => "up",
-            HomeScreenCommand::Down => "down",
-            HomeScreenCommand::Open => "open",
-        }
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "quit" => HomeScreenCommand::Quit.into(),
-            "reload" => HomeScreenCommand::Reload.into(),
-            "left" => HomeScreenCommand::Left.into(),
-            "right" => HomeScreenCommand::Right.into(),
-            "up" => HomeScreenCommand::Up.into(),
-            "down" => HomeScreenCommand::Down.into(),
-            "open" => HomeScreenCommand::Open.into(),
-            _ => None,
-        }
-    }
+    Play,
+    PlayOpen,
+    OpenEpisode,
+    OpenSeason,
+    OpenSeries,
 }
 
 #[instrument(skip_all)]
@@ -128,15 +104,15 @@ pub async fn display_home_screen(
             })
             .context("rendering home screen")?;
         let cmd = tokio::select! {
-            _ = images_available.wait_available() => {continue;
+            _ = images_available.wait_available() => {continue ;
             }
             term = events.next() => {
                 match term {
                     Some(Ok(KeybindEvent::Command(cmd))) => cmd,
                     Some(Ok(KeybindEvent::Text(_))) => unimplemented!(),
-                    Some(Ok(KeybindEvent::Render)) => continue,
-                    Some(Err(e)) => break Err(e).context("getting key events from terminal"),
-                    None => break Ok(Navigation::Exit)
+                    Some(Ok(KeybindEvent::Render)) => continue ,
+                    Some(Err(e)) => break  Err(e).context("getting key events from terminal"),
+                    None => break  Ok(Navigation::Exit)
                 }
             }
         };
@@ -150,6 +126,7 @@ pub async fn display_home_screen(
             }
             HomeScreenCommand::Left => {
                 screen.left();
+                continue;
             }
             HomeScreenCommand::Right => {
                 screen.right();
@@ -161,10 +138,60 @@ pub async fn display_home_screen(
                 screen.down();
             }
             HomeScreenCommand::Open => {
-                break Ok(Navigation::Push {
-                    current: NextScreen::LoadHomeScreen,
-                    next: screen.get().get_action(),
-                });
+                if let Some(entry) = screen.get() {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next: entry.open(),
+                    });
+                }
+            }
+            HomeScreenCommand::OpenEpisode => {
+                if let Some(entry) = screen.get() {
+                    if let Some(next) = entry.episode() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            HomeScreenCommand::OpenSeason => {
+                if let Some(entry) = screen.get() {
+                    if let Some(next) = entry.season() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            HomeScreenCommand::OpenSeries => {
+                if let Some(entry) = screen.get() {
+                    if let Some(next) = entry.series() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            HomeScreenCommand::Play => {
+                if let Some(entry) = screen.get() {
+                    if let Some(next) = entry.play() {
+                        break Ok(Navigation::Push {
+                            current: NextScreen::LoadHomeScreen,
+                            next,
+                        });
+                    }
+                }
+            }
+            HomeScreenCommand::PlayOpen => {
+                if let Some(entry) = screen.get() {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next: entry.play_open(),
+                    });
+                }
             }
         }
     }

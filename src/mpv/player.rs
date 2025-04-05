@@ -1,16 +1,16 @@
-use std::{ffi::CString, fmt::Display, pin::Pin, sync::Arc, task::Poll, time::Duration};
+use std::{ffi::CString, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{Stream, StreamExt, stream::FusedStream};
+use futures_util::{stream::FusedStream, Stream, StreamExt};
 use jellyfin::{
-    Auth, JellyfinClient,
     items::{ItemType, MediaItem},
     playback_status::ProgressBody,
     socket::JellyfinWebSocket,
+    Auth, JellyfinClient,
 };
 use libmpv::{
-    Mpv,
     events::EventContextAsync,
     node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode},
+    Mpv,
 };
 use tokio::{
     task::JoinSet,
@@ -22,7 +22,7 @@ use crate::Config;
 
 use super::mpv_stream::{MpvEvent, MpvStream, ObservedProperty};
 
-use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
+use color_eyre::eyre::{eyre, Context, OptionExt, Report, Result};
 
 pub struct Player<'j> {
     mpv: Option<MpvStream>,

@@ -5,9 +5,14 @@ mod player;
 
 use std::{borrow::Cow, io::Stdout, pin::Pin};
 
-use color_eyre::eyre::{Context, Result};
+use crate::{
+    state::{Navigation, NextScreen},
+    TuiContext,
+};
+use color_eyre::eyre::{eyre, Context, Result};
 use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
+use keybinds::{Command, KeybindEvent, KeybindEventStream};
 use player::{Player, PlayerState};
 use ratatui::{
     layout::{Constraint, Layout},
@@ -18,30 +23,9 @@ use ratatui::{
 use tokio::select;
 use tracing::{info, instrument};
 
-use crate::{
-    keybinds::{Command, KeybindEvent, KeybindEventStream},
-    state::{Navigation, NextScreen},
-    TuiContext,
-};
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Command)]
 pub enum MpvCommand {
     Quit,
-}
-
-impl Command for MpvCommand {
-    fn name(self) -> &'static str {
-        match self {
-            MpvCommand::Quit => "quit",
-        }
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "quit" => Some(MpvCommand::Quit),
-            _ => None,
-        }
-    }
 }
 
 #[instrument(skip_all)]
@@ -51,9 +35,9 @@ pub async fn play(
     index: usize,
 ) -> Result<Navigation> {
     if items.is_empty() {
-        return Ok(Navigation::Replace(NextScreen::Error(
-            "Unable to play, item is empty".into(),
-        )));
+        return Ok(Navigation::Replace(NextScreen::Error(eyre!(
+            "Unable to play, item is empty"
+        ))));
     }
     let mut cx = cx.project();
     let mut player = Player::new(
@@ -167,7 +151,10 @@ fn render(
                         .vertical_margin(3)
                         .areas(area);
                         let mut series_str = Cow::from(series_name.as_str());
-                        info!("index: {:?} {:?}", media_item.season_index, media_item.episode_index);
+                        info!(
+                            "index: {:?} {:?}",
+                            media_item.season_index, media_item.episode_index
+                        );
                         if media_item.episode_index.is_some() || media_item.season_index.is_some() {
                             series_str.to_mut().push(' ');
                             if let Some(season) = media_item.season_index {

@@ -1,11 +1,17 @@
 mod cache;
 mod entry;
+mod error;
+mod fetch;
 mod grid;
 mod home_screen;
 mod image;
+mod item_details;
+mod item_list_details;
 mod keybinds;
+mod list;
 mod login;
 mod mpv;
+mod screen;
 mod state;
 mod user_view;
 
@@ -17,6 +23,7 @@ use std::{
     sync::Mutex,
 };
 
+use ::keybinds::KeybindEvents;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Context, OptionExt, Result};
 use crossterm::{
@@ -25,7 +32,7 @@ use crossterm::{
 };
 use image::ImageProtocolCache;
 use jellyfin::{socket::JellyfinWebSocket, Auth, JellyfinClient};
-use keybinds::{KeybindEvents, Keybinds};
+use keybinds::Keybinds;
 use pin_project_lite::pin_project;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
