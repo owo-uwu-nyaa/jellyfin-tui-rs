@@ -1,15 +1,17 @@
 use std::pin::Pin;
 
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 use jellyfin::{
-    items::MediaItem, playlist::GetPlaylistItemsQuery, shows::GetEpisodesQuery, Auth,
-    JellyfinClient, JellyfinVec,
+    Auth, JellyfinClient, JellyfinVec,
+    items::MediaItem,
+    playlist::GetPlaylistItemsQuery,
+    shows::GetEpisodesQuery,
 };
 use tracing::warn;
 
 use crate::{
-    state::{Navigation, NextScreen},
     TuiContext,
+    state::{Navigation, NextScreen},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -48,18 +50,30 @@ async fn fetch_items(cx: &JellyfinClient<Auth>, item: LoadPlay) -> Result<(Vec<M
                 .await
                 .context("deserializing media items")?
                 .items;
-            let position = if let Some(first) = season_items.first() {
-                item_position(&first.id, &all)
+            if let Some(first) = season_items.first() {
+                if let Some(p) = item_position(&first.id, &all) {
+                    (all, p)
+                } else {
+                    (season_items, 0)
+                }
             } else {
                 warn!("no items found for season");
-                0
-            };
-            (all, position)
+                (all, 0)
+            }
         }
         LoadPlay::Episode { series_id, id } => {
             let all = fetch_series(cx, &series_id).await?;
-            let position = item_position(&id, &all);
-            (all, position)
+
+            if let Some(position) = item_position(&id, &all) {
+                (all, position)
+            } else {
+                let item = cx
+                    .get_item(&id, Some(&cx.get_auth().user.id))
+                    .await?
+                    .deserialize()
+                    .await?;
+                (vec![item], 0)
+            }
         }
         LoadPlay::Playlist { id } => {
             let user_id = cx.get_auth().user.id.as_str();
@@ -89,14 +103,14 @@ async fn fetch_items(cx: &JellyfinClient<Auth>, item: LoadPlay) -> Result<(Vec<M
     })
 }
 
-fn item_position(id: &str, items: &[MediaItem]) -> usize {
+fn item_position(id: &str, items: &[MediaItem]) -> Option<usize> {
     for (index, item) in items.iter().enumerate() {
         if item.id == id {
-            return index;
+            return Some(index);
         }
     }
     warn!("no such item found");
-    0
+    None
 }
 
 async fn fetch_series(cx: &JellyfinClient<Auth>, series_id: &str) -> Result<Vec<MediaItem>> {

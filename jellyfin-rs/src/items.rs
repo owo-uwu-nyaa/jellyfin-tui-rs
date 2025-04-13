@@ -9,6 +9,12 @@ use tracing::instrument;
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UserIdQuery<'a> {
+    pub user_id: Option<&'a str>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetItemsQuery<'a> {
     pub user_id: Option<&'a str>,
     pub start_index: Option<u32>,
@@ -219,6 +225,20 @@ impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
             .send()
             .await?;
         let req = req.error_for_status()?;
+        Ok(req.into())
+    }
+
+    pub async fn get_item(
+        &self,
+        id: &str,
+        user_id: Option<&str>,
+    ) -> Result<JsonResponse<MediaItem>> {
+        let req = self
+            .get(format!("{}Items/{id}", self.url))
+            .query(&UserIdQuery { user_id })
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(req.into())
     }
 
