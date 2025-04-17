@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 
+use itertools::Itertools;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -14,8 +15,8 @@ use super::{Command, KeybindEventStream};
 
 impl<T: Command> KeybindEventStream<'_, T> {
     pub fn inner(&self, area: Rect) -> Rect {
-        if let Some(current) = self.current.as_ref() {
-            let len = current.len();
+        let len: usize = self.current.iter().map(|v|v.len()).sum();
+        if len>0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
             let full_height = full_usable_height + 3;
@@ -33,8 +34,8 @@ impl<T: Command> KeybindEventStream<'_, T> {
 }
 impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        if let Some(current) = self.current.as_ref() {
-            let len = current.len();
+        let len: usize = self.current.iter().map(|v|v.len()).sum();
+        if len>0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
             let full_height = full_usable_height + 3;
@@ -91,8 +92,7 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
             let main = block.inner(area);
             block.render(area, buf);
             let items_per_screen = width as usize * usable_height;
-            let items = current
-                .iter()
+            let items = self.current.iter().map(|v|v.iter()).kmerge_by(|(a,_),(b,_)|a<b)
                 .skip(items_per_screen * self.current_view)
                 .take(items_per_screen);
             let position =

@@ -15,6 +15,10 @@ impl<T: Command> FusedStream for KeybindEventStream<'_, T> {
     }
 }
 
+fn if_non_empty<T>(v: &Vec<T>) -> Option<&Vec<T>> {
+    if v.is_empty() { None } else { Some(v) }
+}
+
 impl<T: Command> Stream for KeybindEventStream<'_, T> {
     type Item = Result<KeybindEvent<T>>;
 
@@ -63,7 +67,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         state: _,
                     }))) => {
                         if self.text_input
-                            && self.current.is_none()
+                            && self.current.is_empty()
                             && modifiers
                                 .intersection(KeyModifiers::CONTROL | KeyModifiers::ALT)
                                 .is_empty()
@@ -72,31 +76,47 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                                 break Some(Ok(KeybindEvent::Text(Text::Char(c))));
                             }
                         }
-                        let current = self.current.as_ref().unwrap_or(&self.top).clone();
-                        match current.get(&Key {
-                            inner: code,
-                            control: modifiers.contains(KeyModifiers::CONTROL),
-                            alt: modifiers.contains(KeyModifiers::ALT),
-                        }) {
-                            Some(KeyBinding::Command(c)) => {
-                                self.current = None;
-                                break Some(Ok(KeybindEvent::Command(*c)));
+                        let mut next = Vec::new();
+                        let mut ret = None;
+                        for c in if_non_empty(self.current.as_ref())
+                            .map(|v| either::Right(v.iter()))
+                            .unwrap_or_else(|| {
+                                either::Left(std::iter::once(&self.top).chain(&self.minor))
+                            })
+                        {
+                            match c.get(&Key {
+                                inner: code,
+                                control: modifiers.contains(KeyModifiers::CONTROL),
+                                alt: modifiers.contains(KeyModifiers::ALT),
+                            }) {
+                                Some(KeyBinding::Command(c)) => {
+                                    ret = Some(KeybindEvent::Command(*c));
+                                    break;
+                                }
+                                Some(KeyBinding::Group { map, name: _ }) => {
+                                    next.push(map.clone());
+                                }
+                                Some(KeyBinding::Invalid(name)) => {
+                                    warn!("'{name}' is an invalid command");
+                                    if !self.current.is_empty() {
+                                        ret = Some(KeybindEvent::Render);
+                                    }
+                                    next = Vec::new();
+                                    break;
+                                }
+                                None => {}
                             }
-                            Some(KeyBinding::Group { map, name: _ }) => {
-                                self.current = Some(map.clone());
+                        }
+                        if let Some(r) = ret {
+                            self.current = Vec::new();
+                            break Some(Ok(r));
+                        }
+                        if next.is_empty() {
+                            if !std::mem::take(&mut self.current).is_empty() {
                                 break Some(Ok(KeybindEvent::Render));
                             }
-                            Some(KeyBinding::Invalid(name)) => {
-                                warn!("'{name}' is an invalid command");
-                                if self.current.take().is_some() {
-                                    break Some(Ok(KeybindEvent::Render));
-                                }
-                            }
-                            None => {
-                                if self.current.take().is_some() {
-                                    break Some(Ok(KeybindEvent::Render));
-                                }
-                            }
+                        } else {
+                            self.current = next;
                         }
                     }
                     Some(Ok(Event::Paste(text))) => {

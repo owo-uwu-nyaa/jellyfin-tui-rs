@@ -108,9 +108,10 @@ impl KeybindEvents {
 pub struct KeybindEventStream<'e, T: Command> {
     inner: &'e mut KeybindEvents,
     top: BindingMap<T>,
-    current: Option<BindingMap<T>>,
+    current: Vec<BindingMap<T>>,
     text_input: bool,
     current_view: usize,
+    minor: Vec<BindingMap<T>>,
 }
 
 impl<'e, T: Command> KeybindEventStream<'e, T> {
@@ -118,12 +119,37 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
         Self {
             inner: events,
             top: map,
-            current: None,
+            current: Vec::with_capacity(0),
             text_input: false,
             current_view: 0,
+            minor: Vec::with_capacity(0),
         }
     }
+
+    pub fn new_with_minor(
+        events: &'e mut KeybindEvents,
+        map: BindingMap<T>,
+        minor: Vec<BindingMap<T>>,
+    ) -> Self {
+        Self {
+            inner: events,
+            top: map,
+            current: Vec::with_capacity(0),
+            text_input: false,
+            current_view: 0,
+            minor,
+        }
+    }
+
     pub fn set_text_input(&mut self, text_input: bool) {
         self.text_input = text_input;
+    }
+
+    pub fn get_minor(&self) -> &Vec<BindingMap<T>> {
+        &self.minor
+    }
+
+    pub fn get_minor_mut(&mut self) -> &mut Vec<BindingMap<T>> {
+        &mut self.minor
     }
 }
