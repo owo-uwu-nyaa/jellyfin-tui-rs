@@ -79,7 +79,7 @@ pub async fn display_item_details(cx: Pin<&mut TuiContext>, item: MediaItem) -> 
                 let w = descripton_area.width.saturating_sub(4);
                 if width != Some(w) {
                     width = Some(w);
-                    if let Some(d) = &item.description {
+                    if let Some(d) = &item.overview {
                         let lines = textwrap::wrap(d, w as usize);
                         scrollbar_state = scrollbar_state.content_length(lines.len());
                         scrollbar_len = lines.len() as u16;
@@ -87,7 +87,7 @@ pub async fn display_item_details(cx: Pin<&mut TuiContext>, item: MediaItem) -> 
                         descr = Some(
                             Paragraph::new(Text::from_iter(lines.into_iter())).block(
                                 Block::bordered()
-                                    .title("Description")
+                                    .title("Overview")
                                     .padding(Padding::uniform(1)),
                             ),
                         );

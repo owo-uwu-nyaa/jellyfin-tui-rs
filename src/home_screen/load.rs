@@ -1,20 +1,20 @@
 use std::{collections::HashMap, pin::Pin};
 
-use color_eyre::{eyre::Context, Result};
-use futures_util::{stream, StreamExt, TryStreamExt};
+use color_eyre::{Result, eyre::Context};
+use futures_util::{StreamExt, TryStreamExt, stream};
 use jellyfin::{
+    Auth, JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
     sha::ShaImpl,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
-    Auth, JellyfinClient,
 };
 use tracing::{debug, instrument, trace};
 
 use crate::{
+    TuiContext,
     fetch::fetch_screen,
     state::{Navigation, NextScreen},
-    TuiContext,
 };
 
 #[derive(Debug)]
@@ -52,6 +52,8 @@ pub async fn load_data(
             image_type_limit: 1.into(),
             enable_image_types: "Thumb, Backdrop, Primary".into(),
             media_types: "Video".into(),
+
+            fields: "Overview".into(),
             enable_total_record_count: true.into(),
             enable_images: true.into(),
             exclude_active_sessions: false.into(),
@@ -69,6 +71,7 @@ pub async fn load_data(
             limit: Some(16),
             enable_user_data: Some(true),
             enable_images: Some(true),
+            fields: "Overview".into(),
             image_type_limit: Some(1),
             enable_image_types: Some("Thumb, Backdrop, Primary"),
             enable_total_record_count: Some(true),
@@ -93,6 +96,7 @@ pub async fn load_data(
                         enable_user_data: Some(true),
                         enable_images: Some(true),
                         image_type_limit: Some(1),
+                        fields: "Overview".into(),
                         enable_image_types: Some("Thumb, Backdrop, Primary"),
                         parent_id: Some(&view.id),
                         group_items: Some(true),

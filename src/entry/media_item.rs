@@ -10,7 +10,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type: ItemType::Movie { container: _ },
             user_data: _,
             episode_index: _,
@@ -22,7 +22,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type: ItemType::Playlist | ItemType::Folder,
             user_data: _,
             episode_index: _,
@@ -34,7 +34,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type: ItemType::Series,
             user_data: _,
             episode_index: _,
@@ -46,7 +46,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Season {
                     series_id,
@@ -65,7 +65,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Episode {
                     container: _,
@@ -92,7 +92,7 @@ pub fn open(item: &MediaItem) -> NextScreen {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Movie { container: _ }
                 | ItemType::Episode {
@@ -112,7 +112,7 @@ pub fn open(item: &MediaItem) -> NextScreen {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Playlist
                 | ItemType::Folder
@@ -135,7 +135,7 @@ pub fn episode(item: &MediaItem) -> NextScreen {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Movie { container: _ }
                 | ItemType::Episode {
@@ -155,7 +155,7 @@ pub fn episode(item: &MediaItem) -> NextScreen {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Playlist
                 | ItemType::Folder
@@ -179,7 +179,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Episode {
                     container: _,
@@ -198,7 +198,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Season {
                     series_id: _,
@@ -214,7 +214,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type: ItemType::Series,
             user_data: _,
             episode_index: _,
@@ -232,7 +232,7 @@ pub fn series(item: &MediaItem) -> Option<NextScreen> {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type:
                 ItemType::Episode {
                     container: _,
@@ -255,7 +255,7 @@ pub fn series(item: &MediaItem) -> Option<NextScreen> {
             media_type: _,
             name: _,
             sort_name: _,
-            description: _,
+            overview: _,
             item_type: ItemType::Series,
             user_data: _,
             episode_index: _,

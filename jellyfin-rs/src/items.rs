@@ -175,7 +175,7 @@ pub struct MediaItem {
     pub media_type: MediaType,
     pub name: String,
     pub sort_name: Option<String>,
-    pub description: Option<String>,
+    pub overview: Option<String>,
     #[serde(flatten)]
     #[serde(rename = "type")]
     pub item_type: ItemType,

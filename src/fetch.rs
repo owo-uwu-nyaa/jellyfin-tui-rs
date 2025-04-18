@@ -2,19 +2,19 @@ use std::{future::Future, pin::pin};
 
 use crate::{keybinds::LoadingCommand, state::Navigation};
 use color_eyre::{
-    eyre::{Context, OptionExt},
     Result,
+    eyre::{Context, OptionExt},
 };
 use futures_util::StreamExt;
 use jellyfin::{
+    Auth, JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
     sha::ShaImpl,
-    Auth, JellyfinClient, JellyfinVec,
 };
 use keybinds::{BindingMap, KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
-    widgets::{Block, Paragraph},
     DefaultTerminal,
+    widgets::{Block, Paragraph},
 };
 use tracing::instrument;
 
@@ -84,6 +84,7 @@ pub async fn fetch_all_children(
                 enable_image_types: "Thumb, Backdrop, Primary".into(),
                 image_type_limit: 1.into(),
                 enable_user_data: true.into(),
+                fields: "Overview".into(),
                 ..Default::default()
             })
             .await
@@ -113,6 +114,7 @@ pub async fn fetch_item(
             enable_image_types: "Thumb, Backdrop, Primary".into(),
             image_type_limit: 1.into(),
             enable_user_data: true.into(),
+            fields: "Overview".into(),
             ..Default::default()
         },
     )
@@ -138,6 +140,7 @@ pub async fn fetch_child_of_type(
             image_type_limit: 1.into(),
             enable_user_data: true.into(),
             recursive: true.into(),
+            fields: "Overview".into(),
             ..Default::default()
         },
     )
