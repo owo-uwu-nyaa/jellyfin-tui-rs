@@ -41,7 +41,7 @@ ansi-to-tui = "7.0.0"
 libc = "0.2.170"
 
 [workspace]
-members = ["jellyfin-rs", "keybinds", "keybinds-derive", "libmpv-rs", "libmpv-rs/libmpv-sys"]
+members = ["jellyfin-rs", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys"]
 
 [features]
 default = ["sqlite-unbundled"]

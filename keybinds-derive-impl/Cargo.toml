@@ -1,0 +1,12 @@
+[package]
+name = "keybinds-derive-impl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+proc-macro2 = "1.0.94"
+quote = "1.0.40"
+syn = { version = "2.0.100", features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing"], default-features = false }
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

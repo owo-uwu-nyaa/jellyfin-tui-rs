@@ -19,6 +19,7 @@ pub use keybinds_derive::{Command, gen_from_config};
 pub trait Command: Clone + Copy + Debug {
     fn to_name(self) -> &'static str;
     fn from_name(name: &str) -> Option<Self>;
+    fn all() -> impl DoubleEndedIterator<Item = &'static str> + Clone + Debug;
 }
 
 #[derive(PartialEq, Eq, Clone)]
