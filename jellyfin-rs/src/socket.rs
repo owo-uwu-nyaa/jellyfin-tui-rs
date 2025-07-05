@@ -23,6 +23,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::{
     err::JellyfinError,
+    items::UserData,
     sha::{Sha1, ShaImpl},
     Auth, JellyfinClient, Result,
 };
@@ -47,10 +48,26 @@ pin_project! {
 #[derive(Debug)]
 pub enum JellyfinMessage {
     Binary(Vec<u8>),
+    RefreshProgress {
+        item_id: String,
+        progress: f64,
+    },
+    UserDataChanged {
+        user_data_list: Vec<ChangedUserData>,
+    },
     Unknown {
         message_type: String,
         data: serde_json::Value,
     },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ChangedUserData {
+    pub item_id: String,
+    pub key: String,
+    #[serde(flatten)]
+    pub user_data: UserData,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +77,15 @@ enum JellyfinMessageInternal {
     #[serde(rename_all = "PascalCase")]
     ForceKeepAlive {
         data: u64,
+    },
+    #[serde(rename_all = "PascalCase")]
+    RefreshProgress {
+        item_id: String,
+        progress: String,
+    },
+    #[serde(rename_all = "PascalCase")]
+    UserDataChanged {
+        user_data_list: Vec<ChangedUserData>,
     },
     #[serde(skip_deserializing)]
     Binary(Vec<u8>),
@@ -88,6 +114,18 @@ impl JellyfinMessageInternal {
             JellyfinMessageInternal::Binary(items) => Some(JellyfinMessage::Binary(items)),
             JellyfinMessageInternal::Unknown { message_type, data } => {
                 Some(JellyfinMessage::Unknown { message_type, data })
+            }
+            JellyfinMessageInternal::RefreshProgress { item_id, progress } => {
+                Some(JellyfinMessage::RefreshProgress {
+                    item_id,
+                    progress: progress
+                        .parse()
+                        .inspect_err(|e| warn!("Error parsing float: {e:?}"))
+                        .ok()?,
+                })
+            }
+            JellyfinMessageInternal::UserDataChanged { user_data_list } => {
+                Some(JellyfinMessage::UserDataChanged { user_data_list })
             }
         }
     }

@@ -18,6 +18,7 @@ struct FlattenVariant {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 enum ParsedVariant {
     Command(CommandVariant),
     Flatten(FlattenVariant),
@@ -163,14 +164,27 @@ fn gen_from_name(
 
 fn gen_all(commands: &[CommandVariant], flattens: &[FlattenVariant]) -> TokenStream {
     let commands = commands.iter().map(|c| &c.name);
-    let flattens = flattens.iter().map(|f| &f.ty);
-    quote! {
-        fn all() ->
-          impl ::std::iter::DoubleEndedIterator<Item = &'static str> +
-            ::std::clone::Clone +
-            ::std::fmt::Debug {
-            [#(#commands),*].into_iter()
-                #(.chain(<#flattens as ::keybinds::Command>::all()))*
+    if flattens.is_empty() {
+        quote! {
+            fn all() -> &'static [&'static str] {
+                const S: &'static [&'static str] = &[#(#commands),*];
+                S
+            }
+        }
+    } else {
+        let flattens = flattens.iter().map(|f| &f.ty);
+        quote! {
+            fn all() -> &'static [&'static str] {
+                static S: ::std::sync::LazyLock<&'static [&'static str]> = LazyLock::new(
+                    || ::keybinds::__macro_support::collect_all_names(
+                        &[
+                            &[#(#commands),*],
+                            #(<#flattens as ::keybinds::Command>::all()),*
+                        ]
+                    )
+                );
+                *S
+            }
         }
     }
 }
@@ -201,15 +215,9 @@ pub fn command(input: TokenStream) -> Result<TokenStream> {
                     Ok(ParsedVariant::Flatten(f)) => flattens.push(f),
                 }
             }
-            if !errors.is_empty() {
-                return Err(errors
-                    .into_iter()
-                    .reduce(|mut a, b| {
-                        a.combine(b);
-                        a
-                    })
-                    .unwrap());
-            }
+            commands.sort_by_key(|c| c.name.value());
+            commands_unique(&commands, &mut errors);
+            collect_errors(errors)?;
             let to_name = gen_to_name(&commands, &flattens, name);
             let from_name = gen_from_name(&commands, &flattens, name);
             let all = gen_all(&commands, &flattens);
@@ -226,12 +234,37 @@ pub fn command(input: TokenStream) -> Result<TokenStream> {
     }
 }
 
+fn collect_errors(errors: Vec<Error>) -> Result<()> {
+    match errors.into_iter().reduce(|mut a, b| {
+        a.combine(b);
+        a
+    }) {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
+}
+
+fn commands_unique(commands: &[CommandVariant], errors: &mut Vec<Error>) {
+    let mut iter = commands.iter();
+    if let Some(mut last) = iter.next() {
+        for current in iter {
+            if last.name == current.name {
+                errors.push(Error::new(
+                    current.name.span(),
+                    format!("identifier \"{}\" is used twice", current.name.value()),
+                ));
+            }
+            last = current;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use quote::quote;
-    use syn::{parse2, parse_quote, ItemImpl};
+    use syn::{ItemImpl, parse_quote, parse2};
 
-    use super::{command, parse_variant, CommandVariant, FlattenVariant, ParsedVariant, Result};
+    use super::{CommandVariant, FlattenVariant, ParsedVariant, Result, command, parse_variant};
     use pretty_assertions::assert_eq;
     #[test]
     fn test_generate() -> Result<()> {
@@ -277,15 +310,19 @@ mod tests {
                         }
                     }
                 }
-                fn all() ->
-                impl ::std::iter::DoubleEndedIterator<Item = &'static str> +
-                    ::std::clone::Clone +
-                    ::std::fmt::Debug {
-                        ["name", "val-b"].into_iter()
-                                         .chain(<I as ::keybinds::Command>::all())
-                                         .chain(<T as ::keybinds::Command>::all())
-                                         .chain(<T2 as ::keybinds::Command>::all())
-                    }
+                fn all() -> &'static [&'static str] {
+                    static S: ::std::sync::LazyLock<&'static [&'static str]> = LazyLock::new(
+                        || ::keybinds::__macro_support::collect_all_names(
+                            &[
+                                &["name", "val-b"],
+                                <I as ::keybinds::Command>::all(),
+                                <T as ::keybinds::Command>::all(),
+                                <T2 as ::keybinds::Command>::all()
+                            ]
+                        )
+                    );
+                    *S
+                }
             }
         })?;
         assert_eq!(expected_impl, gen_impl);
@@ -298,15 +335,21 @@ mod tests {
                 #[command(flatten)]
                 Rec(I)
         })?;
-        let expected = ParsedVariant::Flatten(FlattenVariant { ident: parse_quote!(Rec), ty: parse_quote!(I)});
+        let expected = ParsedVariant::Flatten(FlattenVariant {
+            ident: parse_quote!(Rec),
+            ty: parse_quote!(I),
+        });
         assert_eq!(expected, parsed);
         Ok(())
     }
 
     #[test]
     fn test_variant_command() -> Result<()> {
-        let parsed = parse_variant(parse_quote!( CMDOneTwo))?;
-        let expected = ParsedVariant::Command(CommandVariant { ident: parse_quote!(CMDOneTwo), name: parse_quote!("c-m-d-one-two") });
+        let parsed = parse_variant(parse_quote!(CMDOneTwo))?;
+        let expected = ParsedVariant::Command(CommandVariant {
+            ident: parse_quote!(CMDOneTwo),
+            name: parse_quote!("c-m-d-one-two"),
+        });
         assert_eq!(expected, parsed);
         Ok(())
     }
@@ -314,12 +357,14 @@ mod tests {
     #[test]
     fn test_variant_command_named() -> Result<()> {
         let parsed = parse_variant(parse_quote!(
-            #[command(name="testName")]
+            #[command(name = "testName")]
             Cmd
         ))?;
-        let expected = ParsedVariant::Command(CommandVariant { ident: parse_quote!(Cmd), name: parse_quote!("testName") });
+        let expected = ParsedVariant::Command(CommandVariant {
+            ident: parse_quote!(Cmd),
+            name: parse_quote!("testName"),
+        });
         assert_eq!(expected, parsed);
         Ok(())
     }
-
 }

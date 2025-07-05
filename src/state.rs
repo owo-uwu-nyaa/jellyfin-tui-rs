@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use jellyfin::{items::MediaItem, user_views::UserView};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use crate::{
     error::display_error,
@@ -82,12 +82,15 @@ impl NextScreen {
     }
 }
 
+#[derive(Debug)]
 pub struct State {
     screen_stack: Vec<NextScreen>,
 }
 
 impl State {
+    #[instrument(skip_all)]
     pub fn navigate(&mut self, nav: Navigation) {
+        debug!("navigate instruction: {nav:#?}");
         match nav {
             Navigation::PopContext => {}
             Navigation::Replace(next) => {
@@ -103,7 +106,9 @@ impl State {
             }
         }
     }
+    #[instrument(skip_all)]
     pub fn pop(&mut self) -> Option<NextScreen> {
+        debug!("state stack: {:#?}", self.screen_stack);
         self.screen_stack.pop()
     }
     pub fn new() -> Self {

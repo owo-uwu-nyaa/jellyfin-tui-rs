@@ -3,7 +3,7 @@
   rustPlatform,
   pkg-config,
   openssl,
-  mpv,
+  mpv-unwrapped,
   sqlite,
   use_bindgen ? true,
   bundle_sqlite ? false,
@@ -27,6 +27,7 @@ let
     ./libmpv-rs/test-data
     (fileset_src ./libmpv-rs/libmpv-sys)
     (fileset_src ./keybinds-derive)
+    (fileset_src ./keybinds-derive-impl)
     (fileset_src ./keybinds)
   ];
 
@@ -58,7 +59,7 @@ rustPlatform.buildRustPackage {
   ] ++ (lib.optionals use_bindgen [ rustPlatform.bindgenHook ]);
   buildInputs = [
     openssl
-    mpv
+    mpv-unwrapped
   ] ++ (lib.optionals (!bundle_sqlite) [ sqlite ]);
   buildFeatures =
     (lib.optionals use_bindgen [ "use-bindgen" ])

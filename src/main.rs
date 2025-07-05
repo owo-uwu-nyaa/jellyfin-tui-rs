@@ -51,7 +51,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
     let mut events = KeybindEvents::new()?;
     if let Some(client) = login::login(&mut term, &config, &mut events, &cache).await? {
         let jellyfin_socket = client.get_socket();
-        let mut context = TuiContext {
+        let context = TuiContext {
             jellyfin: client,
             jellyfin_socket,
             term,

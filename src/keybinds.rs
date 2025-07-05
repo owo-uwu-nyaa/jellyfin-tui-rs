@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use color_eyre::{eyre::Context, Result};
-use keybinds::{BindingMap, Command};
+use keybinds::{keybind_config, BindingMap, Command};
 
 use crate::{
     error::ErrorCommand, home_screen::HomeScreenCommand, item_details::EpisodeCommand,
@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-#[keybinds::gen_from_config]
+#[keybind_config]
 pub struct Keybinds {
     pub fetch: BindingMap<LoadingCommand>,
     pub play_mpv: BindingMap<MpvCommand>,
@@ -46,6 +46,10 @@ mod tests {
     fn check_default_keybinds() -> Result<()> {
         Keybinds::from_str(include_str!("../config/keybinds.toml"), true)?;
         Ok(())
+    }
+    #[test]
+    fn check_commands_unique(){
+        Keybinds::assert_uniqueness();
     }
 }
 #[derive(Debug, Clone, Copy, Command)]

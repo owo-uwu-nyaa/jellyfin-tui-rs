@@ -1,7 +1,7 @@
 
-mod gen_from_config;
 mod command;
+mod keybind_config;
 
-pub use gen_from_config::gen_from_config;
+pub use keybind_config::keybind_config;
 pub use command::command;
 pub use syn::Error;

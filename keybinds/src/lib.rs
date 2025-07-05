@@ -14,12 +14,12 @@ use std::{
 #[doc(hidden)]
 pub use eyre as __eyre;
 
-pub use keybinds_derive::{Command, gen_from_config};
+pub use keybinds_derive::{Command, keybind_config};
 
 pub trait Command: Clone + Copy + Debug {
     fn to_name(self) -> &'static str;
     fn from_name(name: &str) -> Option<Self>;
-    fn all() -> impl DoubleEndedIterator<Item = &'static str> + Clone + Debug;
+    fn all() -> &'static [&'static str];
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -152,5 +152,35 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
 
     pub fn get_minor_mut(&mut self) -> &mut Vec<BindingMap<T>> {
         &mut self.minor
+    }
+}
+
+#[doc(hidden)]
+pub mod __macro_support {
+    use crate::{BindingMap, Command};
+
+    pub fn collect_all_names(names: &[&[&'static str]]) -> &'static [&'static str] {
+        let mut out: Vec<_> = names
+            .iter()
+            .flat_map(|s| s.iter().map(|s| s as &'static str))
+            .collect();
+        out.sort_unstable();
+        out.leak()
+    }
+    pub fn commands_unique(names: &[&str], ty:&str) {
+        let mut iter = names.iter();
+        if let Some(mut last) = iter.next() {
+            for current in iter {
+                assert_ne!(last,current, "name of commands in {ty} is not unique");
+                last = current;
+            }
+        }
+    }
+
+    pub trait BindingMapExt {
+        type T;
+    }
+    impl<T:Command> BindingMapExt for BindingMap<T>{
+        type T = T;
     }
 }
