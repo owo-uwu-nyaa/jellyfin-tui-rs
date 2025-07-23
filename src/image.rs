@@ -25,7 +25,7 @@ use jellyfin::{
 use log::trace;
 use parking_lot::Mutex;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui_image::{picker::Picker, protocol::StatefulProtocol, FilterType, Resize};
+use ratatui_image::{picker::Picker, protocol::StatefulProtocol, FilterType, Resize, ResizeEncodeRender};
 use sqlx::{query, query_scalar, SqlitePool};
 use tokio::select;
 use tokio_util::sync::{CancellationToken, DropGuard};

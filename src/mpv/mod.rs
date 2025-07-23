@@ -3,22 +3,23 @@ mod log;
 mod mpv_stream;
 mod player;
 
-use std::{borrow::Cow, io::Stdout, pin::Pin};
+use std::{borrow::Cow, io::Stdout, pin::Pin, str::FromStr};
 
 use crate::{
-    state::{Navigation, NextScreen},
     TuiContext,
+    state::{Navigation, NextScreen},
 };
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Report, Result, eyre};
 use futures_util::{StreamExt, TryStreamExt};
 use jellyfin::items::MediaItem;
 use keybinds::{Command, KeybindEvent, KeybindEventStream};
+use libmpv::MpvInitializer;
 use player::{Player, PlayerState};
 use ratatui::{
+    Terminal,
     layout::{Constraint, Layout},
     prelude::CrosstermBackend,
     widgets::{Block, Padding, Paragraph},
-    Terminal,
 };
 use tokio::select;
 use tracing::{info, instrument};
@@ -194,4 +195,54 @@ fn render(
         }
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MpvProfile {
+    Fast,
+    HighQuality,
+    Default,
+}
+
+impl FromStr for MpvProfile {
+    type Err = Report;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "fast" => Ok(Self::Fast),
+            "high-quality" => Ok(Self::HighQuality),
+            "default" => Ok(Self::Default),
+            v => Err(eyre!("unknown mpv profile \"{v}\"")),
+        }
+    }
+}
+
+impl Default for MpvProfile {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+impl MpvProfile {
+    fn initialize(&self, mpv: &MpvInitializer)->Result<()> {
+        match self{
+            MpvProfile::Fast => {
+                mpv.set_option(c"scale", c"bilinear")?;
+                mpv.set_option(c"descale", c"bilinear")?;
+                mpv.set_option(c"dither", false)?;
+                mpv.set_option(c"correct-downscaling", false)?;
+                mpv.set_option(c"linear-downscaling", false)?;
+                mpv.set_option(c"sigmoid-upscaling", false)?;
+                mpv.set_option(c"hdr-compute-peak", false)?;
+                mpv.set_option(c"hdr-compute-peak", true)?;
+            }
+            MpvProfile::HighQuality => {
+                mpv.set_option(c"scale",c"ewa_lanczossharp")?;
+                mpv.set_option(c"hdr-peak-percentile", 99.995)?;
+                mpv.set_option(c"hdr-contrast-recovery", 0.30)?;
+            },
+            MpvProfile::Default => {},
+        }
+        Ok(())
+    }
 }

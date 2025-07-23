@@ -122,6 +122,7 @@ impl MpvStream {
                     .context("converting hwdec to cstr")?
                     .as_c_str(),
             )?;
+            config.mpv_profile.initialize(&mpv)?;
             Ok(())
         })?
         .enable_async();

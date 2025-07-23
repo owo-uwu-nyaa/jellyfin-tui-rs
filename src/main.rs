@@ -17,21 +17,22 @@ mod user_view;
 
 use std::{
     fs::File,
-    io::{stdout, Write},
+    io::{Write, stdout},
     path::PathBuf,
     pin::pin,
+    str::FromStr,
     sync::Mutex,
 };
 
 use ::keybinds::KeybindEvents;
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{eyre, Context, OptionExt, Result};
+use color_eyre::eyre::{Context, OptionExt, Result, eyre};
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
 };
 use image::ImageProtocolCache;
-use jellyfin::{socket::JellyfinWebSocket, Auth, JellyfinClient};
+use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
 use keybinds::Keybinds;
 use pin_project_lite::pin_project;
 use ratatui::DefaultTerminal;
@@ -43,7 +44,9 @@ use state::State;
 use tokio::sync::oneshot;
 use tracing::{error, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::mpv::MpvProfile;
 
 #[instrument(skip_all)]
 async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -> Result<()> {
@@ -244,6 +247,7 @@ struct ParseConfig {
     pub login_file: Option<PathBuf>,
     pub keybinds_file: Option<PathBuf>,
     pub hwdec: String,
+    pub mpv_profile: Option<String>,
     pub mpv_log_level: String,
 }
 
@@ -251,6 +255,7 @@ struct ParseConfig {
 struct Config {
     pub login_file: PathBuf,
     pub hwdec: String,
+    pub mpv_profile: MpvProfile,
     pub keybinds: Keybinds,
     pub mpv_log_level: String,
 }
@@ -295,6 +300,13 @@ fn init_config(config_file: Option<PathBuf>) -> Result<Config> {
     }
     .context("parsing keybindings")?;
 
+    let mpv_profile = config
+        .mpv_profile
+        .as_deref()
+        .map(MpvProfile::from_str)
+        .unwrap_or(Ok(MpvProfile::default()))
+        .context("parsing mpv_profile")?;
+
     let login_file = if let Some(login_file) = config.login_file {
         if login_file.is_absolute() {
             login_file
@@ -314,6 +326,7 @@ fn init_config(config_file: Option<PathBuf>) -> Result<Config> {
         hwdec: config.hwdec,
         keybinds,
         mpv_log_level: config.mpv_log_level,
+        mpv_profile,
     })
 }
 
