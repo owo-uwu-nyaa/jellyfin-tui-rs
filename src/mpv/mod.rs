@@ -227,6 +227,7 @@ impl MpvProfile {
     fn initialize(&self, mpv: &MpvInitializer)->Result<()> {
         match self{
             MpvProfile::Fast => {
+                info!("using fast profile");
                 mpv.set_option(c"scale", c"bilinear")?;
                 mpv.set_option(c"descale", c"bilinear")?;
                 mpv.set_option(c"dither", false)?;
@@ -237,6 +238,7 @@ impl MpvProfile {
                 mpv.set_option(c"hdr-compute-peak", true)?;
             }
             MpvProfile::HighQuality => {
+                info!("using high quality profile");
                 mpv.set_option(c"scale",c"ewa_lanczossharp")?;
                 mpv.set_option(c"hdr-peak-percentile", 99.995)?;
                 mpv.set_option(c"hdr-contrast-recovery", 0.30)?;
