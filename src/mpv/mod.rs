@@ -229,7 +229,6 @@ impl MpvProfile {
             MpvProfile::Fast => {
                 info!("using fast profile");
                 mpv.set_option(c"scale", c"bilinear")?;
-                mpv.set_option(c"descale", c"bilinear")?;
                 mpv.set_option(c"dither", false)?;
                 mpv.set_option(c"correct-downscaling", false)?;
                 mpv.set_option(c"linear-downscaling", false)?;
@@ -243,7 +242,9 @@ impl MpvProfile {
                 mpv.set_option(c"hdr-peak-percentile", 99.995)?;
                 mpv.set_option(c"hdr-contrast-recovery", 0.30)?;
             },
-            MpvProfile::Default => {},
+            MpvProfile::Default => {
+                info!("using default profile");
+            },
         }
         Ok(())
     }

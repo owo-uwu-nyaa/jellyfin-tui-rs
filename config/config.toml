@@ -1,6 +1,7 @@
 
 login_file = "login.toml"
 
+mpv_profile= "default"
 hwdec = "auto-safe"
 mpv_log_level = "info"
 
