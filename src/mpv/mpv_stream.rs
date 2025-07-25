@@ -105,6 +105,7 @@ impl MpvStream {
             mpv.set_option(c"fullscreen", true)?;
             mpv.set_option(c"drag-and-drop", false)?;
             mpv.set_option(c"osc", true)?;
+            mpv.set_option(c"vo", c"gpu-next")?;
             mpv.set_option(c"terminal", false)?;
             let mut header = b"authorization: ".to_vec();
             header.extend_from_slice(jellyfin.get_auth().header.as_bytes());

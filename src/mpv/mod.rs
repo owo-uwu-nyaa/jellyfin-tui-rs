@@ -229,6 +229,7 @@ impl MpvProfile {
             MpvProfile::Fast => {
                 info!("using fast profile");
                 mpv.set_option(c"scale", c"bilinear")?;
+                mpv.set_option(c"dscale", c"bilinear")?;
                 mpv.set_option(c"dither", false)?;
                 mpv.set_option(c"correct-downscaling", false)?;
                 mpv.set_option(c"linear-downscaling", false)?;
