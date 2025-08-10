@@ -2,7 +2,7 @@ use std::task::Poll;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures_util::{Stream, StreamExt, stream::FusedStream};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::Key;
 
@@ -23,14 +23,18 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
     type Item = Result<KeybindEvent<T>>;
 
     fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
+        let _ = self.span.enter();
         if self.inner.finished {
             Poll::Ready(None)
         } else {
-            Poll::Ready(loop {
-                match std::task::ready!(self.inner.events.poll_next_unpin(cx)) {
+            let this = self.get_mut();
+            let event = 'outer: loop {
+                let event = std::task::ready!(this.inner.events.poll_next_unpin(cx));
+                debug!(?event, "received event from terminal");
+                match event {
                     None
                     | Some(Ok(Event::Key(KeyEvent {
                         code: KeyCode::Char('c'),
@@ -38,7 +42,8 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         kind: KeyEventKind::Press,
                         state: _,
                     }))) => {
-                        self.inner.finished = true;
+                        debug!("finished");
+                        this.inner.finished = true;
                         break None;
                     }
                     Some(Err(e)) => break Some(Err(e.into())),
@@ -48,7 +53,8 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         kind: KeyEventKind::Press,
                         state: _,
                     }))) => {
-                        self.current_view = self.current_view.saturating_add(1);
+                        debug!("moving keybind help page");
+                        this.current_view = this.current_view.saturating_add(1);
                         break Some(Ok(KeybindEvent::Render));
                     }
                     Some(Ok(Event::Key(KeyEvent {
@@ -57,7 +63,8 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         kind: KeyEventKind::Press,
                         state: _,
                     }))) => {
-                        self.current_view = self.current_view.saturating_sub(1);
+                        debug!("moving keybind help page");
+                        this.current_view = this.current_view.saturating_sub(1);
                         break Some(Ok(KeybindEvent::Render));
                     }
                     Some(Ok(Event::Key(KeyEvent {
@@ -66,23 +73,23 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         kind: KeyEventKind::Press,
                         state: _,
                     }))) => {
-                        if self.text_input
-                            && self.current.is_empty()
+                        if this.text_input
+                            && let KeyCode::Char(c) = code
+                            && this.current.is_empty()
                             && modifiers
                                 .intersection(KeyModifiers::CONTROL | KeyModifiers::ALT)
                                 .is_empty()
                         {
-                            if let KeyCode::Char(c) = code {
-                                break Some(Ok(KeybindEvent::Text(Text::Char(c))));
-                            }
+                            debug!("keyboard press in text field");
+                            break Some(Ok(KeybindEvent::Text(Text::Char(c))));
                         }
-                        let mut next = Vec::new();
-                        let mut ret = None;
-                        for c in if_non_empty(self.current.as_ref())
+                        let current = std::mem::take(&mut this.current);
+                        let (top, minor) = (&this.top, &this.minor);
+                        debug!( current_map =?this.current ,"matching on active keymaps");
+
+                        for c in if_non_empty(current.as_ref())
                             .map(|v| either::Right(v.iter()))
-                            .unwrap_or_else(|| {
-                                either::Left(std::iter::once(&self.top).chain(&self.minor))
-                            })
+                            .unwrap_or_else(|| either::Left(std::iter::once(top).chain(minor)))
                         {
                             match c.get(&Key {
                                 inner: code,
@@ -90,44 +97,44 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                                 alt: modifiers.contains(KeyModifiers::ALT),
                             }) {
                                 Some(KeyBinding::Command(c)) => {
-                                    ret = Some(KeybindEvent::Command(*c));
-                                    break;
+                                    debug!("found matching command");
+                                    this.current = Vec::new();
+                                    break 'outer Some(Ok(KeybindEvent::Command(*c)));
                                 }
-                                Some(KeyBinding::Group { map, name: _ }) => {
-                                    next.push(map.clone());
+                                Some(KeyBinding::Group { map, name }) => {
+                                    debug!(name, "found matching group");
+                                    this.current.push(map.clone());
                                 }
                                 Some(KeyBinding::Invalid(name)) => {
                                     warn!("'{name}' is an invalid command");
-                                    if !self.current.is_empty() {
-                                        ret = Some(KeybindEvent::Render);
+                                    if !current.is_empty() {
+                                        this.current = Vec::new();
+                                        break 'outer Some(Ok(KeybindEvent::Render));
                                     }
-                                    next = Vec::new();
                                     break;
                                 }
                                 None => {}
                             }
                         }
-                        if let Some(r) = ret {
-                            self.current = Vec::new();
-                            break Some(Ok(r));
-                        }
-                        if next.is_empty() {
-                            if !std::mem::take(&mut self.current).is_empty() {
-                                break Some(Ok(KeybindEvent::Render));
-                            }
-                        } else {
-                            self.current = next;
+                        if !(current.is_empty() && this.current.is_empty()) {
+                            debug!("should render");
+                            break Some(Ok(KeybindEvent::Render));
                         }
                     }
                     Some(Ok(Event::Paste(text))) => {
-                        if self.text_input {
+                        if this.text_input {
+                            debug!("paste while text input active");
                             break Some(Ok(KeybindEvent::Text(Text::Str(text))));
+                        } else {
+                            debug!("currently no active text input");
                         }
                     }
                     Some(Ok(Event::Resize(_, _))) => break Some(Ok(KeybindEvent::Render)),
                     _ => {}
                 }
-            })
+            };
+            debug!(?event, "emitting event");
+            Poll::Ready(event)
         }
     }
 }
