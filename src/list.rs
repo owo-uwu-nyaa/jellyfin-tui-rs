@@ -15,6 +15,7 @@ use crate::{
     image::ImagesAvailable,
 };
 
+#[derive(Debug)]
 pub struct EntryList {
     entries: Vec<Entry>,
     current: usize,

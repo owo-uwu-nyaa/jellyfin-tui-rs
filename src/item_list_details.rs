@@ -7,7 +7,7 @@ use keybinds::{Command, KeybindEvent, KeybindEventStream};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
     text::Text,
-    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState},
+    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, Widget},
 };
 
 use crate::{
@@ -44,7 +44,7 @@ pub async fn display_fetch_item_list(
         async move {
             Ok(fetch_all_children(jellyfin, &item.id)
                 .await
-                .map(move |data| Navigation::Replace(NextScreen::ItemListDetails(item, data)))
+                .map(move |data| Navigation::Replace(NextScreen::ItemListDetailsData(item, data)))
                 .to_nav())
         },
         cx.events,
@@ -68,7 +68,7 @@ pub async fn display_fetch_item_list_ref(
                 fetch_item(jellyfin, item),
             )
             .await
-            .map(|(data, item)| Navigation::Replace(NextScreen::ItemListDetails(item, data)))
+            .map(|(data, item)| Navigation::Replace(NextScreen::ItemListDetailsData(item, data)))
             .to_nav())
         },
         cx.events,
@@ -96,18 +96,27 @@ pub async fn display_fetch_season(cx: Pin<&mut TuiContext>, series: &str) -> Res
     .await
 }
 
-pub async fn display_item_list_details(
+pub async fn handle_item_list_details_data(
     cx: Pin<&mut TuiContext>,
     item: MediaItem,
     childs: Vec<MediaItem>,
-) -> Result<Navigation> {
-    let mut entries = EntryList::new(
+) -> Result<Navigation>{
+    let name =
+        item.name.clone();
+    Ok(Navigation::Replace(NextScreen::ItemListDetails(item, EntryList::new(
         childs
-            .into_iter()
-            .map(|item| Entry::from_media_item(item, &cx))
+            .iter()
+            .map(|item| Entry::from_media_item(item.clone(), &cx))
             .collect(),
-        item.name.clone(),
-    );
+        name
+    ))))
+}
+
+pub async fn display_item_list_details(
+    cx: Pin<&mut TuiContext>,
+    item: MediaItem,
+    mut entries: EntryList,
+) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
     let cx = cx.project();
     let mut events =
@@ -122,7 +131,7 @@ pub async fn display_item_list_details(
         cx.term
             .draw(|frame| {
                 let height = entry_list_height(cx.image_picker.font_size());
-                let main = block.inner(frame.area());
+                let main = block.inner(events.inner(frame.area()));
                 let [entry_area, descripton_area] =
                     Layout::vertical([Constraint::Length(height), Constraint::Min(1)])
                         .spacing(1)
@@ -162,6 +171,7 @@ pub async fn display_item_list_details(
                         &mut scrollbar_state,
                     );
                 }
+                events.render(frame.area(), frame.buffer_mut());
             })
             .context("drawing item list details")?;
         let cmd = tokio::select! {
@@ -194,7 +204,7 @@ pub async fn display_item_list_details(
                 if let Some(entry) = entries.get() {
                     if let Some(next) = entry.play() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::ItemDetails(item),
+                            current: NextScreen::ItemListDetails(item,entries),
                             next,
                         });
                     }
@@ -202,9 +212,10 @@ pub async fn display_item_list_details(
             }
             SeasonCommand::Open => {
                 if let Some(entry) = entries.get() {
+                    let next = entry.open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemDetails(item),
-                        next: entry.open(),
+                            current: NextScreen::ItemListDetails(item,entries),
+                        next
                     });
                 }
             }
@@ -212,7 +223,7 @@ pub async fn display_item_list_details(
                 if let Some(entry) = entries.get() {
                     if let Some(next) = entry.episode() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::ItemListDetails(item,entries),
                             next,
                         });
                     }
@@ -222,7 +233,7 @@ pub async fn display_item_list_details(
                 if let Some(entry) = entries.get() {
                     if let Some(next) = entry.season() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::ItemListDetails(item,entries),
                             next,
                         });
                     }
@@ -232,7 +243,7 @@ pub async fn display_item_list_details(
                 if let Some(entry) = entries.get() {
                     if let Some(next) = entry.series() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::ItemListDetails(item,entries),
                             next,
                         });
                     }

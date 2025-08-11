@@ -112,7 +112,7 @@ impl KeybindEvents {
 pub struct KeybindEventStream<'e, T: Command> {
     inner: &'e mut KeybindEvents,
     top: BindingMap<T>,
-    current: Vec<BindingMap<T>>,
+    next_maps: Vec<BindingMap<T>>,
     text_input: bool,
     current_view: usize,
     minor: Vec<BindingMap<T>>,
@@ -126,7 +126,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
         Self {
             inner: events,
             top: map,
-            current: Vec::with_capacity(0),
+            next_maps: Vec::with_capacity(0),
             text_input: false,
             current_view: 0,
             minor: Vec::with_capacity(0),
@@ -144,7 +144,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
         Self {
             inner: events,
             top: map,
-            current: Vec::with_capacity(0),
+            next_maps: Vec::with_capacity(0),
             text_input: false,
             current_view: 0,
             minor,

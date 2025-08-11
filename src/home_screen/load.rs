@@ -143,7 +143,7 @@ pub async fn load_home_screen(cx: Pin<&mut TuiContext>) -> Result<Navigation> {
                     current: NextScreen::LoadHomeScreen,
                     next: NextScreen::Error(e),
                 }),
-                Ok(data) => Ok(Navigation::Replace(NextScreen::HomeScreen(data))),
+                Ok(data) => Ok(Navigation::Replace(NextScreen::HomeScreenData(data))),
             }
         },
         cx.events,

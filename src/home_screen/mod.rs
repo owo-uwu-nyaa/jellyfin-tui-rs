@@ -79,13 +79,19 @@ pub enum HomeScreenCommand {
     OpenSeries,
 }
 
-#[instrument(skip_all)]
-pub async fn display_home_screen(
+pub async fn handle_home_screen_data(
     context: Pin<&mut TuiContext>,
     data: HomeScreenData,
 ) -> Result<Navigation> {
+    Ok(Navigation::Replace(NextScreen::HomeScreen(create_home_screen(data, &context))))
+}
+
+#[instrument(skip_all)]
+pub async fn display_home_screen(
+    context: Pin<&mut TuiContext>,
+    mut screen: EntryScreen,
+) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
-    let mut screen = create_home_screen(data, &context);
     let context = context.project();
     let mut events =
         KeybindEventStream::new(context.events, context.config.keybinds.home_screen.clone());
@@ -122,7 +128,7 @@ pub async fn display_home_screen(
                 break Ok(Navigation::PopContext);
             }
             HomeScreenCommand::Reload => {
-                break Ok(Navigation::Replace(NextScreen::LoadHomeScreen));
+                break Ok(Navigation::Replace(NextScreen::HomeScreen(screen)));
             }
             HomeScreenCommand::Left => {
                 screen.left();
@@ -139,9 +145,10 @@ pub async fn display_home_screen(
             }
             HomeScreenCommand::Open => {
                 if let Some(entry) = screen.get() {
+                    let next = entry.open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::LoadHomeScreen,
-                        next: entry.open(),
+                        current: NextScreen::HomeScreen(screen),
+                        next,
                     });
                 }
             }
@@ -149,7 +156,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     if let Some(next) = entry.episode() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::HomeScreen(screen),
                             next,
                         });
                     }
@@ -159,7 +166,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     if let Some(next) = entry.season() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::HomeScreen(screen),
                             next,
                         });
                     }
@@ -169,7 +176,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     if let Some(next) = entry.series() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::HomeScreen(screen),
                             next,
                         });
                     }
@@ -179,7 +186,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     if let Some(next) = entry.play() {
                         break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
+                            current: NextScreen::HomeScreen(screen),
                             next,
                         });
                     }
@@ -187,9 +194,10 @@ pub async fn display_home_screen(
             }
             HomeScreenCommand::PlayOpen => {
                 if let Some(entry) = screen.get() {
+                    let next = entry.play_open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::LoadHomeScreen,
-                        next: entry.play_open(),
+                        current: NextScreen::HomeScreen(screen),
+                        next,
                     });
                 }
             }

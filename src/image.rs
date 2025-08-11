@@ -1,15 +1,7 @@
 use std::{
-    cmp::min,
-    collections::HashMap,
-    future::Future,
-    io::Cursor,
-    ops::DerefMut,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Weak,
-    },
-    task::{self, Poll, Waker},
-    time::Duration,
+    cmp::min, collections::HashMap, fmt::Debug, future::Future, io::Cursor, ops::DerefMut, sync::{
+        atomic::{AtomicBool, Ordering}, Arc, Weak
+    }, task::{self, Poll, Waker}
 };
 
 use bytes::Bytes;
@@ -17,51 +9,37 @@ use color_eyre::eyre::Context;
 use either::Either;
 use image::{DynamicImage, ImageReader};
 use jellyfin::{
+    AuthStatus, JellyfinClient,
     image::{GetImage, GetImageQuery},
     items::ImageType,
     sha::ShaImpl,
-    AuthStatus, JellyfinClient,
 };
 use log::trace;
 use parking_lot::Mutex;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui_image::{picker::Picker, protocol::StatefulProtocol, FilterType, Resize, ResizeEncodeRender};
-use sqlx::{query, query_scalar, SqlitePool};
+use ratatui_image::{
+    FilterType, Resize, ResizeEncodeRender, picker::Picker, protocol::StatefulProtocol,
+};
+use sqlx::{SqlitePool, query, query_scalar};
 use tokio::select;
 use tokio_util::sync::{CancellationToken, DropGuard};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    entry::{image_height, IMAGE_WIDTH},
     Result,
+    entry::{IMAGE_WIDTH, image_height},
 };
 
-#[instrument(skip_all)]
-pub async fn clean_image_cache(db: SqlitePool) {
-    let mut interval = tokio::time::interval(Duration::from_secs(60 * 60));
-    let err = loop {
-        select! {
-            biased;
-            _ = db.close_event() => {
-                return
-            }
-            _ = interval.tick() => {}
-        }
-
-        match query!("delete from image_cache where (added+7*24*60*60)<unixepoch()")
-            .execute(&db)
-            .await
-            .context("deleting old images from cache")
-        {
-            Err(e) => break e,
-            Ok(res) => {
-                if res.rows_affected() > 0 {
-                    info!("removed {} images from cache", res.rows_affected());
-                }
-            }
-        }
-    };
-    error!("Error cleaning image cache: {err:?}");
+#[instrument]
+pub async fn clean_images(db: SqlitePool) -> Result<()> {
+    let res = query!("delete from image_cache where (added+7*24*60*60)<unixepoch()")
+        .execute(&db)
+        .await
+        .context("deleting old images from cache")?;
+    if res.rows_affected() > 0 {
+        info!("removed {} images from cache", res.rows_affected());
+    }
+    Ok(())
 }
 
 struct ImagesAvailableInner {
@@ -177,11 +155,13 @@ enum ImageStateInnerState {
     Image(StatefulProtocol, ImageProtocolKey, u16),
 }
 
+
 impl Default for ImageStateInnerState {
     fn default() -> Self {
         Self::Invalid
     }
 }
+
 
 struct ImageStateInner {
     _cancel_fetch: Option<DropGuard>,

@@ -1,6 +1,6 @@
 pub mod media_item;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Debug};
 
 use jellyfin::{
     items::{ItemType, MediaItem},
@@ -28,6 +28,14 @@ pub struct Entry {
     inner: EntryInner,
     watch_status: Option<Cow<'static, str>>,
 }
+
+impl Debug for Entry{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry").field("title", &self.title).field("subtitle", &self.subtitle).field("watch_status", &self.watch_status).finish_non_exhaustive()
+    }
+}
+
+
 
 pub const IMAGE_WIDTH: u16 = 32;
 pub fn image_height(font: FontSize) -> u16 {
@@ -207,6 +215,7 @@ impl Entry {
     }
 }
 
+#[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum EntryInner {
     Item(MediaItem),

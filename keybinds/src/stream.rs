@@ -26,11 +26,11 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        let _ = self.span.enter();
-        if self.inner.finished {
+        let this = self.get_mut();
+        let e = this.span.enter();
+        if this.inner.finished {
             Poll::Ready(None)
         } else {
-            let this = self.get_mut();
             let event = 'outer: loop {
                 let event = std::task::ready!(this.inner.events.poll_next_unpin(cx));
                 debug!(?event, "received event from terminal");
@@ -75,7 +75,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                     }))) => {
                         if this.text_input
                             && let KeyCode::Char(c) = code
-                            && this.current.is_empty()
+                            && this.next_maps.is_empty()
                             && modifiers
                                 .intersection(KeyModifiers::CONTROL | KeyModifiers::ALT)
                                 .is_empty()
@@ -83,11 +83,11 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                             debug!("keyboard press in text field");
                             break Some(Ok(KeybindEvent::Text(Text::Char(c))));
                         }
-                        let current = std::mem::take(&mut this.current);
+                        let current_map = std::mem::take(&mut this.next_maps);
                         let (top, minor) = (&this.top, &this.minor);
-                        debug!( current_map =?this.current ,"matching on active keymaps");
+                        debug!(?current_map, "matching on active keymaps");
 
-                        for c in if_non_empty(current.as_ref())
+                        for c in if_non_empty(current_map.as_ref())
                             .map(|v| either::Right(v.iter()))
                             .unwrap_or_else(|| either::Left(std::iter::once(top).chain(minor)))
                         {
@@ -98,17 +98,17 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                             }) {
                                 Some(KeyBinding::Command(c)) => {
                                     debug!("found matching command");
-                                    this.current = Vec::new();
+                                    this.next_maps = Vec::new();
                                     break 'outer Some(Ok(KeybindEvent::Command(*c)));
                                 }
                                 Some(KeyBinding::Group { map, name }) => {
                                     debug!(name, "found matching group");
-                                    this.current.push(map.clone());
+                                    this.next_maps.push(map.clone());
                                 }
                                 Some(KeyBinding::Invalid(name)) => {
                                     warn!("'{name}' is an invalid command");
-                                    if !current.is_empty() {
-                                        this.current = Vec::new();
+                                    if !current_map.is_empty() {
+                                        this.next_maps = Vec::new();
                                         break 'outer Some(Ok(KeybindEvent::Render));
                                     }
                                     break;
@@ -116,7 +116,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                                 None => {}
                             }
                         }
-                        if !(current.is_empty() && this.current.is_empty()) {
+                        if !(current_map.is_empty() && this.next_maps.is_empty()) {
                             debug!("should render");
                             break Some(Ok(KeybindEvent::Render));
                         }
@@ -134,6 +134,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                 }
             };
             debug!(?event, "emitting event");
+            drop(e);
             Poll::Ready(event)
         }
     }

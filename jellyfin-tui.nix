@@ -56,15 +56,18 @@ rustPlatform.buildRustPackage {
   buildNoDefaultFeatures = true;
   nativeBuildInputs = [
     pkg-config
-  ] ++ (lib.optionals use_bindgen [ rustPlatform.bindgenHook ]);
+  ]
+  ++ (lib.optionals use_bindgen [ rustPlatform.bindgenHook ]);
   buildInputs = [
     openssl
     mpv-unwrapped
-  ] ++ (lib.optionals (!bundle_sqlite) [ sqlite ]);
+  ]
+  ++ (lib.optionals (!bundle_sqlite) [ sqlite ]);
   buildFeatures =
     (lib.optionals use_bindgen [ "use-bindgen" ])
     ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
   SQLX_OFFLINE = "true";
   # make config parser work
   XDG_CONFIG_HOME = "/tmp";
+  separateDebugInfo = true;
 }

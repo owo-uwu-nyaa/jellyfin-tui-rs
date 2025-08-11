@@ -13,6 +13,7 @@ use crate::{
     image::ImagesAvailable,
 };
 
+#[derive(Debug)]
 pub struct EntryScreen {
     entries: Vec<EntryList>,
     current: usize,

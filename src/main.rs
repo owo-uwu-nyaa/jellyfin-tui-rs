@@ -76,7 +76,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
 #[tokio::main(flavor = "current_thread")]
 #[instrument(skip_all)]
 async fn run(term: DefaultTerminal, config: Config, paniced: oneshot::Receiver<()>) -> Result<()> {
-    let cache = cache::initialize_cache().await?;
+    let cache = cache::cache().await?;
     let res = tokio::select! {
         res = tokio::spawn(run_app(term, config, cache.clone())) => {
             match res.context("joining main task"){

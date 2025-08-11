@@ -1,10 +1,9 @@
 use std::{
     borrow::Cow,
-    fs::{create_dir_all, OpenOptions},
+    fs::{OpenOptions, create_dir_all},
     io::Write,
     os::unix::fs::OpenOptionsExt,
     pin::pin,
-    time::Duration,
 };
 
 use color_eyre::eyre::{Context, OptionExt, Report, Result};
@@ -12,21 +11,20 @@ use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use keybinds::{Command, KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
+    DefaultTerminal,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, BorderType, Padding, Paragraph, Wrap},
-    DefaultTerminal,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_scalar, SqlitePool};
-use tokio::select;
+use sqlx::{SqlitePool, query, query_scalar};
 use tracing::{error, info, instrument};
 use url::Url;
 
 use crate::{
-    keybinds::{Keybinds, LoadingCommand},
     Config,
+    keybinds::{Keybinds, LoadingCommand},
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -386,30 +384,13 @@ async fn jellyfin_login(
     Ok(client)
 }
 
-#[instrument(skip_all)]
-pub async fn clean_creds(db: SqlitePool) {
-    let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 24));
-    let err = loop {
-        select! {
-            biased;
-            _ = db.close_event() => {
-                return
-            }
-            _ = interval.tick() => {}
-        }
-
-        match query!("delete from creds where (added+30*24*60*60)<unixepoch()")
-            .execute(&db)
-            .await
-            .context("deleting old creds")
-        {
-            Err(e) => break e,
-            Ok(res) => {
-                if res.rows_affected() > 0 {
-                    info!("removed {} access tokens from cache", res.rows_affected());
-                }
-            }
-        }
-    };
-    error!("Error cleaning image cache: {err:?}");
+pub async fn clean_creds(db: SqlitePool) -> Result<()> {
+    let res = query!("delete from creds where (added+30*24*60*60)<unixepoch()")
+        .execute(&db)
+        .await
+        .context("deleting old creds")?;
+    if res.rows_affected() > 0 {
+        info!("removed {} access tokens from cache", res.rows_affected());
+    }
+    Ok(())
 }

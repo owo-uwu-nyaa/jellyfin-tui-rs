@@ -15,7 +15,7 @@ use super::{Command, KeybindEventStream};
 
 impl<T: Command> KeybindEventStream<'_, T> {
     pub fn inner(&self, area: Rect) -> Rect {
-        let len: usize = self.current.iter().map(|v|v.len()).sum();
+        let len: usize = self.next_maps.iter().map(|v|v.len()).sum();
         if len>0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
@@ -34,7 +34,7 @@ impl<T: Command> KeybindEventStream<'_, T> {
 }
 impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let len: usize = self.current.iter().map(|v|v.len()).sum();
+        let len: usize = self.next_maps.iter().map(|v|v.len()).sum();
         if len>0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
@@ -92,7 +92,7 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
             let main = block.inner(area);
             block.render(area, buf);
             let items_per_screen = width as usize * usable_height;
-            let items = self.current.iter().map(|v|v.iter()).kmerge_by(|(a,_),(b,_)|a<b)
+            let items = self.next_maps.iter().map(|v|v.iter()).kmerge_by(|(a,_),(b,_)|a<b)
                 .skip(items_per_screen * self.current_view)
                 .take(items_per_screen);
             let position =

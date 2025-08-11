@@ -1,13 +1,19 @@
+use std::{future::Future, time::Duration};
+
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 
 use color_eyre::{
-    eyre::{Context, OptionExt},
     Result,
+    eyre::{Context, OptionExt},
 };
-use tracing::{info, instrument};
+use tokio::{
+    select,
+    time::{Instant, MissedTickBehavior, interval_at},
+};
+use tracing::{Instrument, error, info, info_span, instrument};
 
 #[instrument]
 async fn open_db() -> Result<SqlitePool> {
@@ -39,12 +45,42 @@ async fn open_db() -> Result<SqlitePool> {
     }
 }
 
+async fn cache_maintainance<Fut: Future<Output = Result<()>>>(
+    mut f: impl FnMut(SqlitePool) -> Fut,
+    db: SqlitePool,
+) {
+    let mut interval = interval_at(
+        Instant::now() + Duration::from_secs(30),
+        Duration::from_secs(60 * 60),
+    );
+    interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    select! {
+        biased;
+        _ = db.close_event() => {
+            return
+        }
+        _ = interval.tick() => {}
+    }
+    if let Err(err) = f(db.clone()).await {
+        error!("Error maintaining cache: {err:?}")
+    }
+}
+
 #[instrument(skip_all)]
-pub async fn initialize_cache() -> Result<SqlitePool> {
+pub async fn cache() -> Result<SqlitePool> {
     let db = open_db().await?;
-    sqlx::migrate!().run(&db).await?;
-    info!("migrations applied");
-    tokio::spawn(crate::image::clean_image_cache(db.clone()));
-    tokio::spawn(crate::login::clean_creds(db.clone()));
+    let migrate = info_span!("migrate");
+    sqlx::migrate!()
+        .run(&db)
+        .instrument(migrate.clone())
+        .await?;
+    migrate.in_scope(|| info!("migrations applied"));
+    let maintainance = info_span!("cache_maintainance");
+    tokio::spawn(
+        cache_maintainance(crate::image::clean_images, db.clone()).instrument(maintainance.clone()),
+    );
+    tokio::spawn(
+        cache_maintainance(crate::login::clean_creds, db.clone()).instrument(maintainance),
+    );
     Ok(db)
 }

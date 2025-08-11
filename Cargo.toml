@@ -13,7 +13,7 @@ jellyfin = { path = "jellyfin-rs", features = ["native-tls", "sha-openssl"]}
 ratatui = "0.29.0"
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["macros", "parking_lot", "rt", "signal", "time"] }
-toml = { version = "0.8.19", default-features = false, features = ["display", "parse"] }
+toml = { version = "0.9.5", default-features = false, features = ["serde", "display", "parse"] }
 url = "2.5.4"
 whoami = { version = "1.5.2", default-features = false }
 tracing = "0.1.41"
