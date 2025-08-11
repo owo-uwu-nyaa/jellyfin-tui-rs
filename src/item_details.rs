@@ -14,7 +14,7 @@ use keybinds::{Command, KeybindEvent, KeybindEventStream};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
     text::Text,
-    widgets::{Block, BorderType, Padding, Paragraph, Scrollbar, ScrollbarState},
+    widgets::{Block, BorderType, Padding, Paragraph, Scrollbar, ScrollbarState, Widget},
 };
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -62,7 +62,7 @@ pub async fn display_item_details(cx: Pin<&mut TuiContext>, item: MediaItem) -> 
         cx.term
             .draw(|frame| {
                 let height = entry_height(cx.image_picker.font_size());
-                let main = block.inner(frame.area());
+                let main = block.inner(events.inner(frame.area()));
                 let [entry_area, descripton_area] =
                     Layout::vertical([Constraint::Length(height), Constraint::Min(1)])
                         .spacing(1)
@@ -104,6 +104,7 @@ pub async fn display_item_details(cx: Pin<&mut TuiContext>, item: MediaItem) -> 
                         &mut scrollbar_state,
                     );
                 }
+                events.render(frame.area(), frame.buffer_mut());
             })
             .context("drawing episode/movie")?;
         let cmd = tokio::select! {
