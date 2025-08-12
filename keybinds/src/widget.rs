@@ -5,7 +5,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Color,
-    symbols,
+    symbols::{self, border::PLAIN},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
 };
@@ -15,8 +15,8 @@ use super::{Command, KeybindEventStream};
 
 impl<T: Command> KeybindEventStream<'_, T> {
     pub fn inner(&self, area: Rect) -> Rect {
-        let len: usize = self.next_maps.iter().map(|v|v.len()).sum();
-        if len>0 {
+        let len: usize = self.next_maps.iter().map(|v| v.len()).sum();
+        if len > 0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
             let full_height = full_usable_height + 3;
@@ -34,8 +34,8 @@ impl<T: Command> KeybindEventStream<'_, T> {
 }
 impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let len: usize = self.next_maps.iter().map(|v|v.len()).sum();
-        if len>0 {
+        let len: usize = self.next_maps.iter().map(|v| v.len()).sum();
+        if len > 0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
             let full_height = full_usable_height + 3;
@@ -59,11 +59,6 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                 width: area.width,
                 height: height as u16,
             };
-            let border_set = symbols::border::Set {
-                top_left: symbols::line::NORMAL.vertical_right,
-                top_right: symbols::line::NORMAL.vertical_left,
-                ..symbols::border::PLAIN
-            };
             let block_left = &mut buf[(area.x, area.y + area.height - height as u16 - 1)];
             if block_left.symbol() == symbols::line::NORMAL.bottom_left {
                 block_left.set_symbol(symbols::line::NORMAL.vertical_right);
@@ -76,7 +71,7 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                 block_right.set_symbol(symbols::line::NORMAL.vertical_left);
             }
             let mut block = Block::new()
-                .border_set(border_set)
+                .border_set(PLAIN)
                 .borders(Borders::RIGHT | Borders::BOTTOM | Borders::LEFT)
                 .padding(ratatui::widgets::Padding {
                     left: 1,
@@ -84,6 +79,9 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                     top: 1,
                     bottom: 1,
                 });
+            if block_right.symbol() == " "{
+                block = block.borders(Borders::all());
+            }
             if num_views > 1 {
                 block = block
                     .title_bottom(format!("{} of {}", self.current_view, num_views))
@@ -92,7 +90,11 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
             let main = block.inner(area);
             block.render(area, buf);
             let items_per_screen = width as usize * usable_height;
-            let items = self.next_maps.iter().map(|v|v.iter()).kmerge_by(|(a,_),(b,_)|a<b)
+            let items = self
+                .next_maps
+                .iter()
+                .map(|v| v.iter())
+                .kmerge_by(|(a, _), (b, _)| a < b)
                 .skip(items_per_screen * self.current_view)
                 .take(items_per_screen);
             let position =
