@@ -128,7 +128,7 @@ pub async fn display_home_screen(
                 break Ok(Navigation::PopContext);
             }
             HomeScreenCommand::Reload => {
-                break Ok(Navigation::Replace(NextScreen::HomeScreen(screen)));
+                break Ok(Navigation::Replace(NextScreen::LoadHomeScreen));
             }
             HomeScreenCommand::Left => {
                 screen.left();
