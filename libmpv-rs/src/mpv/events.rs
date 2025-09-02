@@ -351,12 +351,12 @@ pub trait EventContextExt: sealed::EventContextExt {
     /// Returns `Some(Err(...))` if there was invalid utf-8, or if either an
     /// `MPV_EVENT_GET_PROPERTY_REPLY`, `MPV_EVENT_SET_PROPERTY_REPLY`, `MPV_EVENT_COMMAND_REPLY`,
     /// or `MPV_EVENT_PROPERTY_CHANGE` event failed, or if `MPV_EVENT_END_FILE` reported an error.
-    fn wait_event(&mut self, timeout: f64) -> Option<Result<Event>> {
+    fn wait_event(&mut self, timeout: f64) -> Option<Result<Event<'_>>> {
         let event = unsafe { *libmpv_sys::mpv_wait_event(self.get_ctx().as_ptr(), timeout) };
-        if event.event_id != mpv_event_id::None {
-            if let Err(e) = mpv_err((), event.error) {
-                return Some(Err(e));
-            }
+        if event.event_id != mpv_event_id::None
+            && let Err(e) = mpv_err((), event.error)
+        {
+            return Some(Err(e));
         }
 
         match event.event_id {
@@ -479,8 +479,8 @@ fn poll(wake: &mut WakerContext, cx: &mut std::task::Context<'_>) {
 pub trait EventContextAsyncExt:
     sealed::EventContextAsyncExt + EventContextExt + Send + Sync
 {
-    fn wait_event_async(&mut self) -> impl Future<Output = Result<Event>> + Send + Sync;
-    fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Event>> {
+    fn wait_event_async(&mut self) -> impl Future<Output = Result<Event<'_>>> + Send + Sync;
+    fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Event<'_>>> {
         poll(self.get_waker(), cx);
         if let Some(v) = self.wait_event(0.0) {
             Poll::Ready(v)
@@ -491,7 +491,7 @@ pub trait EventContextAsyncExt:
 }
 
 impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {
-    async fn wait_event_async(&mut self) -> Result<Event> {
+    async fn wait_event_async(&mut self) -> Result<Event<'_>> {
         poll_fn(|cx| {
             poll(self.get_waker(), cx);
             Poll::Ready(())

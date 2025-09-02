@@ -363,9 +363,8 @@ fn append(mpv: &Mpv<EventContextAsync>, jellyfin: &JellyfinClient, item: &MediaI
 
 fn name(item: &MediaItem) -> Result<CString> {
     let name = match &item.item_type {
-        ItemType::Movie { container: _ } => item.name.clone(),
+        ItemType::Movie  => item.name.clone(),
         ItemType::Episode {
-            container: _,
             season_id: _,
             season_name: _,
             series_id: _,

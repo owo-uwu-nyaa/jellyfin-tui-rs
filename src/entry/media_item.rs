@@ -11,7 +11,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             name: _,
             sort_name: _,
             overview: _,
-            item_type: ItemType::Movie { container: _ },
+            item_type: ItemType::Movie ,
             user_data: _,
             episode_index: _,
             season_index: _,
@@ -68,7 +68,6 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             overview: _,
             item_type:
                 ItemType::Episode {
-                    container: _,
                     season_id: _,
                     season_name: _,
                     series_id,
@@ -94,9 +93,8 @@ pub fn open(item: &MediaItem) -> NextScreen {
             sort_name: _,
             overview: _,
             item_type:
-                ItemType::Movie { container: _ }
+                ItemType::Movie
                 | ItemType::Episode {
-                    container: _,
                     season_id: _,
                     season_name: _,
                     series_id: _,
@@ -137,9 +135,8 @@ pub fn episode(item: &MediaItem) -> NextScreen {
             sort_name: _,
             overview: _,
             item_type:
-                ItemType::Movie { container: _ }
+                ItemType::Movie
                 | ItemType::Episode {
-                    container: _,
                     season_id: _,
                     season_name: _,
                     series_id: _,
@@ -182,7 +179,6 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             overview: _,
             item_type:
                 ItemType::Episode {
-                    container: _,
                     season_id: Some(id),
                     season_name: _,
                     series_id: _,
@@ -235,7 +231,6 @@ pub fn series(item: &MediaItem) -> Option<NextScreen> {
             overview: _,
             item_type:
                 ItemType::Episode {
-                    container: _,
                     season_id: _,
                     season_name: _,
                     series_id,

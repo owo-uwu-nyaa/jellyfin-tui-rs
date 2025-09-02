@@ -101,14 +101,13 @@ fn render(
 
                 let area = block.inner(block_area);
                 match &media_item.item_type {
-                    jellyfin::items::ItemType::Movie { container: _ } => {
+                    jellyfin::items::ItemType::Movie => {
                         frame.render_widget(
                             Paragraph::new(media_item.name.clone()).centered(),
                             area,
                         );
                     }
                     jellyfin::items::ItemType::Episode {
-                        container: _,
                         season_id: _,
                         season_name: None,
                         series_id: _,
@@ -138,7 +137,6 @@ fn render(
                         );
                     }
                     jellyfin::items::ItemType::Episode {
-                        container: _,
                         season_id: _,
                         season_name: Some(season_name),
                         series_id: _,
@@ -224,8 +222,8 @@ impl Default for MpvProfile {
 }
 
 impl MpvProfile {
-    fn initialize(&self, mpv: &MpvInitializer)->Result<()> {
-        match self{
+    fn initialize(&self, mpv: &MpvInitializer) -> Result<()> {
+        match self {
             MpvProfile::Fast => {
                 info!("using fast profile");
                 mpv.set_option(c"scale", c"bilinear")?;
@@ -239,13 +237,13 @@ impl MpvProfile {
             }
             MpvProfile::HighQuality => {
                 info!("using high quality profile");
-                mpv.set_option(c"scale",c"ewa_lanczossharp")?;
+                mpv.set_option(c"scale", c"ewa_lanczossharp")?;
                 mpv.set_option(c"hdr-peak-percentile", 99.995)?;
                 mpv.set_option(c"hdr-contrast-recovery", 0.30)?;
-            },
+            }
             MpvProfile::Default => {
                 info!("using default profile");
-            },
+            }
         }
         Ok(())
     }

@@ -113,9 +113,8 @@ impl Entry {
 
     pub fn from_media_item(item: MediaItem, context: &TuiContext) -> Self {
         let (title, subtitle) = match &item.item_type {
-            ItemType::Movie { container: _ } => (item.name.clone(), None),
+            ItemType::Movie => (item.name.clone(), None),
             ItemType::Episode {
-                container: _,
                 season_id: _,
                 season_name: _,
                 series_id: _,
