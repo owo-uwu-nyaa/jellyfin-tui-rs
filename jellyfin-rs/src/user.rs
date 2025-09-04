@@ -3,11 +3,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::session::SessionInfo;
-use crate::sha::ShaImpl;
 use crate::AuthStatus;
 use crate::Authed;
 use crate::JellyfinClient;
-use crate::JsonResponse;
+use crate::connect::JsonResponse;
+use crate::request::NoQuery;
+use crate::request::RequestBuilderExt;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -641,46 +642,63 @@ struct AuthUserStdQuery {
     password: String,
 }
 
-impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     /// Gets a list of all users that the `UserAuth` has access to, given some filters.
     pub async fn get_users(
         &self,
         is_hidden: bool,
         is_disabled: bool,
     ) -> Result<JsonResponse<Vec<User>>> {
-        let req = self
-            .get(format!("{}Users", self.url,))
-            .query(&GetUsersQuery {
-                is_hidden,
-                is_disabled,
-            })
-            .send()
-            .await?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                "/Users",
+                &GetUsersQuery {
+                    is_hidden,
+                    is_disabled,
+                },
+            )?
+            .empty_body()?,
+        )
+        .await
     }
     pub async fn get_user_by_id(&self, id: impl AsRef<str>) -> Result<JsonResponse<User>> {
-        let req = self
-            .get(format!("{}Users/{}", self.url, id.as_ref()))
-            .send()
-            .await?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                |prefix: &mut String| {
+                    prefix.push_str("/Users/");
+                    prefix.push_str(id.as_ref());
+                },
+                NoQuery,
+            )?
+            .empty_body()?,
+        )
+        .await
     }
     pub async fn delete_user(&self, id: impl AsRef<str>) -> Result<()> {
-        let _req = self
-            .delete(format!("{}Users/{}", self.url, id.as_ref()))
-            .send()
-            .await?;
+        self.send_request(
+            self.delete(
+                |prefix: &mut String| {
+                    prefix.push_str("/Users/");
+                    prefix.push_str(id.as_ref());
+                },
+                NoQuery,
+            )?
+            .empty_body()?,
+        )
+        .await?;
         Ok(())
     }
     pub async fn update_user(&self, id: impl AsRef<str>, new_info: &User) -> Result<()> {
-        let _req = self
-            .post(format!("{}Users", self.url))
-            .query(&UserIdQuery {
-                user_id: id.as_ref(),
-            })
-            .json(new_info)
-            .send()
-            .await?;
+        self.send_request(
+            self.post(
+                "/Users",
+                &UserIdQuery {
+                    user_id: id.as_ref(),
+                },
+            )?
+            .json_body(new_info)?,
+        )
+        .await?;
         Ok(())
     }
     pub async fn update_user_conf(
@@ -688,14 +706,16 @@ impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         id: impl AsRef<str>,
         new_conf: &UserConfiguration,
     ) -> Result<()> {
-        let _req = self
-            .post(format!("{}Users/Configuration", self.url))
-            .query(&UserIdQuery {
-                user_id: id.as_ref(),
-            })
-            .json(new_conf)
-            .send()
-            .await?;
+        self.send_request(
+            self.post(
+                "/Users/Configuration",
+                &UserIdQuery {
+                    user_id: id.as_ref(),
+                },
+            )?
+            .json_body(new_conf)?,
+        )
+        .await?;
         Ok(())
     }
     pub async fn update_user_password(
@@ -703,16 +723,18 @@ impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         id: impl AsRef<str>,
         new_password: impl AsRef<str>,
     ) -> Result<()> {
-        let _req = self
-            .post(format!("{}Users/Password", self.url))
-            .query(&UserIdQuery {
-                user_id: id.as_ref(),
-            })
-            .json(&NewPwReq {
+        self.send_request(
+            self.post(
+                "/Users/Password",
+                &UserIdQuery {
+                    user_id: id.as_ref(),
+                },
+            )?
+            .json_body(&NewPwReq {
                 new_pw: new_password.as_ref(),
-            })
-            .send()
-            .await?;
+            })?,
+        )
+        .await?;
         Ok(())
     }
     pub async fn update_user_policy(
@@ -720,34 +742,37 @@ impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         id: impl AsRef<str>,
         new_policy: &UserPolicy,
     ) -> Result<()> {
-        let req = self
-            .post(format!("{}Users/{}/Policy", self.url, id.as_ref()))
-            .json(&new_policy)
-            .send()
-            .await?;
-        let _req = req.error_for_status()?;
+        self.send_request(
+            self.post(
+                |prefix: &mut String| {
+                    prefix.push_str("/Users/");
+                    prefix.push_str(id.as_ref());
+                    prefix.push_str("/Policy");
+                },
+                NoQuery,
+            )?
+            .json_body(new_policy)?,
+        )
+        .await?;
         Ok(())
     }
     pub async fn get_user_by_auth(&self) -> Result<JsonResponse<User>> {
-        let req = self.get(format!("{}Users/Me", self.url)).send().await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/Users/Me", NoQuery)?.empty_body()?)
+            .await
     }
     pub async fn create_user(
         &self,
         username: impl AsRef<str>,
         password: impl AsRef<str>,
     ) -> Result<JsonResponse<User>> {
-        let req = self
-            .post(format!("{}Users/New", self.url))
-            .json(&CreateUserReq {
-                name: username.as_ref(),
-                password: password.as_ref(),
-            })
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.post("/Users/New", NoQuery)?
+                .json_body(&CreateUserReq {
+                    name: username.as_ref(),
+                    password: password.as_ref(),
+                })?,
+        )
+        .await
     }
 }
 
@@ -778,43 +803,31 @@ pub struct ForgotPasswordResponse {
     pin_expiration_date: Option<String>,
 }
 
-impl<Auth: AuthStatus, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: AuthStatus> JellyfinClient<Auth> {
     pub async fn user_forgot_password(
         &self,
         username: impl AsRef<str>,
     ) -> Result<JsonResponse<ForgotPasswordResponse>> {
-        let req = self
-            .client
-            .post(format!("{}Users/ForgotPassword", self.url))
-            .json(&ForgotPwReq {
+        self.send_request_json(self.post("/Users/ForgotPassword", NoQuery)?.json_body(
+            &ForgotPwReq {
                 entered_username: username.as_ref(),
-            })
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+            },
+        )?)
+        .await
     }
     pub async fn user_redeem_forgot_password_pin(
         &self,
         pin: impl AsRef<str>,
     ) -> Result<JsonResponse<RedeemForgotPasswordResponse>> {
-        let req = self
-            .client
-            .post(format!("{}Users/ForgotPassword/Pin", self.url))
-            .json(&RedeemForgotPasswordReq { pin: pin.as_ref() })
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.post("/Users/ForgotPassword/Pin", NoQuery)?
+                .json_body(&RedeemForgotPasswordReq { pin: pin.as_ref() })?,
+        )
+        .await
     }
     pub async fn get_public_user_list(&self) -> Result<JsonResponse<Vec<User>>> {
-        let req = self
-            .client
-            .get(format!("{}Users/Public", self.url))
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/Users/Public", NoQuery)?.empty_body()?)
+            .await
     }
 }
 

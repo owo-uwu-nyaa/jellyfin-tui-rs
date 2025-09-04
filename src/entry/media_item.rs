@@ -11,7 +11,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             name: _,
             sort_name: _,
             overview: _,
-            item_type: ItemType::Movie ,
+            item_type: ItemType::Movie,
             user_data: _,
             episode_index: _,
             season_index: _,

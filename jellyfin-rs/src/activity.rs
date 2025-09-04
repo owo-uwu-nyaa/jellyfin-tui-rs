@@ -2,11 +2,11 @@ use super::err::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::sha::ShaImpl;
 use crate::Authed;
 use crate::JellyfinClient;
 use crate::JellyfinVec;
-use crate::JsonResponse;
+use crate::connect::JsonResponse;
+use crate::request::RequestBuilderExt;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -31,7 +31,7 @@ struct GetActivityLogEntriesQuery<'s> {
     has_user_id: bool,
 }
 
-impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     pub async fn get_activity_log_entries(
         &self,
         start_index: Option<u32>,
@@ -39,16 +39,18 @@ impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         min_date: Option<&str>,
         has_user_id: bool,
     ) -> Result<JsonResponse<JellyfinVec<ActivityLogEntry>>> {
-        let req = self
-            .get(format!("{}System/ActivityLog/Entries", self.url,))
-            .query(&GetActivityLogEntriesQuery {
-                start_index,
-                limit,
-                min_date,
-                has_user_id,
-            })
-            .send()
-            .await?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                "/System/ActivityLog/Entries",
+                &GetActivityLogEntriesQuery {
+                    start_index,
+                    limit,
+                    min_date,
+                    has_user_id,
+                },
+            )?
+            .empty_body()?,
+        )
+        .await
     }
 }

@@ -1,7 +1,7 @@
 use std::{cmp::min, pin::Pin};
 
-use color_eyre::{eyre::Context, Result};
-use futures_util::{future::try_join, StreamExt};
+use color_eyre::{Result, eyre::Context};
+use futures_util::{StreamExt, future::try_join};
 use jellyfin::items::MediaItem;
 use keybinds::{Command, KeybindEvent, KeybindEventStream};
 use ratatui::{
@@ -11,12 +11,12 @@ use ratatui::{
 };
 
 use crate::{
+    TuiContext,
     entry::Entry,
     fetch::{fetch_all_children, fetch_child_of_type, fetch_item, fetch_screen},
     image::ImagesAvailable,
-    list::{entry_list_height, EntryList},
+    list::{EntryList, entry_list_height},
     state::{Navigation, NextScreen, ToNavigation},
-    TuiContext,
 };
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -100,16 +100,18 @@ pub async fn handle_item_list_details_data(
     cx: Pin<&mut TuiContext>,
     item: MediaItem,
     childs: Vec<MediaItem>,
-) -> Result<Navigation>{
-    let name =
-        item.name.clone();
-    Ok(Navigation::Replace(NextScreen::ItemListDetails(item, EntryList::new(
-        childs
-            .iter()
-            .map(|item| Entry::from_media_item(item.clone(), &cx))
-            .collect(),
-        name
-    ))))
+) -> Result<Navigation> {
+    let name = item.name.clone();
+    Ok(Navigation::Replace(NextScreen::ItemListDetails(
+        item,
+        EntryList::new(
+            childs
+                .iter()
+                .map(|item| Entry::from_media_item(item.clone(), &cx))
+                .collect::<Result<Vec<_>>>()?,
+            name,
+        ),
+    )))
 }
 
 pub async fn display_item_list_details(
@@ -201,52 +203,52 @@ pub async fn display_item_list_details(
                 entries.right();
             }
             SeasonCommand::Play => {
-                if let Some(entry) = entries.get() {
-                    if let Some(next) = entry.play() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::ItemListDetails(item,entries),
-                            next,
-                        });
-                    }
+                if let Some(entry) = entries.get()
+                    && let Some(next) = entry.play()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::ItemListDetails(item, entries),
+                        next,
+                    });
                 }
             }
             SeasonCommand::Open => {
                 if let Some(entry) = entries.get() {
                     let next = entry.open();
                     break Ok(Navigation::Push {
-                            current: NextScreen::ItemListDetails(item,entries),
-                        next
+                        current: NextScreen::ItemListDetails(item, entries),
+                        next,
                     });
                 }
             }
             SeasonCommand::OpenEpisode => {
-                if let Some(entry) = entries.get() {
-                    if let Some(next) = entry.episode() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::ItemListDetails(item,entries),
-                            next,
-                        });
-                    }
+                if let Some(entry) = entries.get()
+                    && let Some(next) = entry.episode()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::ItemListDetails(item, entries),
+                        next,
+                    });
                 }
             }
             SeasonCommand::OpenSeason => {
-                if let Some(entry) = entries.get() {
-                    if let Some(next) = entry.season() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::ItemListDetails(item,entries),
-                            next,
-                        });
-                    }
+                if let Some(entry) = entries.get()
+                    && let Some(next) = entry.season()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::ItemListDetails(item, entries),
+                        next,
+                    });
                 }
             }
             SeasonCommand::OpenSeries => {
-                if let Some(entry) = entries.get() {
-                    if let Some(next) = entry.series() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::ItemListDetails(item,entries),
-                            next,
-                        });
-                    }
+                if let Some(entry) = entries.get()
+                    && let Some(next) = entry.series()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::ItemListDetails(item, entries),
+                        next,
+                    });
                 }
             }
         }

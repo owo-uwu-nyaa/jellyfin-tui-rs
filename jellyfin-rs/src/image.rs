@@ -1,10 +1,12 @@
-use std::{fmt::Display, future::Future};
+use std::sync::Arc;
 
 use bytes::Bytes;
-use reqwest::Client;
 use serde::Serialize;
 
-use crate::{items::ImageType, sha::ShaImpl, AuthStatus, JellyfinClient, Result};
+use crate::{
+    AuthStatus, JellyfinClient, Result, connect::Connection, items::ImageType,
+    request::RequestBuilderExt,
+};
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,37 +16,57 @@ pub struct GetImageQuery<'s> {
 }
 
 pub struct GetImage {
-    client: Client,
-    url: String,
+    connection: Arc<Connection>,
+    req: http::Request<String>,
 }
 
 impl GetImage {
-    pub async fn get(self, query: &GetImageQuery<'_>) -> Result<Bytes> {
-        Ok(self
-            .client
-            .get(self.url)
-            .query(query)
-            .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await?)
+    pub async fn get(self) -> Result<Bytes> {
+        Ok(self.connection.send_request(self.req).await?.0.into())
     }
 }
 
-impl<Auth: AuthStatus, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
-    pub fn prepare_get_image(&self, item_id: impl Display, image_type: ImageType) -> GetImage {
-        GetImage {
-            client: self.client.clone(),
-            url: format!("{}Items/{item_id}/Images/{image_type}", self.url),
-        }
-    }
-    pub fn get_image<'a>(
-        &'a self,
-        item_id: impl Display,
+fn image_req(
+    client: &JellyfinClient<impl AuthStatus>,
+    item_id: &str,
+    image_type: ImageType,
+    query: &GetImageQuery<'_>,
+) -> Result<http::Request<String>> {
+    client
+        .get(
+            |prefix: &mut String| {
+                prefix.push_str("/Items/");
+                prefix.push_str(item_id);
+                prefix.push_str("/Images/");
+                prefix.push_str(image_type.name());
+            },
+            query,
+        )?
+        .empty_body()
+}
+
+impl<Auth: AuthStatus> JellyfinClient<Auth> {
+    pub fn prepare_get_image(
+        &self,
+        item_id: &str,
         image_type: ImageType,
-        query: &'a GetImageQuery<'_>,
-    ) -> impl Future<Output = Result<Bytes>> + Send + Sync + 'a {
-        self.prepare_get_image(item_id, image_type).get(query)
+        query: &GetImageQuery<'_>,
+    ) -> Result<GetImage> {
+        Ok(GetImage {
+            connection: self.connection.clone(),
+            req: image_req(self, item_id, image_type, query)?,
+        })
+    }
+    pub async fn get_image(
+        &self,
+        item_id: &str,
+        image_type: ImageType,
+        query: &GetImageQuery<'_>,
+    ) -> Result<Bytes> {
+        Ok(self
+            .send_request(image_req(self, item_id, image_type, query)?)
+            .await?
+            .0
+            .into())
     }
 }

@@ -1,7 +1,12 @@
-use reqwest::RequestBuilder;
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{Auth, JellyfinClient, Result, ShaImpl};
+use crate::{
+    Authed, JellyfinClient, Result,
+    connect::Connection,
+    request::{NoQuery, PathBuilder, RequestBuilderExt},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -17,65 +22,92 @@ pub struct ProgressBody<'s> {
     pub is_paused: bool,
 }
 
+struct Prepared {
+    conn: Arc<Connection>,
+    req: http::request::Builder,
+}
+
+impl Prepared {
+    fn new<Auth: Authed>(client: &JellyfinClient<Auth>, uri: impl PathBuilder) -> Result<Self> {
+        let req = client.post(uri, NoQuery)?;
+        Ok(Prepared {
+            conn: client.connection.clone(),
+            req,
+        })
+    }
+    async fn send(self, val: &impl Serialize) -> Result<()> {
+        self.conn.send_request(self.req.json_body(val)?).await?;
+        Ok(())
+    }
+}
+
 pub struct SetPlaying {
-    inner: RequestBuilder,
+    inner: Prepared,
 }
 impl SetPlaying {
     pub async fn send(self, item_id: &str) -> Result<()> {
-        self.inner
-            .json(&PlayingBody { item_id })
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(())
+        self.inner.send(&PlayingBody { item_id }).await
     }
 }
 
 pub struct SetPlayingProgress {
-    inner: RequestBuilder,
+    inner: Prepared,
 }
 impl SetPlayingProgress {
     pub async fn send(self, body: &ProgressBody<'_>) -> Result<()> {
-        self.inner.json(body).send().await?.error_for_status()?;
-        Ok(())
+        self.inner.send(body).await
     }
 }
 
 pub struct SetPlayingStopped {
-    inner: RequestBuilder,
+    inner: Prepared,
 }
 impl SetPlayingStopped {
     pub async fn send(self, body: &ProgressBody<'_>) -> Result<()> {
-        self.inner.json(body).send().await?.error_for_status()?;
-        Ok(())
+        self.inner.send(body).await
     }
 }
 
-impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
-    pub fn prepare_set_playing(&self) -> SetPlaying {
-        SetPlaying {
-            inner: self.post(format!("{}Sessions/Playing", self.url)),
-        }
+impl<Auth: Authed> JellyfinClient<Auth> {
+    pub fn prepare_set_playing(&self) -> Result<SetPlaying> {
+        Ok(SetPlaying {
+            inner: Prepared::new(self, "/Sessions/Playing")?,
+        })
     }
     pub async fn set_playing(&self, item_id: &str) -> Result<()> {
-        self.prepare_set_playing().send(item_id).await
+        self.send_request(
+            self.post("/Sessions/Playing", NoQuery)?
+                .json_body(&PlayingBody { item_id })?,
+        )
+        .await?;
+        Ok(())
     }
 
-    pub fn prepare_set_playing_progress(&self) -> SetPlayingProgress {
-        SetPlayingProgress {
-            inner: self.post(format!("{}Sessions/Playing/Progress", self.url)),
-        }
+    pub fn prepare_set_playing_progress(&self) -> Result<SetPlayingProgress> {
+        Ok(SetPlayingProgress {
+            inner: Prepared::new(self, "/Sessions/Playing/Progress")?,
+        })
     }
     pub async fn set_playing_progress(&self, body: &ProgressBody<'_>) -> Result<()> {
-        self.prepare_set_playing_progress().send(body).await
+        self.send_request(
+            self.post("/Sessions/Playing/Progress", NoQuery)?
+                .json_body(body)?,
+        )
+        .await?;
+        Ok(())
     }
 
-    pub fn prepare_set_playing_stopped(&self) -> SetPlayingProgress {
-        SetPlayingProgress {
-            inner: self.post(format!("{}Sessions/Playing/Stopped", self.url)),
-        }
+    pub fn prepare_set_playing_stopped(&self) -> Result<SetPlayingProgress> {
+        Ok(SetPlayingProgress {
+            inner: Prepared::new(self, "/Sessions/Playing/Stopped")?,
+        })
     }
     pub async fn set_playing_stopped(&self, body: &ProgressBody<'_>) -> Result<()> {
-        self.prepare_set_playing_stopped().send(body).await
+        self.send_request(
+            self.post("/Sessions/Playing/Stopped", NoQuery)?
+                .json_body(body)?,
+        )
+        .await?;
+        Ok(())
     }
 }

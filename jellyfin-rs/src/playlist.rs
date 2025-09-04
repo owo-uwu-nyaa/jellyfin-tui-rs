@@ -1,6 +1,9 @@
 use serde::Serialize;
 
-use crate::{items::MediaItem, sha::ShaImpl, Authed, JellyfinClient, JellyfinVec, JsonResponse};
+use crate::{
+    Authed, JellyfinClient, JellyfinVec, connect::JsonResponse, items::MediaItem,
+    request::RequestBuilderExt,
+};
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct GetPlaylistItemsQuery<'s> {
@@ -13,18 +16,23 @@ pub struct GetPlaylistItemsQuery<'s> {
     pub enable_user_data: Option<bool>,
 }
 
-impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     pub async fn get_playlist_items(
         &self,
         playlist_id: &str,
         query: &GetPlaylistItemsQuery<'_>,
     ) -> crate::Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}Playlists/{playlist_id}/Items", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                |prefix: &mut String| {
+                    prefix.push_str("/Playlists/");
+                    prefix.push_str(playlist_id);
+                    prefix.push_str("/Items");
+                },
+                query,
+            )?
+            .empty_body()?,
+        )
+        .await
     }
 }

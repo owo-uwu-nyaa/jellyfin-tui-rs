@@ -4,16 +4,16 @@ use crate::list::EntryList;
 use crate::screen::EntryScreen;
 use color_eyre::eyre::Context;
 use futures_util::StreamExt;
-use jellyfin::items::MediaItem;
+use jellyfin::{items::MediaItem, user_views::UserView};
 use load::HomeScreenData;
 use ratatui::widgets::Widget;
 use tracing::{debug, instrument};
 
 use crate::{
+    Result, TuiContext,
     entry::Entry,
     image::ImagesAvailable,
     state::{Navigation, NextScreen},
-    Result, TuiContext,
 };
 use keybinds::{Command, KeybindEvent, KeybindEventStream};
 
@@ -23,44 +23,56 @@ fn create_from_media_item_vec(
     items: Vec<MediaItem>,
     title: &str,
     context: &TuiContext,
-) -> Option<EntryList> {
-    if items.is_empty() {
+) -> Result<Option<EntryList>> {
+    Ok(if items.is_empty() {
         None
     } else {
         EntryList::new(
             items
                 .into_iter()
                 .map(|item| Entry::from_media_item(item, context))
-                .collect(),
+                .collect::<Result<Vec<_>>>()?,
             title.to_string(),
         )
         .into()
-    }
+    })
 }
 
-fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> EntryScreen {
-    let entries = [
-        create_from_media_item_vec(data.resume, "Continue Watching", context),
-        create_from_media_item_vec(data.next_up, "Next Up", context),
+fn create_from_user_views_vec(
+    items: Vec<UserView>,
+    title: &str,
+    context: &TuiContext,
+) -> Result<Option<EntryList>> {
+    Ok(if items.is_empty() {
+        None
+    } else {
         EntryList::new(
-            data.views
-                .iter()
-                .cloned()
+            items
+                .into_iter()
                 .map(|item| Entry::from_user_view(item, context))
-                .collect(),
-            "Library".to_string(),
+                .collect::<Result<Vec<_>>>()?,
+            title.to_string(),
         )
-        .into(),
+        .into()
+    })
+}
+
+fn create_home_screen(mut data: HomeScreenData, context: &TuiContext) -> Result<EntryScreen> {
+    let views: Vec<_> = data.views.clone();
+    let entries = [
+        create_from_media_item_vec(data.resume, "Continue Watching", context).transpose(),
+        create_from_media_item_vec(data.next_up, "Next Up", context).transpose(),
+        create_from_user_views_vec(data.views, "Library", context).transpose(),
     ]
     .into_iter()
-    .chain(data.views.iter().map(|view| {
-        data.latest
-            .remove(view.id.as_str())
-            .and_then(|items| create_from_media_item_vec(items, view.name.as_str(), context))
+    .chain(views.iter().map(|view| {
+        data.latest.remove(view.id.as_str()).and_then(|items| {
+            create_from_media_item_vec(items, view.name.as_str(), context).transpose()
+        })
     }))
     .flatten()
-    .collect();
-    EntryScreen::new(entries, "Home".to_string())
+    .collect::<Result<_>>()?;
+    Ok(EntryScreen::new(entries, "Home".to_string()))
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -83,7 +95,9 @@ pub async fn handle_home_screen_data(
     context: Pin<&mut TuiContext>,
     data: HomeScreenData,
 ) -> Result<Navigation> {
-    Ok(Navigation::Replace(NextScreen::HomeScreen(create_home_screen(data, &context))))
+    Ok(Navigation::Replace(NextScreen::HomeScreen(
+        create_home_screen(data, &context)?,
+    )))
 }
 
 #[instrument(skip_all)]
@@ -153,43 +167,43 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::OpenEpisode => {
-                if let Some(entry) = screen.get() {
-                    if let Some(next) = entry.episode() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::HomeScreen(screen),
-                            next,
-                        });
-                    }
+                if let Some(entry) = screen.get()
+                    && let Some(next) = entry.episode()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::HomeScreen(screen),
+                        next,
+                    });
                 }
             }
             HomeScreenCommand::OpenSeason => {
-                if let Some(entry) = screen.get() {
-                    if let Some(next) = entry.season() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::HomeScreen(screen),
-                            next,
-                        });
-                    }
+                if let Some(entry) = screen.get()
+                    && let Some(next) = entry.season()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::HomeScreen(screen),
+                        next,
+                    });
                 }
             }
             HomeScreenCommand::OpenSeries => {
-                if let Some(entry) = screen.get() {
-                    if let Some(next) = entry.series() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::HomeScreen(screen),
-                            next,
-                        });
-                    }
+                if let Some(entry) = screen.get()
+                    && let Some(next) = entry.series()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::HomeScreen(screen),
+                        next,
+                    });
                 }
             }
             HomeScreenCommand::Play => {
-                if let Some(entry) = screen.get() {
-                    if let Some(next) = entry.play() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::HomeScreen(screen),
-                            next,
-                        });
-                    }
+                if let Some(entry) = screen.get()
+                    && let Some(next) = entry.play()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::HomeScreen(screen),
+                        next,
+                    });
                 }
             }
             HomeScreenCommand::PlayOpen => {

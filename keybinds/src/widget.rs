@@ -79,7 +79,7 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                     top: 1,
                     bottom: 1,
                 });
-            if block_right.symbol() == " "{
+            if block_right.symbol() == " " {
                 block = block.borders(Borders::all());
             }
             if num_views > 1 {

@@ -3,9 +3,8 @@ use std::{collections::HashMap, pin::Pin};
 use color_eyre::{Result, eyre::Context};
 use futures_util::{StreamExt, TryStreamExt, stream};
 use jellyfin::{
-    Auth, JellyfinClient,
+    JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
-    sha::ShaImpl,
     user_library::GetLatestQuery,
     user_views::{GetUserViewsQuery, UserView, UserViewType},
 };
@@ -26,10 +25,7 @@ pub struct HomeScreenData {
 }
 
 #[instrument(skip_all)]
-pub async fn load_data(
-    client: &JellyfinClient<Auth, impl ShaImpl>,
-    user_id: &str,
-) -> Result<HomeScreenData> {
+pub async fn load_data(client: &JellyfinClient, user_id: &str) -> Result<HomeScreenData> {
     debug!("collecting main screen information");
     let user_views = client
         .get_user_views(&GetUserViewsQuery {
@@ -107,7 +103,7 @@ pub async fn load_data(
                 {
                     Ok(items) => match items.deserialize().await {
                         Ok(items) => Some(Ok((view.id.clone(), items))),
-                        Err(e) => Some(Err(e.into())),
+                        Err(e) => Some(Err(e)),
                     },
                     Err(e) => Some(Err(e)),
                 }

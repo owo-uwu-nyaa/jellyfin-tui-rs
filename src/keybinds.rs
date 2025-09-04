@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use color_eyre::{eyre::Context, Result};
-use keybinds::{keybind_config, BindingMap, Command};
+use color_eyre::{Result, eyre::Context};
+use keybinds::{BindingMap, Command, keybind_config};
 
 use crate::{
     error::ErrorCommand, home_screen::HomeScreenCommand, item_details::EpisodeCommand,
@@ -48,7 +48,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn check_commands_unique(){
+    fn check_commands_unique() {
         Keybinds::assert_uniqueness();
     }
 }

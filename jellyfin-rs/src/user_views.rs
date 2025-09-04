@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 use crate::{
-    items::ImageType, sha::ShaImpl, Auth, JellyfinClient, JellyfinVec, JsonResponse, Result,
+    Authed, JellyfinClient, JellyfinVec, Result, connect::JsonResponse, items::ImageType,
+    request::RequestBuilderExt,
 };
 
 #[derive(Debug, Serialize, Default)]
@@ -16,19 +17,14 @@ pub struct GetUserViewsQuery<'s> {
     pub include_hidden: Option<bool>,
 }
 
-impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     #[instrument(skip(self))]
     pub async fn get_user_views(
         &self,
         query: &GetUserViewsQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<UserView>>> {
-        let req = self
-            .get(format!("{}UserViews", self.url))
-            .query(&query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/UserViews", query)?.empty_body()?)
+            .await
     }
 }
 

@@ -7,9 +7,8 @@ use color_eyre::{
 };
 use futures_util::StreamExt;
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
+    JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
-    sha::ShaImpl,
 };
 use keybinds::{BindingMap, KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
@@ -51,10 +50,7 @@ pub async fn fetch_screen(
     }
 }
 
-async fn single_item(
-    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
-    query: &GetItemsQuery<'_>,
-) -> Result<MediaItem> {
+async fn single_item(jellyfin: &JellyfinClient, query: &GetItemsQuery<'_>) -> Result<MediaItem> {
     jellyfin
         .get_items(query)
         .await
@@ -68,10 +64,7 @@ async fn single_item(
 }
 
 #[instrument(skip(jellyfin))]
-pub async fn fetch_all_children(
-    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
-    id: &str,
-) -> Result<Vec<MediaItem>> {
+pub async fn fetch_all_children(jellyfin: &JellyfinClient, id: &str) -> Result<Vec<MediaItem>> {
     let user_id = jellyfin.get_auth().user.id.as_str();
     let items = JellyfinVec::collect(async |start| {
         jellyfin
@@ -98,10 +91,7 @@ pub async fn fetch_all_children(
 }
 
 #[instrument(skip(jellyfin))]
-pub async fn fetch_item(
-    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
-    id: &str,
-) -> Result<MediaItem> {
+pub async fn fetch_item(jellyfin: &JellyfinClient, id: &str) -> Result<MediaItem> {
     let user_id = jellyfin.get_auth().user.id.as_str();
     single_item(
         jellyfin,
@@ -122,7 +112,7 @@ pub async fn fetch_item(
 }
 
 pub async fn fetch_child_of_type(
-    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
+    jellyfin: &JellyfinClient,
     t: &str,
     id: &str,
 ) -> Result<MediaItem> {

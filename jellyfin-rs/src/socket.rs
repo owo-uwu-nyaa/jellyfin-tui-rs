@@ -1,50 +1,359 @@
 use std::{
     cmp::min,
     future::Future,
-    marker::PhantomData,
     pin::Pin,
     sync::Arc,
-    task::{ready, Poll},
+    task::{Poll, ready},
     time::Duration,
 };
 
-use base64::{prelude::BASE64_STANDARD, Engine};
 use futures_core::Stream;
 use futures_sink::Sink;
+use http::Uri;
 use pin_project_lite::pin_project;
-use reqwest::{
-    header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION, UPGRADE},
-    Client, StatusCode, Upgraded,
-};
 use serde::{Deserialize, Serialize};
-use tokio::time::{interval, sleep, Interval, Sleep};
+use tokio::time::{Interval, Sleep, interval, sleep};
 use tokio_websockets::{Message, WebSocketStream};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info};
 
 use crate::{
-    err::JellyfinError,
-    items::UserData,
-    sha::{Sha1, ShaImpl},
     Auth, JellyfinClient, Result,
+    connect::{Connection, MaybeTls},
+    items::UserData,
 };
 
-type SocketFuture = dyn Future<Output = Result<Upgraded>> + Send;
+type SocketFuture = dyn Future<Output = Result<WebSocketStream<MaybeTls>>> + Send;
 
 pin_project! {
-    pub struct JellyfinWebSocket<Sha: ShaImpl = crate::sha::Default> {
-        connect: ConnectInfo<Sha>,
-        socket_future: Option<Pin<Box<SocketFuture>>>,
-        #[pin]
-        socket: Option<WebSocketStream<Upgraded>>,
-        send_keep_alive: bool,
-        keep_alive_timer: Option<Interval>,
-        #[pin]
-        reconnect: Option<Sleep>,
-        backoff: bool,
-        reconnect_sleep: Option<Duration>,
-        closing: bool,
+    #[project = SocketStateProj]
+    enum SocketState{
+        BackoffSleep{#[pin] sleep: Sleep, backoff_duration: Duration},
+        Handshake{f:Pin<Box<SocketFuture>>,backoff_duration: Option<Duration>},
+        Websocket{#[pin] socket:WebSocketStream<MaybeTls>, state: SocketHandlingState},
     }
 }
+
+enum SocketHandlingState {
+    Close,
+    Normal,
+    WebsocketKeepAlive {
+        keep_alive: Interval,
+        send_now: bool,
+    },
+}
+
+struct OpResult {
+    state_change: Option<SocketState>,
+    output: Option<Option<Result<JellyfinMessage>>>,
+}
+
+fn make_backoff(backoff_duration: Option<Duration>) -> SocketState {
+    //do exponential backoff to a maximum of 1 minute
+    let backoff_duration = match backoff_duration {
+        None => Duration::from_secs(5),
+        Some(duration) => min(duration * 2, Duration::from_secs(60)),
+    };
+    info!("reconnecting in {} seconds", backoff_duration.as_secs());
+    SocketState::BackoffSleep {
+        sleep: sleep(backoff_duration),
+        backoff_duration,
+    }
+}
+
+async fn make_websocket_future(
+    builder: tokio_websockets::client::Builder<'static>,
+    connect: Arc<Connection>,
+) -> Result<WebSocketStream<MaybeTls>> {
+    let conn = connect.http1_base_connection().await?;
+    let (stream, _) = builder.connect_on(conn).await?;
+    Ok(stream)
+}
+
+fn make_handshake(backoff_duration: Option<Duration>, connect: &ConnectInfo) -> SocketState {
+    let builder = tokio_websockets::client::Builder::from_uri(connect.uri.clone());
+    let connection = connect.connection.clone();
+    let future = Box::pin(make_websocket_future(builder, connection));
+    SocketState::Handshake {
+        f: future,
+        backoff_duration,
+    }
+}
+
+fn make_websocket(socket: WebSocketStream<MaybeTls>) -> SocketState {
+    SocketState::Websocket {
+        socket,
+        state: SocketHandlingState::Normal,
+    }
+}
+
+fn poll_backoff_sleep(
+    sleep: Pin<&mut Sleep>,
+    backoff_duration: Duration,
+    cx: &mut std::task::Context<'_>,
+    connect: &ConnectInfo,
+) -> Poll<OpResult> {
+    ready!(sleep.poll(cx));
+    Poll::Ready(OpResult {
+        state_change: Some(make_handshake(Some(backoff_duration), connect)),
+        output: None,
+    })
+}
+
+fn poll_handshake(
+    mut f: Pin<&mut SocketFuture>,
+    backoff_duration: Option<Duration>,
+    cx: &mut std::task::Context<'_>,
+) -> Poll<OpResult> {
+    match ready!(f.as_mut().poll(cx)) {
+        Ok(socket) => Poll::Ready(OpResult {
+            state_change: Some(make_websocket(socket)),
+            output: None,
+        }),
+        Err(e) => Poll::Ready(OpResult {
+            state_change: Some(make_backoff(backoff_duration)),
+            output: Some(Some(Err(e))),
+        }),
+    }
+}
+
+struct WebsocketResult {
+    parent: Option<OpResult>,
+    socket: Option<SocketHandlingState>,
+}
+
+fn poll_websocket_close(
+    socket: Pin<&mut WebSocketStream<MaybeTls>>,
+    cx: &mut std::task::Context<'_>,
+    connect: &ConnectInfo,
+) -> Poll<WebsocketResult> {
+    let res = ready!(socket.poll_close(cx));
+    debug!("socket closed");
+    let output = res.err().map(|e| Some(Err(e.into())));
+    Poll::Ready(WebsocketResult {
+        parent: Some(OpResult {
+            state_change: Some(make_handshake(None, connect)),
+            output,
+        }),
+        socket: None,
+    })
+}
+
+fn poll_websocket_normal(
+    mut socket: Pin<&mut WebSocketStream<MaybeTls>>,
+    cx: &mut std::task::Context<'_>,
+) -> Poll<WebsocketResult> {
+    loop {
+        match ready!(socket.as_mut().poll_next(cx)) {
+            None => {
+                debug!("websocket closed");
+                return Poll::Ready(WebsocketResult {
+                    parent: None,
+                    socket: Some(SocketHandlingState::Close),
+                });
+            }
+            Some(Err(e)) => {
+                debug!("error in websocket: {e:?}");
+                return Poll::Ready(WebsocketResult {
+                    parent: Some(OpResult {
+                        state_change: None,
+                        output: Some(Some(Err(e.into()))),
+                    }),
+                    socket: Some(SocketHandlingState::Close),
+                });
+            }
+            Some(Ok(message)) => {
+                if message.is_ping() || message.is_pong() {
+                } else if let Some(message) = message.as_text() {
+                    match serde_json::from_str::<JellyfinMessageInternal>(message) {
+                        Err(e) => {
+                            return Poll::Ready(WebsocketResult {
+                                parent: Some(OpResult {
+                                    state_change: None,
+                                    output: Some(Some(Err(e.into()))),
+                                }),
+                                socket: None,
+                            });
+                        }
+                        Ok(JellyfinMessageInternal::KeepAlive) => {}
+                        Ok(JellyfinMessageInternal::ForceKeepAlive { data }) => {
+                            return Poll::Ready(WebsocketResult {
+                                parent: None,
+                                socket: Some(SocketHandlingState::WebsocketKeepAlive {
+                                    keep_alive: interval(Duration::from_secs(data).div_f64(2.0)),
+                                    send_now: true,
+                                }),
+                            });
+                        }
+                        Ok(JellyfinMessageInternal::Unknown { message_type, data }) => {
+                            return Poll::Ready(WebsocketResult {
+                                parent: Some(OpResult {
+                                    state_change: None,
+                                    output: Some(Some(Ok(JellyfinMessage::Unknown {
+                                        message_type,
+                                        data,
+                                    }))),
+                                }),
+                                socket: None,
+                            });
+                        }
+                        Ok(JellyfinMessageInternal::RefreshProgress { item_id, progress }) => {
+                            let message = match progress.parse::<f64>() {
+                                Ok(progress) => {
+                                    Ok(JellyfinMessage::RefreshProgress { item_id, progress })
+                                }
+                                Err(e) => Err(e.into()),
+                            };
+                            return Poll::Ready(WebsocketResult {
+                                parent: Some(OpResult {
+                                    state_change: None,
+                                    output: Some(Some(message)),
+                                }),
+                                socket: None,
+                            });
+                        }
+                        Ok(JellyfinMessageInternal::UserDataChanged { user_data_list }) => {
+                            return Poll::Ready(WebsocketResult {
+                                parent: Some(OpResult {
+                                    state_change: None,
+                                    output: Some(Some(Ok(JellyfinMessage::UserDataChanged {
+                                        user_data_list,
+                                    }))),
+                                }),
+                                socket: None,
+                            });
+                        }
+                    }
+                } else if message.as_payload().is_empty() {
+                } else {
+                    return Poll::Ready(WebsocketResult {
+                        parent: Some(OpResult {
+                            state_change: None,
+                            output: Some(Some(Ok(JellyfinMessage::Binary(
+                                message.as_payload().to_vec(),
+                            )))),
+                        }),
+                        socket: None,
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn poll_websocket_keep_alive(
+    mut socket: Pin<&mut WebSocketStream<MaybeTls>>,
+    keep_alive: &mut Interval,
+    send_now: &mut bool,
+    cx: &mut std::task::Context<'_>,
+) -> Poll<WebsocketResult> {
+    if keep_alive.poll_tick(cx).is_ready() {
+        *send_now = true;
+    }
+    if *send_now {
+        if let Err(e) = ready!(socket.as_mut().poll_ready(cx)) {
+            debug!("error waiting for keep alive send to be ready");
+            return Poll::Ready(WebsocketResult {
+                parent: Some(OpResult {
+                    state_change: None,
+                    output: Some(Some(Err(e.into()))),
+                }),
+                socket: Some(SocketHandlingState::Close),
+            });
+        }
+        if let Err(e) = socket
+            .as_mut()
+            .start_send(Message::text("{\"MessageType\":\"KeepAlive\"}"))
+        {
+            debug!("error sending keep alive");
+            return Poll::Ready(WebsocketResult {
+                parent: Some(OpResult {
+                    state_change: None,
+                    output: Some(Some(Err(e.into()))),
+                }),
+                socket: Some(SocketHandlingState::Close),
+            });
+        }
+        *send_now = false;
+    }
+    poll_websocket_normal(socket, cx)
+}
+
+fn poll_websocket(
+    mut socket: Pin<&mut WebSocketStream<MaybeTls>>,
+    state: &mut SocketHandlingState,
+    cx: &mut std::task::Context<'_>,
+    connect: &ConnectInfo,
+) -> Poll<OpResult> {
+    loop {
+        let res = match state {
+            SocketHandlingState::Close => poll_websocket_close(socket.as_mut(), cx, connect),
+            SocketHandlingState::Normal => poll_websocket_normal(socket.as_mut(), cx),
+            SocketHandlingState::WebsocketKeepAlive {
+                keep_alive,
+                send_now,
+            } => poll_websocket_keep_alive(socket.as_mut(), keep_alive, send_now, cx),
+        };
+        let res = ready!(res);
+        if let Some(new_state) = res.socket {
+            *state = new_state;
+        }
+        if let Some(parent) = res.parent {
+            return Poll::Ready(parent);
+        }
+    }
+}
+
+impl SocketState {
+    fn poll_state(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        connect: &ConnectInfo,
+    ) -> Poll<Option<Result<JellyfinMessage>>> {
+        loop {
+            let res = match self.as_mut().project() {
+                SocketStateProj::BackoffSleep {
+                    sleep,
+                    backoff_duration,
+                } => poll_backoff_sleep(sleep, *backoff_duration, cx, connect),
+                SocketStateProj::Handshake {
+                    f,
+                    backoff_duration,
+                } => poll_handshake(f.as_mut(), *backoff_duration, cx),
+                SocketStateProj::Websocket { socket, state } => {
+                    poll_websocket(socket, state, cx, connect)
+                }
+            };
+            let res = ready!(res);
+            if let Some(state) = res.state_change {
+                self.set(state);
+            }
+            if let Some(output) = res.output {
+                return Poll::Ready(output);
+            }
+        }
+    }
+}
+
+pin_project! {
+    pub struct JellyfinWebSocket {
+        connect: ConnectInfo,
+        #[pin]
+        state: SocketState,
+    }
+}
+
+impl Stream for JellyfinWebSocket {
+    type Item = Result<JellyfinMessage>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        this.state.poll_state(cx, this.connect)
+    }
+}
+
 #[derive(Debug)]
 pub enum JellyfinMessage {
     Binary(Vec<u8>),
@@ -87,8 +396,6 @@ enum JellyfinMessageInternal {
     UserDataChanged {
         user_data_list: Vec<ChangedUserData>,
     },
-    #[serde(skip_deserializing)]
-    Binary(Vec<u8>),
     #[serde(untagged)]
     #[serde(rename_all = "PascalCase")]
     Unknown {
@@ -97,321 +404,36 @@ enum JellyfinMessageInternal {
     },
 }
 
-impl JellyfinMessageInternal {
-    #[inline(always)]
-    fn into_public<Sha: ShaImpl>(
-        self,
-        state: Pin<&mut JellyfinWebSocket<Sha>>,
-    ) -> Option<JellyfinMessage> {
-        match self {
-            JellyfinMessageInternal::KeepAlive => None,
-            JellyfinMessageInternal::ForceKeepAlive { data } => {
-                let state = state.project();
-                *state.keep_alive_timer = Some(interval(Duration::from_secs(data).div_f64(2.0)));
-                *state.send_keep_alive = false;
-                None
-            }
-            JellyfinMessageInternal::Binary(items) => Some(JellyfinMessage::Binary(items)),
-            JellyfinMessageInternal::Unknown { message_type, data } => {
-                Some(JellyfinMessage::Unknown { message_type, data })
-            }
-            JellyfinMessageInternal::RefreshProgress { item_id, progress } => {
-                Some(JellyfinMessage::RefreshProgress {
-                    item_id,
-                    progress: progress
-                        .parse()
-                        .inspect_err(|e| warn!("Error parsing float: {e:?}"))
-                        .ok()?,
-                })
-            }
-            JellyfinMessageInternal::UserDataChanged { user_data_list } => {
-                Some(JellyfinMessage::UserDataChanged { user_data_list })
-            }
-        }
-    }
-}
-
-#[inline(always)]
-fn poll_socket_connected<Sha: ShaImpl>(
-    state: Pin<&mut JellyfinWebSocket<Sha>>,
-    cx: &mut std::task::Context<'_>,
-) -> Poll<()> {
-    let mut state = state.project();
-    if state.socket.is_none() {
-        loop {
-            if state.socket_future.is_none() {
-                if *state.backoff {
-                    if state.reconnect.is_none() {
-                        //do exponential backoff to a maximum of 1 minute
-                        let time = match state.reconnect_sleep {
-                            None => Duration::from_secs(5),
-                            Some(duration) => min((*duration) * 2, Duration::from_secs(60)),
-                        };
-                        *state.reconnect_sleep = Some(time);
-                        info!("reconnecting in {} seconds", time.as_secs());
-                        state.reconnect.set(Some(sleep(time)));
-                    }
-                    ready!(state
-                        .reconnect
-                        .as_mut()
-                        .as_pin_mut()
-                        .expect("filled by previous check")
-                        .poll(cx));
-                    state.reconnect.set(None);
-                }
-                *state.socket_future = Some(state.connect.new_connection());
-            }
-            match ready!(state
-                .socket_future
-                .as_mut()
-                .expect("filled by previous check")
-                .as_mut()
-                .poll(cx))
-            {
-                Ok(stream) => {
-                    state.socket.set(Some(
-                        tokio_websockets::ClientBuilder::new().take_over(stream),
-                    ));
-                    *state.socket_future = None;
-                    *state.backoff = false;
-                    *state.reconnect_sleep = None;
-                    *state.closing = false;
-                    break;
-                }
-                Err(e) => {
-                    warn!("error connecting web socket: {e:?}");
-                    *state.socket_future = None;
-                    *state.backoff = true;
-                }
-            }
-        }
-    }
-    Poll::Ready(())
-}
-
-///closes the current stream
-/// requires socket to be set
-#[inline(always)]
-fn poll_close<Sha: ShaImpl>(
-    state: Pin<&mut JellyfinWebSocket<Sha>>,
-    cx: &mut std::task::Context<'_>,
-) -> Poll<()> {
-    let mut state = state.project();
-    let _ = ready!(state
-        .socket
-        .as_mut()
-        .as_pin_mut()
-        .expect("filled by previous function")
-        .poll_close(cx));
-    debug!("socket closed successfully");
-    state.socket.set(None);
-    *state.keep_alive_timer = None;
-    Poll::Ready(())
-}
-
-/// send keep alive if needed
-/// requires socket to be set
-/// returns true if an error occurred and the parent loop should be restarted
-#[inline(always)]
-fn poll_keep_alive<Sha: ShaImpl>(
-    state: Pin<&mut JellyfinWebSocket<Sha>>,
-    cx: &mut std::task::Context<'_>,
-) -> bool {
-    let mut state = state.project();
-    if !*state.send_keep_alive
-        && state
-            .keep_alive_timer
-            .as_mut()
-            .map(|i| i.poll_tick(cx).is_ready())
-            .unwrap_or(false)
-    {
-        *state.send_keep_alive = true;
-    }
-    if *state.send_keep_alive {
-        let mut socket = state
-            .socket
-            .as_mut()
-            .as_pin_mut()
-            .expect("set in previous function");
-        match socket.as_mut().poll_ready(cx) {
-            Poll::Pending => false,
-            Poll::Ready(Err(e)) => {
-                warn!("error waiting for socket to be ready: {e:?}");
-                *state.closing = true;
-                true
-            }
-            Poll::Ready(Ok(())) => {
-                *state.send_keep_alive = false;
-                if let Err(e) = socket.start_send(Message::text("{\"MessageType\":\"KeepAlive\"}"))
-                {
-                    warn!("error sending keep alive message: {e:?}");
-                    *state.closing = true;
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    } else {
-        false
-    }
-}
-
-#[inline(always)]
-fn poll_message<Sha: ShaImpl>(
-    state: Pin<&mut JellyfinWebSocket<Sha>>,
-    cx: &mut std::task::Context<'_>,
-) -> Poll<Option<Result<JellyfinMessageInternal>>> {
-    let mut state = state.project();
-    Poll::Ready(
-        match ready!(state
-            .socket
-            .as_mut()
-            .as_pin_mut()
-            .expect("set in previous function")
-            .poll_next(cx))
-        {
-            None => {
-                *state.closing = true;
-                None
-            }
-            Some(Err(e)) => {
-                warn!("error receiving message: {e:?}");
-                *state.closing = true;
-                None
-            }
-            Some(Ok(message)) => {
-                if message.is_ping() || message.is_pong() {
-                    None
-                } else if let Some(message) = message.as_text() {
-                    match serde_json::from_str(message) {
-                        Ok(message) => Some(Ok(message)),
-                        Err(e) => Some(Err(e.into())),
-                    }
-                } else if message.as_payload().is_empty() {
-                    None
-                } else {
-                    Some(Ok(JellyfinMessageInternal::Binary(
-                        message.as_payload().to_vec(),
-                    )))
-                }
-            }
-        },
-    )
-}
-
-impl<Sha: ShaImpl> Stream for JellyfinWebSocket<Sha> {
-    type Item = Result<JellyfinMessage>;
-
-    #[instrument(skip_all, name = "poll_jellyfin_web_socket")]
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        loop {
-            ready!(poll_socket_connected(self.as_mut(), cx));
-            if self.closing {
-                ready!(poll_close(self.as_mut(), cx));
-                continue;
-            }
-            if poll_keep_alive(self.as_mut(), cx) {
-                continue;
-            }
-            match ready!(poll_message(self.as_mut(), cx)) {
-                Some(Ok(message)) => {
-                    debug!("internal message: {message:#?}");
-                    if let Some(message) = message.into_public(self.as_mut()) {
-                        break Poll::Ready(Some(Ok(message)));
-                    }
-                }
-                Some(Err(e)) => break Poll::Ready(Some(Err(e))),
-                None => {}
-            }
-        }
-    }
-}
-
 #[derive(Debug, Default, Clone, Serialize)]
 struct SocketQuery<'s> {
     api_key: &'s str,
     deviceid: &'s str,
 }
 
-struct ConnectInfo<Sha: ShaImpl> {
-    url: String,
-    client: Client,
-    access_token: Arc<str>,
-    deviceid: Arc<str>,
-    _sha: PhantomData<Sha>,
+struct ConnectInfo {
+    uri: Uri,
+    connection: Arc<Connection>,
 }
 
-impl<Sha: ShaImpl> ConnectInfo<Sha> {
-    fn new_connection(&self) -> Pin<Box<SocketFuture>> {
-        let request = self.client.get(&self.url);
-        let access_token = self.access_token.clone();
-        let deviceid = self.deviceid.clone();
-        Box::pin(async move {
-            let mut nonce = [0; 16];
-            getrandom::fill(&mut nonce)?;
-            let nonce = BASE64_STANDARD.encode(nonce);
-            let query = SocketQuery {
-                api_key: &access_token,
-                deviceid: &deviceid,
-            };
-            let res = request
-                .header(UPGRADE, "websocket")
-                .header(CONNECTION, "Upgrade")
-                .header(SEC_WEBSOCKET_KEY, &nonce)
-                .header(SEC_WEBSOCKET_VERSION, "13")
-                .query(&query)
-                .send()
-                .await?
-                .error_for_status()?;
-            if res.status() != StatusCode::SWITCHING_PROTOCOLS {
-                return Err(JellyfinError::Jellyfin("wrong status code"));
-            }
-            let mut accept = <Sha::S1 as Sha1>::new();
-            accept.update(nonce.as_bytes());
-            accept.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-            let accept_bytes = accept.finalize();
-            let accept = BASE64_STANDARD.encode(accept_bytes);
-            if res
-                .headers()
-                .get(SEC_WEBSOCKET_ACCEPT)
-                .ok_or(JellyfinError::Jellyfin(
-                    "missing sec-websocket-accept header",
-                ))?
-                .as_bytes()
-                != accept.as_bytes()
-            {
-                return Err(JellyfinError::Jellyfin(
-                    "sec-websocket-accept has a wrong value",
-                ));
-            }
-            Ok(res.upgrade().await?)
-        })
-    }
-}
+impl JellyfinClient<Auth> {
+    pub fn get_socket(&self) -> Result<JellyfinWebSocket> {
+        let uri = http::uri::Builder::new()
+            .scheme(if self.tls() { "wss" } else { "ws" })
+            .authority(self.connection.authority().clone())
+            .path_and_query(self.build_path(
+                "/socket",
+                SocketQuery {
+                    api_key: &self.auth.access_token,
+                    deviceid: &self.auth.device_id,
+                },
+            )?)
+            .build()?;
 
-impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
-    pub fn get_socket(&self) -> JellyfinWebSocket<Sha> {
         let connect = ConnectInfo {
-            url: format!("{}socket", self.url),
-            client: self.client.clone(),
-            access_token: Arc::from(self.auth.access_token.as_str()),
-            deviceid: Arc::from(self.auth.device_id.as_str()),
-            _sha: PhantomData,
+            uri,
+            connection: self.connection.clone(),
         };
-        JellyfinWebSocket {
-            connect,
-            socket_future: None,
-            socket: None,
-            send_keep_alive: false,
-            keep_alive_timer: None,
-            reconnect: None,
-            backoff: false,
-            reconnect_sleep: None,
-            closing: false,
-        }
+        let state = make_handshake(None, &connect);
+        Ok(JellyfinWebSocket { connect, state })
     }
 }

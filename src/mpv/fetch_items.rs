@@ -2,9 +2,7 @@ use std::pin::Pin;
 
 use color_eyre::{Result, eyre::Context};
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec,
-    items::MediaItem,
-    playlist::GetPlaylistItemsQuery,
+    Auth, JellyfinClient, JellyfinVec, items::MediaItem, playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
 };
 use tracing::warn;

@@ -1,7 +1,8 @@
 use serde::Serialize;
 
 use crate::{
-    items::MediaItem, sha::ShaImpl, Authed, JellyfinClient, JellyfinVec, JsonResponse, Result,
+    Authed, JellyfinClient, JellyfinVec, Result, connect::JsonResponse, items::MediaItem,
+    request::RequestBuilderExt,
 };
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -30,19 +31,24 @@ pub struct GetSeasonsQuery<'s> {
     pub enable_user_data: Option<bool>,
 }
 
-impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     pub async fn get_episodes(
         &self,
         series_id: &str,
         query: &GetEpisodesQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}Shows/{series_id}/Episodes", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                |prefix: &mut String| {
+                    prefix.push_str("/Shows/");
+                    prefix.push_str(series_id);
+                    prefix.push_str("/Episodes");
+                },
+                query,
+            )?
+            .empty_body()?,
+        )
+        .await
     }
 
     pub async fn get_seasons(
@@ -50,12 +56,17 @@ impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         series_id: &str,
         query: &GetSeasonsQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}Shows/{series_id}/Seasons", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                |prefix: &mut String| {
+                    prefix.push_str("/Shows/");
+                    prefix.push_str(series_id);
+                    prefix.push_str("/Seasons");
+                },
+                query,
+            )?
+            .empty_body()?,
+        )
+        .await
     }
 }

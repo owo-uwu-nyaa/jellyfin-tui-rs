@@ -1,16 +1,14 @@
-use std::marker::PhantomData;
-
-use reqwest::header::{HeaderValue, AUTHORIZATION};
+use aws_lc_rs::digest;
+use http::{HeaderValue, header::AUTHORIZATION};
 use serde::Serialize;
 
-use base64::{engine::general_purpose::URL_SAFE, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE};
 use tracing::{instrument, trace};
 
 use crate::{
-    err::JellyfinError,
-    sha::{Sha256, ShaImpl},
-    user::{User, UserAuth},
     Auth, ClientInfo, JellyfinClient, KeyAuth, NoAuth,
+    request::{NoQuery, RequestBuilderExt},
+    user::{User, UserAuth},
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize)]
@@ -19,15 +17,13 @@ struct AuthUserNameReq<'a> {
     username: &'a str,
     pw: &'a str,
 }
-impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
-    pub fn auth_key(self, key: String, user_name: impl AsRef<str>) -> JellyfinClient<KeyAuth, Sha> {
+impl JellyfinClient<NoAuth> {
+    pub fn auth_key(self, key: String, user_name: impl AsRef<str>) -> JellyfinClient<KeyAuth> {
         let key = key.to_string();
         let device_id =
-            make_user_client_id::<Sha>(user_name.as_ref(), &self.client_info, &self.device_name);
+            make_user_client_id(user_name.as_ref(), &self.client_info, &self.device_name);
         let auth_header = make_auth_header(&key, &self.client_info, &self.device_name, &device_id);
         JellyfinClient {
-            url: self.url,
-            client: self.client,
             client_info: self.client_info,
             device_name: self.device_name,
             auth: KeyAuth {
@@ -35,7 +31,9 @@ impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
                 header: auth_header,
                 device_id,
             },
-            _phantom: PhantomData,
+            host_header: self.host_header,
+            uri_base: self.uri_base,
+            connection: self.connection,
         }
     }
 
@@ -44,33 +42,33 @@ impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
         self,
         username: impl AsRef<str>,
         password: impl AsRef<str>,
-    ) -> Result<JellyfinClient<Auth, Sha>, (Self, JellyfinError)> {
+    ) -> Result<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
         let username = username.as_ref();
-        let device_id = make_user_client_id::<Sha>(username, &self.client_info, &self.device_name);
-        let req = match self
-            .client
-            .post(format!("{}Users/AuthenticateByName", self.url))
-            .json(&AuthUserNameReq {
-                username,
-                pw: password.as_ref(),
-            })
-            .header(
-                AUTHORIZATION,
-                make_auth_handshake_header(&self.client_info, &self.device_name, &device_id),
+        let device_id = make_user_client_id(username, &self.client_info, &self.device_name);
+        let auth: Result<UserAuth, color_eyre::Report> = async {
+            self.send_request_json(
+                self.post("/Users/AuthenticateByName", NoQuery)?
+                    .header(
+                        AUTHORIZATION,
+                        make_auth_handshake_header(
+                            &self.client_info,
+                            &self.device_name,
+                            &device_id,
+                        ),
+                    )
+                    .json_body(&AuthUserNameReq {
+                        username,
+                        pw: password.as_ref(),
+                    })?,
             )
-            .send()
+            .await?
+            .deserialize()
             .await
-        {
-            Ok(req) => req,
-            Err(e) => return Err((self, e.into())),
-        };
-        let req = match req.error_for_status() {
-            Ok(req) => req,
-            Err(e) => return Err((self, e.into())),
-        };
-        let auth: UserAuth = match req.json().await {
-            Ok(auth) => auth,
-            Err(e) => return Err((self, e.into())),
+        }
+        .await;
+        let auth = match auth {
+            Ok(v) => v,
+            Err(e) => return Err((self, e)),
         };
         let auth_header = make_auth_header(
             &auth.access_token,
@@ -79,8 +77,6 @@ impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
             &device_id,
         );
         Ok(JellyfinClient {
-            url: self.url,
-            client: self.client,
             client_info: self.client_info,
             device_name: self.device_name,
             auth: Auth {
@@ -89,28 +85,26 @@ impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
                 header: auth_header,
                 device_id,
             },
-            _phantom: PhantomData,
+            host_header: self.host_header,
+            uri_base: self.uri_base,
+            connection: self.connection,
         })
     }
 }
 
-impl<Sha: ShaImpl> JellyfinClient<KeyAuth, Sha> {
-    pub async fn get_self(self) -> Result<JellyfinClient<Auth, Sha>, (Self, JellyfinError)> {
-        let req = match self.get(format!("{}Users/Me", self.url)).send().await {
-            Ok(v) => v,
-            Err(e) => return Err((self, e.into())),
+impl JellyfinClient<KeyAuth> {
+    pub async fn get_self(self) -> Result<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
+        let user = async {
+            self.send_request_json(self.get("/Users/Me", NoQuery)?.empty_body()?)
+                .await?
+                .deserialize()
+                .await
         };
-        let req = match req.error_for_status() {
+        let user: User = match user.await {
             Ok(v) => v,
-            Err(e) => return Err((self, e.into())),
-        };
-        let user: User = match req.json().await {
-            Ok(v) => v,
-            Err(e) => return Err((self, e.into())),
+            Err(e) => return Err((self, e)),
         };
         Ok(JellyfinClient {
-            url: self.url,
-            client: self.client,
             client_info: self.client_info,
             device_name: self.device_name,
             auth: Auth {
@@ -119,7 +113,9 @@ impl<Sha: ShaImpl> JellyfinClient<KeyAuth, Sha> {
                 header: self.auth.header,
                 device_id: self.auth.device_id,
             },
-            _phantom: PhantomData,
+            host_header: self.host_header,
+            uri_base: self.uri_base,
+            connection: self.connection,
         })
     }
 }
@@ -165,16 +161,12 @@ fn make_auth_header(
 }
 
 #[instrument(skip_all)]
-fn make_user_client_id<Sha: ShaImpl>(
-    user_name: &str,
-    client_info: &ClientInfo,
-    device_name: &str,
-) -> String {
-    let mut digest = <Sha::S256 as Sha256>::new();
+fn make_user_client_id(user_name: &str, client_info: &ClientInfo, device_name: &str) -> String {
+    let mut digest = digest::Context::new(&digest::SHA256);
     digest.update(client_info.name.as_bytes());
     digest.update(client_info.version.as_bytes());
     digest.update(device_name.as_bytes());
     digest.update(user_name.as_bytes());
-    let hash = digest.finalize();
+    let hash = digest.finish();
     URL_SAFE.encode(hash)
 }

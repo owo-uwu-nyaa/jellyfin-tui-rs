@@ -1,16 +1,16 @@
 use std::{ffi::CString, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
-use futures_util::{stream::FusedStream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream::FusedStream};
 use jellyfin::{
+    Auth, JellyfinClient,
     items::{ItemType, MediaItem},
     playback_status::ProgressBody,
     socket::JellyfinWebSocket,
-    Auth, JellyfinClient,
 };
 use libmpv::{
+    Mpv,
     events::EventContextAsync,
     node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode},
-    Mpv,
 };
 use tokio::{
     task::JoinSet,
@@ -22,7 +22,7 @@ use crate::Config;
 
 use super::mpv_stream::{MpvEvent, MpvStream, ObservedProperty};
 
-use color_eyre::eyre::{eyre, Context, OptionExt, Report, Result};
+use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
 
 pub struct Player<'j> {
     mpv: Option<MpvStream>,
@@ -121,7 +121,7 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                         state.id = Some(id.clone());
                         let started = state.jellyfin.prepare_set_playing();
                         state.join.spawn(async move {
-                            if let Err(e) = started.send(&id).await {
+                            if let Err(e) = async { started?.send(&id).await }.await {
                                 error!("error sending playback started: {e:?}")
                             }
                         });
@@ -177,29 +177,31 @@ fn poll_state(state: &mut Player<'_>, cx: &mut std::task::Context<'_>) -> Result
                 }
             }
         }
-        if state.send_timer.poll_tick(cx).is_ready() {
-            if let (Some(id), Some(pos)) = (state.id.as_ref(), state.position) {
-                if state.index != state.last_index || state.position != state.last_position {
-                    debug!("updating playback progress");
-                    state.last_index = state.index;
-                    state.last_position = state.position;
-                    let progress = state.jellyfin.prepare_set_playing_progress();
-                    let id = id.clone();
-                    let paused = state.paused;
-                    state.join.spawn(async move {
-                        if let Err(e) = progress
-                            .send(&ProgressBody {
-                                item_id: &id,
-                                is_paused: paused,
-                                position_ticks: (pos * 10000000.0) as u64,
-                            })
-                            .await
-                        {
-                            error!("error updating playback progress: {e:?}")
-                        }
-                    });
+        if state.send_timer.poll_tick(cx).is_ready()
+            && let (Some(id), Some(pos)) = (state.id.as_ref(), state.position)
+            && (state.index != state.last_index || state.position != state.last_position)
+        {
+            debug!("updating playback progress");
+            state.last_index = state.index;
+            state.last_position = state.position;
+            let progress = state.jellyfin.prepare_set_playing_progress();
+            let id = id.clone();
+            let paused = state.paused;
+            state.join.spawn(async move {
+                if let Err(e) = async {
+                    progress?
+                        .send(&ProgressBody {
+                            item_id: &id,
+                            is_paused: paused,
+                            position_ticks: (pos * 10000000.0) as u64,
+                        })
+                        .await
                 }
-            }
+                .await
+                {
+                    error!("error updating playback progress: {e:?}")
+                }
+            });
         }
         Poll::Pending
     };
@@ -217,13 +219,16 @@ fn send_playing_stopped(
         let finished = jellyfin.prepare_set_playing_stopped();
         let id = id.clone();
         join.spawn(async move {
-            if let Err(e) = finished
-                .send(&ProgressBody {
-                    item_id: &id,
-                    position_ticks: (pos * 10000000.0) as u64,
-                    is_paused: paused,
-                })
-                .await
+            if let Err(e) = async {
+                finished?
+                    .send(&ProgressBody {
+                        item_id: &id,
+                        position_ticks: (pos * 10000000.0) as u64,
+                        is_paused: paused,
+                    })
+                    .await
+            }
+            .await
             {
                 error!("error sending stop message: {e:?}")
             }
@@ -282,9 +287,11 @@ impl<'j> Player<'j> {
             append(&mpv, jellyfin, item)?
         }
         debug!("previous files added");
+        let uri = jellyfin.get_video_uri(&items[index])?.to_string();
+        debug!("adding {uri} to queue and play it");
         mpv.command(&[
             c"loadfile".to_node(),
-            CString::new(jellyfin.get_video_url(&items[index]))
+            CString::new(uri)
                 .context("converting video url to cstr")?
                 .to_node(),
             c"append-play".to_node(),
@@ -344,9 +351,11 @@ impl<'j> Player<'j> {
 }
 
 fn append(mpv: &Mpv<EventContextAsync>, jellyfin: &JellyfinClient, item: &MediaItem) -> Result<()> {
+    let uri = jellyfin.get_video_uri(item)?.to_string();
+    debug!("adding {uri} to queue");
     mpv.command(&[
         c"loadfile".to_node(),
-        CString::new(jellyfin.get_video_url(item))
+        CString::new(uri)
             .context("converting video url to cstr")?
             .to_node(),
         c"append".to_node(),
@@ -363,7 +372,7 @@ fn append(mpv: &Mpv<EventContextAsync>, jellyfin: &JellyfinClient, item: &MediaI
 
 fn name(item: &MediaItem) -> Result<CString> {
     let name = match &item.item_type {
-        ItemType::Movie  => item.name.clone(),
+        ItemType::Movie => item.name.clone(),
         ItemType::Episode {
             season_id: _,
             season_name: _,

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::{sha::ShaImpl, Auth, JellyfinClient, Result};
-use crate::{JellyfinVec, JsonResponse};
+use crate::Authed;
+use crate::request::{NoQuery, RequestBuilderExt};
+use crate::{JellyfinClient, JellyfinVec, Result, connect::JsonResponse};
+use color_eyre::eyre::Context;
+use http::Uri;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
@@ -127,7 +130,7 @@ pub enum MediaType {
 #[serde(tag = "Type")]
 pub enum ItemType {
     #[serde(rename_all = "PascalCase")]
-    Movie ,
+    Movie,
     #[serde(rename_all = "PascalCase")]
     Episode {
         season_id: Option<String>,
@@ -183,19 +186,14 @@ pub struct MediaItem {
     pub season_index: Option<u64>,
 }
 
-impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
     #[instrument(skip(self))]
     pub async fn get_user_items_resume(
         &self,
         query: &GetResumeQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}UserItems/Resume", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/UserItems/Resume", query)?.empty_body()?)
+            .await
     }
 
     #[instrument(skip(self))]
@@ -203,26 +201,16 @@ impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         &self,
         query: &GetNextUpQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}Shows/NextUp", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/Shows/NextUp", query)?.empty_body()?)
+            .await
     }
 
     pub async fn get_items(
         &self,
         query: &GetItemsQuery<'_>,
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
-        let req = self
-            .get(format!("{}Items", self.url))
-            .query(query)
-            .send()
-            .await?;
-        let req = req.error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(self.get("/Items", query)?.empty_body()?)
+            .await
     }
 
     pub async fn get_item(
@@ -230,26 +218,48 @@ impl<Sha: ShaImpl> JellyfinClient<Auth, Sha> {
         id: &str,
         user_id: Option<&str>,
     ) -> Result<JsonResponse<MediaItem>> {
-        let req = self
-            .get(format!("{}Items/{id}", self.url))
-            .query(&UserIdQuery { user_id })
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(req.into())
+        self.send_request_json(
+            self.get(
+                |prefix: &mut String| {
+                    prefix.push_str("/Items/");
+                    prefix.push_str(id);
+                },
+                &UserIdQuery { user_id },
+            )?
+            .empty_body()?,
+        )
+        .await
     }
 
     pub async fn set_user_data(&self, item: &str, data: &SetUserData) -> Result<()> {
-        let _ = self
-            .post(format!("{}UserItems/{item}/UserData", self.url))
-            .json(data)
-            .send()
-            .await?
-            .error_for_status()?;
+        self.send_request(
+            self.post(
+                |prefix: &mut String| {
+                    prefix.push_str("/Items/");
+                    prefix.push_str(item);
+                    prefix.push_str("/UserData");
+                },
+                NoQuery,
+            )?
+            .json_body(data)?,
+        )
+        .await?;
         Ok(())
     }
 
-    pub fn get_video_url(&self, item: &MediaItem) -> String {
-        format!("{}Items/{}/Download", self.url, item.id)
+    pub fn get_video_uri(&self, item: &MediaItem) -> Result<Uri> {
+        Uri::builder()
+            .scheme(if self.tls() { "https" } else { "http" })
+            .authority(self.authority().to_owned())
+            .path_and_query(self.build_path(
+                |prefix: &mut String| {
+                    prefix.push_str("/Items/");
+                    prefix.push_str(&item.id);
+                    prefix.push_str("/Download");
+                },
+                NoQuery,
+            )?)
+            .build()
+            .context("assembling video uri")
     }
 }

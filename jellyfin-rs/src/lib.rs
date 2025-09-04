@@ -1,40 +1,46 @@
-use std::{borrow::Cow, future::Future, marker::PhantomData};
+use std::{borrow::Cow, future::Future, ops::Deref, sync::Arc};
 
+use color_eyre::eyre::{OptionExt, eyre};
+use connect::Connection;
 pub use err::Result;
-use reqwest::{
-    header::{HeaderValue, AUTHORIZATION},
-    Client, IntoUrl, RequestBuilder,
-};
+use http::{Uri, header::AUTHORIZATION};
+use hyper::header::HeaderValue;
 use sealed::AuthSealed;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sha::ShaImpl;
-use url::Url;
+use serde::{Deserialize, Serialize};
 use user::User;
 
 pub mod activity;
 pub mod auth;
+pub mod connect;
 pub mod err;
 pub mod image;
 pub mod items;
 pub mod playback_status;
 pub mod playlist;
+pub mod request;
 pub mod session;
-pub mod sha;
 pub mod shows;
 pub mod socket;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
-pub use reqwest;
 
 #[derive(Debug, Clone)]
-pub struct JellyfinClient<AuthS: AuthStatus = Auth, Sha: ShaImpl = sha::Default> {
-    url: Url,
-    client: Client,
+pub struct JellyfinClient<AuthS: AuthStatus = Auth> {
+    host_header: HeaderValue,
+    uri_base: String,
+    connection: Arc<Connection>,
     client_info: ClientInfo,
     device_name: Cow<'static, str>,
     auth: AuthS,
-    _phantom: PhantomData<Sha>,
+}
+
+impl<A: AuthStatus> Deref for JellyfinClient<A> {
+    type Target = Connection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.connection
+    }
 }
 
 pub struct NoAuth;
@@ -59,10 +65,24 @@ mod sealed {
     impl AuthSealed for KeyAuth {}
 }
 
-pub trait AuthStatus: AuthSealed {}
-impl AuthStatus for NoAuth {}
-impl AuthStatus for Auth {}
-impl AuthStatus for KeyAuth {}
+pub trait AuthStatus: AuthSealed {
+    fn add_auth_header(&self, builder: http::request::Builder) -> http::request::Builder;
+}
+impl AuthStatus for NoAuth {
+    fn add_auth_header(&self, builder: http::request::Builder) -> http::request::Builder {
+        builder
+    }
+}
+impl AuthStatus for Auth {
+    fn add_auth_header(&self, builder: http::request::Builder) -> http::request::Builder {
+        builder.header(AUTHORIZATION, &self.header)
+    }
+}
+impl AuthStatus for KeyAuth {
+    fn add_auth_header(&self, builder: http::request::Builder) -> http::request::Builder {
+        builder.header(AUTHORIZATION, &self.header)
+    }
+}
 pub trait Authed: AuthStatus {
     fn token(&self) -> &str;
     fn header(&self) -> &HeaderValue;
@@ -92,24 +112,38 @@ pub struct ClientInfo {
     pub version: Cow<'static, str>,
 }
 
-impl<AuthS: AuthStatus, Sha: ShaImpl> JellyfinClient<AuthS, Sha> {
+impl<AuthS: AuthStatus> JellyfinClient<AuthS> {
+    pub fn connection(&self) -> &Arc<Connection> {
+        &self.connection
+    }
+
     /// Creates a new `JellyfinConnection`
     /// * `url` The base jellyfin server url, without a trailing "/"
     pub fn new(
-        url: impl AsRef<str>,
+        uri: impl AsRef<str>,
         client_info: ClientInfo,
         device_name: impl Into<Cow<'static, str>>,
-    ) -> err::Result<JellyfinClient<NoAuth, Sha>> {
+    ) -> err::Result<JellyfinClient<NoAuth>> {
+        let uri = Uri::try_from(uri.as_ref())?.into_parts();
+        let tls = match uri.scheme.as_ref().map(|s| s.as_str()) {
+            None => return Err(eyre!("jellyfin uri has no scheme")),
+            Some("http") => false,
+            Some("https") => true,
+            Some(val) => return Err(eyre!("unexpected jellyfin uri scheme {val}")),
+        };
+        let authority = uri.authority.ok_or_eyre("uri has no authority part")?;
+        let host_header = HeaderValue::from_str(authority.as_str())?;
+        let uri_base = uri
+            .path_and_query
+            .map(|path| path.path().trim_end_matches("/").to_string())
+            .unwrap_or(String::new());
         Ok(JellyfinClient {
-            url: Url::parse(url.as_ref())?,
-            client: Client::builder()
-                .connector_layer(tower::limit::concurrency::ConcurrencyLimitLayer::new(2))
-                .connection_verbose(true)
-                .build()?,
+            uri_base,
+            host_header,
+            connection: Arc::new(Connection::new(authority, tls)?),
             auth: NoAuth,
             client_info,
             device_name: device_name.into(),
-            _phantom: PhantomData,
         })
     }
 
@@ -123,7 +157,7 @@ impl<AuthS: AuthStatus, Sha: ShaImpl> JellyfinClient<AuthS, Sha> {
         device_name: impl Into<Cow<'static, str>>,
         username: impl AsRef<str>,
         password: impl AsRef<str>,
-    ) -> err::Result<JellyfinClient<Auth, Sha>> {
+    ) -> err::Result<JellyfinClient<Auth>> {
         Self::new(url, client_info, device_name)?
             .auth_user_name(username, password)
             .await
@@ -136,15 +170,15 @@ impl<AuthS: AuthStatus, Sha: ShaImpl> JellyfinClient<AuthS, Sha> {
         device_name: impl Into<Cow<'static, str>>,
         key: String,
         username: impl AsRef<str>,
-    ) -> Result<JellyfinClient<KeyAuth, Sha>> {
+    ) -> Result<JellyfinClient<KeyAuth>> {
         Ok(Self::new(url, client_info, device_name)?.auth_key(key, username))
     }
 
     pub fn get_auth(&self) -> &AuthS {
         &self.auth
     }
-    pub fn get_base_url(&self) -> &Url {
-        &self.url
+    pub fn get_base_uri(&self) -> &str {
+        &self.uri_base
     }
     pub fn get_client_info(&self) -> &ClientInfo {
         &self.client_info
@@ -152,67 +186,17 @@ impl<AuthS: AuthStatus, Sha: ShaImpl> JellyfinClient<AuthS, Sha> {
     pub fn get_device_name(&self) -> &str {
         &self.device_name
     }
-    pub fn get_http_client(&self) -> &Client {
-        &self.client
-    }
 }
 
-impl<Sha: ShaImpl> JellyfinClient<NoAuth, Sha> {
-    pub fn get_base_url_mut(&mut self) -> &mut Url {
-        &mut self.url
-    }
-}
-
-impl<Auth: Authed, Sha: ShaImpl> JellyfinClient<Auth, Sha> {
-    fn get(&self, url: impl IntoUrl) -> RequestBuilder {
-        self.client
-            .get(url)
-            .header(AUTHORIZATION, self.auth.header().clone())
-    }
-    fn post(&self, url: impl IntoUrl) -> RequestBuilder {
-        self.client
-            .post(url)
-            .header(AUTHORIZATION, self.auth.header().clone())
-    }
-    fn delete(&self, url: impl IntoUrl) -> RequestBuilder {
-        self.client
-            .delete(url)
-            .header(AUTHORIZATION, self.auth.header().clone())
-    }
-    pub fn without_auth(self) -> JellyfinClient<NoAuth, Sha> {
+impl<Auth: Authed> JellyfinClient<Auth> {
+    pub fn without_auth(self) -> JellyfinClient<NoAuth> {
         JellyfinClient {
-            url: self.url,
-            client: self.client,
+            uri_base: self.uri_base,
+            host_header: self.host_header,
+            connection: self.connection,
             client_info: self.client_info,
             device_name: self.device_name,
             auth: NoAuth,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-pub struct JsonResponse<T: DeserializeOwned> {
-    response: reqwest::Response,
-    deserialize: PhantomData<T>,
-}
-
-impl<T: DeserializeOwned> JsonResponse<T> {
-    pub async fn deserialize(self) -> Result<T> {
-        Ok(self.response.json().await?)
-    }
-    pub async fn deserialize_value(self) -> Result<serde_json::Value> {
-        Ok(self.response.json().await?)
-    }
-    pub async fn deserialize_as<V: DeserializeOwned>(self) -> Result<V> {
-        Ok(self.response.json().await?)
-    }
-}
-
-impl<T: DeserializeOwned> From<reqwest::Response> for JsonResponse<T> {
-    fn from(value: reqwest::Response) -> Self {
-        Self {
-            response: value,
-            deserialize: PhantomData,
         }
     }
 }
@@ -236,10 +220,10 @@ impl<T> JellyfinVec<T> {
         let mut res = initial.items;
         let total = initial.total_record_count;
         loop {
-            if let Some(total) = total {
-                if total as usize <= res.len() {
-                    break;
-                }
+            if let Some(total) = total
+                && total as usize <= res.len()
+            {
+                break;
             }
             if last_len == 0 {
                 break;

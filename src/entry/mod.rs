@@ -12,13 +12,13 @@ use ratatui::{
     text::Span,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use ratatui_image::{picker::Picker, FontSize};
+use ratatui_image::{FontSize, picker::Picker};
 use tracing::instrument;
 
 use crate::{
+    Result, TuiContext,
     image::{ImagesAvailable, JellyfinImage, JellyfinImageState},
     state::NextScreen,
-    TuiContext,
 };
 
 pub struct Entry {
@@ -29,13 +29,15 @@ pub struct Entry {
     watch_status: Option<Cow<'static, str>>,
 }
 
-impl Debug for Entry{
+impl Debug for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Entry").field("title", &self.title).field("subtitle", &self.subtitle).field("watch_status", &self.watch_status).finish_non_exhaustive()
+        f.debug_struct("Entry")
+            .field("title", &self.title)
+            .field("subtitle", &self.subtitle)
+            .field("watch_status", &self.watch_status)
+            .finish_non_exhaustive()
     }
 }
-
-
 
 pub const IMAGE_WIDTH: u16 = 32;
 pub fn image_height(font: FontSize) -> u16 {
@@ -111,7 +113,7 @@ impl Entry {
         }
     }
 
-    pub fn from_media_item(item: MediaItem, context: &TuiContext) -> Self {
+    pub fn from_media_item(item: MediaItem, context: &TuiContext) -> Result<Self> {
         let (title, subtitle) = match &item.item_type {
             ItemType::Movie => (item.name.clone(), None),
             ItemType::Episode {
@@ -141,7 +143,8 @@ impl Entry {
                     *image_type,
                     context.image_cache.clone(),
                 )
-            });
+            })
+            .transpose()?;
         let watch_status = if let Some(user_data) = item.user_data.as_ref() {
             if let Some(num @ 1..) = user_data.unplayed_item_count {
                 Some(format!("{num}").into())
@@ -153,10 +156,16 @@ impl Entry {
         } else {
             None
         };
-        Self::new(image, title, subtitle, EntryInner::Item(item), watch_status)
+        Ok(Self::new(
+            image,
+            title,
+            subtitle,
+            EntryInner::Item(item),
+            watch_status,
+        ))
     }
 
-    pub fn from_user_view(item: UserView, context: &TuiContext) -> Self {
+    pub fn from_user_view(item: UserView, context: &TuiContext) -> Result<Self> {
         let title = item.name.clone();
         let image = item
             .image_tags
@@ -172,8 +181,9 @@ impl Entry {
                     *image_type,
                     context.image_cache.clone(),
                 )
-            });
-        Self::new(image, title, None, EntryInner::View(item), None)
+            })
+            .transpose()?;
+        Ok(Self::new(image, title, None, EntryInner::View(item), None))
     }
 
     pub fn play(&self) -> Option<NextScreen> {

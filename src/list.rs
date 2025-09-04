@@ -7,11 +7,11 @@ use ratatui::{
         Wrap,
     },
 };
-use ratatui_image::{picker::Picker, FontSize};
+use ratatui_image::{FontSize, picker::Picker};
 use tracing::{instrument, trace};
 
 use crate::{
-    entry::{entry_height, Entry, ENTRY_WIDTH},
+    entry::{ENTRY_WIDTH, Entry, entry_height},
     image::ImagesAvailable,
 };
 

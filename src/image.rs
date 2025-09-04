@@ -1,7 +1,15 @@
 use std::{
-    cmp::min, collections::HashMap, fmt::Debug, future::Future, io::Cursor, ops::DerefMut, sync::{
-        atomic::{AtomicBool, Ordering}, Arc, Weak
-    }, task::{self, Poll, Waker}
+    cmp::min,
+    collections::HashMap,
+    fmt::Debug,
+    future::Future,
+    io::Cursor,
+    ops::DerefMut,
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
+    task::{self, Poll, Waker},
 };
 
 use bytes::Bytes;
@@ -12,7 +20,6 @@ use jellyfin::{
     AuthStatus, JellyfinClient,
     image::{GetImage, GetImageQuery},
     items::ImageType,
-    sha::ShaImpl,
 };
 use log::trace;
 use parking_lot::Mutex;
@@ -51,11 +58,12 @@ impl ImagesAvailableInner {
     #[instrument(level = "trace", skip_all)]
     fn wake(&self) {
         trace!("images available");
-        if !self.available.load(Ordering::SeqCst) && !self.available.swap(true, Ordering::SeqCst) {
-            if let Some(waker) = self.waker.lock().take() {
-                trace!("waking");
-                waker.wake();
-            }
+        if !self.available.load(Ordering::SeqCst)
+            && !self.available.swap(true, Ordering::SeqCst)
+            && let Some(waker) = self.waker.lock().take()
+        {
+            trace!("waking");
+            waker.wake();
         }
     }
 }
@@ -155,13 +163,11 @@ enum ImageStateInnerState {
     Image(StatefulProtocol, ImageProtocolKey, u16),
 }
 
-
 impl Default for ImageStateInnerState {
     fn default() -> Self {
         Self::Invalid
     }
 }
-
 
 struct ImageStateInner {
     _cancel_fetch: Option<DropGuard>,
@@ -255,11 +261,7 @@ async fn do_fetch_image(
         }
     };
     debug!("requesting image");
-    let query = GetImageQuery {
-        tag: Some(tag),
-        format: Some("webp"),
-    };
-    let image = get_image.get(&query);
+    let image = get_image.get();
     let image = select! {
         biased;
         res = image => {
@@ -333,20 +335,20 @@ async fn fetch_image(
 
 impl JellyfinImageState {
     pub fn new(
-        client: &JellyfinClient<impl AuthStatus, impl ShaImpl>,
+        client: &JellyfinClient<impl AuthStatus>,
         db: SqlitePool,
         tag: String,
         item_id: String,
         image_type: ImageType,
         cache: ImageProtocolCache,
-    ) -> Self {
+    ) -> Result<Self> {
         let key = ImageProtocolKey {
             tag,
             item_id,
             image_type,
         };
         let cached = cache.protocols.lock().remove(&key);
-        if let Some(cached) = cached {
+        let res = if let Some(cached) = cached {
             trace!("got image from cache");
             let state = match cached {
                 Either::Left((protocol, width)) => {
@@ -368,7 +370,14 @@ impl JellyfinImageState {
                 item_id,
                 image_type,
             } = key;
-            let get_image = client.prepare_get_image(&item_id, image_type);
+            let get_image = client.prepare_get_image(
+                &item_id,
+                image_type,
+                &GetImageQuery {
+                    tag: Some(&tag),
+                    format: Some("webp"),
+                },
+            )?;
             let cancel = CancellationToken::new();
             Self {
                 inner: Arc::new(ImageStateInner {
@@ -385,7 +394,8 @@ impl JellyfinImageState {
                     cache,
                 }),
             }
-        }
+        };
+        Ok(res)
     }
     #[instrument(skip_all, name = "prefetch_image")]
     pub fn prefetch(&mut self, availabe: &ImagesAvailable) {

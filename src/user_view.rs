@@ -1,26 +1,25 @@
 use color_eyre::eyre::{Context, Result};
 use futures_util::StreamExt;
 use jellyfin::{
-    items::{GetItemsQuery, MediaItem},
-    sha::ShaImpl,
-    user_views::UserView,
     Auth, JellyfinClient, JellyfinVec,
+    items::{GetItemsQuery, MediaItem},
+    user_views::UserView,
 };
 use std::pin::Pin;
 use tracing::debug;
 
 use crate::{
+    TuiContext,
     entry::Entry,
     fetch::fetch_screen,
     grid::EntryGrid,
     image::ImagesAvailable,
     state::{Navigation, NextScreen, ToNavigation},
-    TuiContext,
 };
 use keybinds::{Command, KeybindEvent, KeybindEventStream};
 
 async fn fetch_user_view_items(
-    jellyfin: &JellyfinClient<Auth, impl ShaImpl>,
+    jellyfin: &JellyfinClient<Auth>,
     view: &UserView,
 ) -> Result<Vec<MediaItem>> {
     let user_id = jellyfin.get_auth().user.id.as_str();
@@ -94,7 +93,7 @@ pub async fn display_user_view(
         items
             .into_iter()
             .map(|item| Entry::from_media_item(item, &cx))
-            .collect(),
+            .collect::<Result<Vec<_>>>()?,
         view.name.clone(),
     );
     let images_available = ImagesAvailable::new();
@@ -145,13 +144,13 @@ pub async fn display_user_view(
                 grid.down();
             }
             UserViewCommand::Play => {
-                if let Some(entry) = grid.get() {
-                    if let Some(next) = entry.play() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::LoadUserView(view),
-                            next,
-                        });
-                    }
+                if let Some(entry) = grid.get()
+                    && let Some(next) = entry.play()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadUserView(view),
+                        next,
+                    });
                 }
             }
             UserViewCommand::Open => {
@@ -163,33 +162,33 @@ pub async fn display_user_view(
                 }
             }
             UserViewCommand::OpenEpisode => {
-                if let Some(entry) = grid.get() {
-                    if let Some(next) = entry.episode() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
-                            next,
-                        });
-                    }
+                if let Some(entry) = grid.get()
+                    && let Some(next) = entry.episode()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next,
+                    });
                 }
             }
             UserViewCommand::OpenSeason => {
-                if let Some(entry) = grid.get() {
-                    if let Some(next) = entry.season() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
-                            next,
-                        });
-                    }
+                if let Some(entry) = grid.get()
+                    && let Some(next) = entry.season()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next,
+                    });
                 }
             }
             UserViewCommand::OpenSeries => {
-                if let Some(entry) = grid.get() {
-                    if let Some(next) = entry.series() {
-                        break Ok(Navigation::Push {
-                            current: NextScreen::LoadHomeScreen,
-                            next,
-                        });
-                    }
+                if let Some(entry) = grid.get()
+                    && let Some(next) = entry.series()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next,
+                    });
                 }
             }
         }

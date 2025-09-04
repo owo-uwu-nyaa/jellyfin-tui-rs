@@ -1,18 +1,18 @@
 use std::{
     ffi::CString,
     ops::Deref,
-    task::{ready, Poll},
+    task::{Poll, ready},
 };
 
 use color_eyre::eyre::{Context, Result};
 use futures_util::Stream;
 use jellyfin::JellyfinClient;
 use libmpv::{
+    Format, Mpv,
     events::{
-        mpv_event_id, Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData,
+        Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData, mpv_event_id,
     },
     node::{BorrowingMpvNodeList, ToNode},
-    Format, Mpv,
 };
 use tracing::{info, instrument, trace, warn};
 

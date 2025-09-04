@@ -6,7 +6,7 @@ use std::{
     pin::pin,
 };
 
-use color_eyre::eyre::{Context, OptionExt, Report, Result};
+use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use keybinds::{Command, KeybindEvent, KeybindEventStream, KeybindEvents};
@@ -20,7 +20,6 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use sqlx::{SqlitePool, query, query_scalar};
 use tracing::{error, info, instrument};
-use url::Url;
 
 use crate::{
     Config,
@@ -219,26 +218,18 @@ pub async fn login(
             error = Some(e);
         }
     }
-    let mut info_chainged = false;
+    let mut info_changed = false;
     let device_name: Cow<'static, str> = whoami::fallible::hostname()
         .ok()
         .map(|v| v.into())
         .unwrap_or_else(|| "unknown".into());
-    let mut client = JellyfinClient::<NoAuth>::new(
-        "http://test",
-        ClientInfo {
-            name: "jellyfin-tui-rs".into(),
-            version: "0.1".into(),
-        },
-        device_name,
-    )?;
     let client = 'connect: loop {
         if let Some(e) = error.take() {
             error!("Error logging in: {e:?}");
             if !get_login_info(
                 term,
                 &mut login_info,
-                &mut info_chainged,
+                &mut info_changed,
                 e,
                 events,
                 &config.keybinds,
@@ -249,16 +240,25 @@ pub async fn login(
                 return Ok(None);
             }
         }
+        if login_info.server_url.is_empty() {
+            error = Some(eyre!("Server URI is empty"));
+            continue;
+        }
 
-        match Url::parse(&login_info.server_url).context("parsing server base url") {
-            Ok(url) => {
-                *client.get_base_url_mut() = url;
-            }
+        let client = match JellyfinClient::<NoAuth>::new(
+            &login_info.server_url,
+            ClientInfo {
+                name: "jellyfin-tui-rs".into(),
+                version: "0.1".into(),
+            },
+            device_name.clone(),
+        ) {
+            Ok(client) => client,
             Err(e) => {
                 error = Some(e);
                 continue;
             }
-        }
+        };
         let mut auth_request = pin!(jellyfin_login(
             client,
             cache,
@@ -282,8 +282,7 @@ pub async fn login(
                 request = &mut auth_request => {
                     match request {
                         Ok(client) => break 'connect client,
-                        Err((c,e)) => {
-                            client = c;
+                        Err((_,e)) => {
                             error = Some(e.wrap_err("logging in"));
                             break
                         },
@@ -292,7 +291,7 @@ pub async fn login(
             };
         }
     };
-    if info_chainged {
+    if info_changed {
         create_dir_all(
             config
                 .login_file
@@ -365,7 +364,7 @@ async fn jellyfin_login(
     info!("connecting to server");
     let client = match client.auth_user_name(username, password).await {
         Ok(v) => v,
-        Err((client, e)) => return Err((client, e.into())),
+        Err((client, e)) => return Err((client, e)),
     };
     let device_name = client.get_device_name();
     let client_name = client.get_client_info().name.as_ref();

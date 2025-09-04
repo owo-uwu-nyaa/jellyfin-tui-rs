@@ -7,9 +7,9 @@ use ratatui::{
 use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
 
-use super::list::{entry_list_height, EntryList};
+use super::list::{EntryList, entry_list_height};
 use crate::{
-    entry::{Entry, ENTRY_WIDTH},
+    entry::{ENTRY_WIDTH, Entry},
     image::ImagesAvailable,
 };
 

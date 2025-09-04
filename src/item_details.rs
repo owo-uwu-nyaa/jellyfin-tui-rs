@@ -1,13 +1,13 @@
 use std::{cmp::min, pin::Pin};
 
 use crate::{
-    entry::{entry_height, Entry, ENTRY_WIDTH},
+    TuiContext,
+    entry::{ENTRY_WIDTH, Entry, entry_height},
     fetch::{fetch_child_of_type, fetch_screen},
     image::ImagesAvailable,
     state::{Navigation, NextScreen, ToNavigation},
-    TuiContext,
 };
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{Result, eyre::Context};
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
 use keybinds::{Command, KeybindEvent, KeybindEventStream};
@@ -46,7 +46,7 @@ pub async fn display_fetch_episode(cx: Pin<&mut TuiContext>, parent: &str) -> Re
 
 //also works with movies
 pub async fn display_item_details(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<Navigation> {
-    let mut entry = Entry::from_media_item(item.clone(), &cx);
+    let mut entry = Entry::from_media_item(item.clone(), &cx)?;
     let images_available = ImagesAvailable::new();
     let cx = cx.project();
     let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.item_details.clone());

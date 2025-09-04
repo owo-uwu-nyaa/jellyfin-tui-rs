@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::{state::Navigation, TuiContext};
+use crate::{TuiContext, state::Navigation};
 
 #[derive(Debug, Clone, Copy, Command)]
 pub enum ErrorCommand {

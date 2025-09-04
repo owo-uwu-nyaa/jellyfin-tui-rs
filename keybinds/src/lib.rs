@@ -4,12 +4,12 @@ pub mod widget;
 
 use crossterm::event::{EventStream, KeyCode};
 use eyre::Result;
-use tracing::{debug, info_span, Span};
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
     sync::Arc,
 };
+use tracing::{Span, debug, info_span};
 
 ///reexport for proc macro
 #[doc(hidden)]
@@ -82,13 +82,13 @@ pub enum KeyBinding<T: Command> {
     Invalid(String),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum Text {
     Char(char),
     Str(String),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum KeybindEvent<T: Command> {
     Render,
     Command(T),
@@ -116,13 +116,13 @@ pub struct KeybindEventStream<'e, T: Command> {
     text_input: bool,
     current_view: usize,
     minor: Vec<BindingMap<T>>,
-    span: Span
+    span: Span,
 }
 
 impl<'e, T: Command> KeybindEventStream<'e, T> {
     pub fn new(events: &'e mut KeybindEvents, map: BindingMap<T>) -> Self {
         let span = info_span!("KeybindEventStream");
-        span.in_scope(||debug!(?map, "new keybind stream with map"));
+        span.in_scope(|| debug!(?map, "new keybind stream with map"));
         Self {
             inner: events,
             top: map,
@@ -130,7 +130,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
             text_input: false,
             current_view: 0,
             minor: Vec::with_capacity(0),
-            span
+            span,
         }
     }
 
@@ -140,7 +140,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
         minor: Vec<BindingMap<T>>,
     ) -> Self {
         let span = info_span!("KeybindEventStream");
-        span.in_scope(||debug!(?map, ?minor, "new keybind stream with map"));
+        span.in_scope(|| debug!(?map, ?minor, "new keybind stream with map"));
         Self {
             inner: events,
             top: map,
@@ -148,7 +148,7 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
             text_input: false,
             current_view: 0,
             minor,
-            span
+            span,
         }
     }
 
@@ -177,11 +177,11 @@ pub mod __macro_support {
         out.sort_unstable();
         out.leak()
     }
-    pub fn commands_unique(names: &[&str], ty:&str) {
+    pub fn commands_unique(names: &[&str], ty: &str) {
         let mut iter = names.iter();
         if let Some(mut last) = iter.next() {
             for current in iter {
-                assert_ne!(last,current, "name of commands in {ty} is not unique");
+                assert_ne!(last, current, "name of commands in {ty} is not unique");
                 last = current;
             }
         }
@@ -190,7 +190,7 @@ pub mod __macro_support {
     pub trait BindingMapExt {
         type T;
     }
-    impl<T:Command> BindingMapExt for BindingMap<T>{
+    impl<T: Command> BindingMapExt for BindingMap<T> {
         type T = T;
     }
 }

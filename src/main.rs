@@ -53,7 +53,7 @@ async fn run_app(mut term: DefaultTerminal, config: Config, cache: SqlitePool) -
     let picker = Picker::from_query_stdio().context("getting information for image display")?;
     let mut events = KeybindEvents::new()?;
     if let Some(client) = login::login(&mut term, &config, &mut events, &cache).await? {
-        let jellyfin_socket = client.get_socket();
+        let jellyfin_socket = client.get_socket()?;
         let context = TuiContext {
             jellyfin: client,
             jellyfin_socket,
@@ -150,7 +150,7 @@ fn log_file() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    std::env::set_var("LC_NUMERIC", "C");
+    unsafe { std::env::set_var("LC_NUMERIC", "C") };
     color_eyre::install().expect("installing color eyre format handler");
     let args = Args::try_parse()?;
     match args.action {
