@@ -141,7 +141,7 @@ in
     (mkIf cfg.enable {
       home.packages = [ cfg.package ];
       xdg.configFile = {
-        "jellyfin-tui-rs/config.toml".source = pkgs.writers.writeTOML cfg.config;
+        "jellyfin-tui-rs/config.toml".source = pkgs.writers.writeTOML "config.toml" cfg.config;
         "jellyfin-tui-rs/keybinds.toml".source = jellyfin-tui.checkKeybinds keybinds;
       };
     })
