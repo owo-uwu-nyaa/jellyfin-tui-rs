@@ -55,26 +55,27 @@ let
             jellyfin-tui check-keybinds "$out"
           '';
     in
-    (rust-build.withCrateOverrides {
-      libmpv-sys = {
-        buildInputs = [ mpv-unwrapped ];
-        nativeBuildInputs = [
-          pkg-config
-        ]
-        ++ (if use_bindgen then [ rustPlatform.bindgenHook ] else [ ]);
-      };
-      libsqlite3-sys =
-        if !bundle_sqlite then
-          {
-            buildInputs = [ sqlite ];
-            nativeBuildInputs = [
-              pkg-config
-              rustPlatform.bindgenHook
-            ];
-          }
-        else
-          { };
-    }).build
+    (
+      (rust-build.withCrateOverrides {
+        libmpv-sys = {
+          buildInputs = [ mpv-unwrapped ];
+          nativeBuildInputs = [
+            pkg-config
+          ]
+          ++ (if use_bindgen then [ rustPlatform.bindgenHook ] else [ ]);
+        };
+        libsqlite3-sys =
+          if !bundle_sqlite then
+            {
+              buildInputs = [ sqlite ];
+              nativeBuildInputs = [
+                pkg-config
+                rustPlatform.bindgenHook
+              ];
+            }
+          else
+            { };
+      }).build
       {
         inherit src;
         pname = "jellyfin-tui";
@@ -83,9 +84,15 @@ let
         features =
           (lib.optionals use_bindgen [ "use-bindgen" ])
           ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
-        passthru = {
-          inherit checkKeybinds;
-        };
-      };
+      })
+      .overrideAttrs
+      (
+        _: prev: {
+          passthru = (prev.passthru or { }) // {
+            inherit checkKeybinds;
+          };
+        }
+      )
+    ;
 in
 jellyfin-tui
