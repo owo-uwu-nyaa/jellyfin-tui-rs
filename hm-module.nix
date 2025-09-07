@@ -109,7 +109,7 @@ in
       };
       login_file = mkOption {
         type = types.path;
-        default = "{config.xdg.configHome}/jellyfin-tui-rs/login.toml";
+        default = "${config.xdg.configHome}/jellyfin-tui-rs/login.toml";
         description = "login file";
       };
     };
