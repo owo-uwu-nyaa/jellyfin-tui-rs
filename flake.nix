@@ -77,6 +77,9 @@
             inherit jellyfin-tui;
             default = jellyfin-tui;
           };
+          hmModules = {
+            default = import ./hm-module.nix nix-rust-build;
+          };
         }
       )
     );
