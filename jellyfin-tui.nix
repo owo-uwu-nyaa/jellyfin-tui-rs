@@ -1,11 +1,11 @@
 {
   lib,
-  rustPlatform,
   pkg-config,
-  openssl,
   mpv-unwrapped,
+  rustPlatform,
   sqlite,
-  use_bindgen ? true,
+  rust-build,
+  use_bindgen ? false,
   bundle_sqlite ? false,
 }:
 let
@@ -36,38 +36,32 @@ let
     inherit fileset;
   };
 in
-rustPlatform.buildRustPackage {
-  inherit src;
-  pname = "jellyfin-tui";
-  version = "0.1.0";
-  cargoLock.lockFile = ./Cargo.lock;
-  cargoTestFlags = [
-    # run in wokspace
-    "--workspace"
-    # skip tests failing in sandbox
-    "--"
-    "--skip"
-    "tests::events"
-    "--skip"
-    "tests::node_map"
-    "--skip"
-    "tests::properties"
-  ];
-  buildNoDefaultFeatures = true;
-  nativeBuildInputs = [
-    pkg-config
-  ]
-  ++ (lib.optionals use_bindgen [ rustPlatform.bindgenHook ]);
-  buildInputs = [
-    openssl
-    mpv-unwrapped
-  ]
-  ++ (lib.optionals (!bundle_sqlite) [ sqlite ]);
-  buildFeatures =
-    (lib.optionals use_bindgen [ "use-bindgen" ])
-    ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
-  SQLX_OFFLINE = "true";
-  # make config parser work
-  XDG_CONFIG_HOME = "/tmp";
-  separateDebugInfo = true;
-}
+(rust-build.withCrateOverrides {
+  libmpv-sys = {
+    buildInputs = [ mpv-unwrapped ];
+    nativeBuildInputs = [
+      pkg-config
+    ]
+    ++ (if use_bindgen then [ rustPlatform.bindgenHook ] else [ ]);
+  };
+  libsqlite3-sys =
+    if !bundle_sqlite then
+      {
+        buildInputs = [ sqlite ];
+        nativeBuildInputs = [
+          pkg-config
+          rustPlatform.bindgenHook
+        ];
+      }
+    else
+      { };
+}).build
+  {
+    inherit src;
+    pname = "jellyfin-tui";
+    version = "0.1.0";
+    noDefaultFeatures = true;
+    features =
+      (lib.optionals use_bindgen [ "use-bindgen" ])
+      ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
+  }

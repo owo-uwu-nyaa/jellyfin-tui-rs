@@ -12,6 +12,12 @@
       url = "github:numtide/flake-utils";
       inputs.systems.follows = "systems";
     };
+    nix-rust-build = {
+      url = "github:RobinMarchart/nix-rust-build";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.systems.follows = "systems";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   outputs =
@@ -19,6 +25,7 @@
       nixpkgs,
       rust-overlay,
       flake-utils,
+      nix-rust-build,
       ...
     }:
     (
@@ -27,26 +34,17 @@
         let
           overlays = [
             rust-overlay.overlays.default
+            nix-rust-build.overlays.default
           ];
           pkgs = import nixpkgs {
             inherit system overlays;
           };
-          toolchain_dev = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          platform_dev = pkgs.makeRustPlatform {
-            rustc = toolchain_dev;
-            cargo = toolchain_dev;
-          };
-
           jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix { };
-          jellyfin-tui-rust-overlay = jellyfin-tui.override {
-            rustPlatform = platform_dev;
-          };
         in
         {
           packages = {
             default = jellyfin-tui;
-
-            inherit jellyfin-tui jellyfin-tui-rust-overlay;
+            inherit jellyfin-tui;
           };
           devShells.default =
             pkgs.mkShell.override
@@ -60,11 +58,9 @@
                   pkgs.rust-bin.nightly.latest.rust-analyzer
                   pkgs.sqlx-cli
                   pkgs.pkg-config
-                  pkgs.openssl
                   pkgs.sqlite
                   pkgs.mpv-unwrapped
-                  toolchain_dev
-                  platform_dev.bindgenHook
+                  pkgs.rustPlatform.bindgenHook
                 ];
                 DATABASE_URL = "sqlite://db.sqlite";
               };
