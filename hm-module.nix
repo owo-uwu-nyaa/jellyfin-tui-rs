@@ -79,7 +79,7 @@ let
       template = t;
     };
   keybinds = mapKeybinds cfg.keybinds;
-  jellyfin-tui = (pkgs.extend nix-rust-build).callPackage ./jellyfin-tui.nix { };
+  jellyfin-tui = (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyfin-tui.nix { };
 
 in
 {
