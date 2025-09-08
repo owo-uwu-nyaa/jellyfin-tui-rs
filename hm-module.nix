@@ -13,8 +13,51 @@ let
     types
     mkDefault
     mkMerge
+    uniqueStrings
     ;
   cfg = config.jellyfin-tui;
+  mapping =
+
+    lib.types.mkOptionType rec {
+      name = "single keybind mapping";
+      description = "either a string or nested map";
+      descriptionClass = "conjunction";
+      check = val: builtins.isString val || builtins.isAttrs val;
+      merge = {
+        __functor =
+          self: loc: defs:
+          (self.v2 { inherit loc defs; }).value;
+        v2 =
+
+          { loc, defs }:
+          let
+            hasStr = builtins.any ({ value, ... }: builtins.isString value);
+            pushPosition = map (
+              { file, value }:
+              builtins.mapAttrs (_: v: {
+                inherit file;
+                value = v;
+              }) value
+            );
+            checkDefsForError =
+              check: loc: defs:
+              let
+                invalidDefs = builtins.filter (def: !check def.value) defs;
+              in
+              if invalidDefs != [ ] then
+                { message = "Definition values: ${lib.options.showDefs invalidDefs}"; }
+              else
+                null;
+
+          in
+          {
+            headError = checkDefsForError check loc defs;
+
+          };
+
+      };
+    };
+
   map_type = types.submodule {
     name = types.str;
     template = mkOption {
@@ -23,7 +66,7 @@ let
       description = "templates that should be inherited from";
     };
     binds = mkOption {
-      type = types.attrsOf (types.either map_type types.str);
+      type = types.attrsOf (types.either types.str map_type);
       default = { };
       description = "keybind bindings";
     };
@@ -35,7 +78,7 @@ let
       description = "templates that should be inherited from";
     };
     binds = mkOption {
-      type = types.attrsOf (types.either map_type types.str);
+      type = types.attrsOf (types.either types.str map_type);
       default = { };
       description = "keybind bindings";
     };
