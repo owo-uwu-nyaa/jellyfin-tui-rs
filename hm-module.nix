@@ -58,7 +58,6 @@ in
     {
       jellyfin-tui = {
         enable = mkDefault true;
-        defaultKeybinds = mkDefault true;
       };
     }
     (mkIf cfg.enable {
