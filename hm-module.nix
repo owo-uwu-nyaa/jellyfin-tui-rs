@@ -11,12 +11,9 @@ let
     mkIf
     mkOption
     types
-    mkDefault
-    mkMerge
     ;
   cfg = config.jellyfin-tui;
   jellyfin-tui = (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyfin-tui.nix { };
-
 in
 {
   options.jellyfin-tui = {
@@ -47,6 +44,10 @@ in
         default = "${config.xdg.configHome}/jellyfin-tui-rs/login.toml";
         description = "login file";
       };
+      keybinds_file = mkOption {
+        type = types.nullOr types.path;
+        default = "${config.xdg.configHome}/jellyfin-tui-rs/keybinds.toml";
+      };
     };
     keybinds = mkOption {
       type = types.attrsOf types.anything;
@@ -54,18 +55,11 @@ in
       description = "prefixes for keybind help";
     };
   };
-  config = mkMerge [
-    {
-      jellyfin-tui = {
-        enable = mkDefault true;
-      };
-    }
-    (mkIf cfg.enable {
-      home.packages = [ cfg.package ];
-      xdg.configFile = {
-        "jellyfin-tui-rs/config.toml".source = pkgs.writers.writeTOML "config.toml" cfg.config;
-        "jellyfin-tui-rs/keybinds.toml".source = jellyfin-tui.checkKeybinds cfg.keybinds;
-      };
-    })
-  ];
+  config = mkIf cfg.enable {
+    home.packages = [ cfg.package ];
+    xdg.configFile = {
+      "jellyfin-tui-rs/config.toml".source = pkgs.writers.writeTOML "config.toml" cfg.config;
+      "jellyfin-tui-rs/keybinds.toml".source = jellyfin-tui.checkKeybinds cfg.keybinds;
+    };
+  };
 }
