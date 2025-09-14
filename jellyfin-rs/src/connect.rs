@@ -31,7 +31,7 @@ use tokio_rustls::{
     client::TlsStream,
     rustls::{ClientConfig, RootCertStore, pki_types::ServerName},
 };
-use tracing::{error, instrument, warn};
+use tracing::{Instrument, error, error_span, instrument, warn};
 
 use crate::Result;
 
@@ -210,11 +210,14 @@ impl Connection {
 }
 
 fn spawn_con(con: impl Future<Output = hyper::Result<()>> + Send + 'static) {
-    tokio::spawn(async move {
-        if let Err(e) = pin!(con).await {
-            error!("connection error: {e:?}")
+    tokio::spawn(
+        async move {
+            if let Err(e) = pin!(con).await {
+                error!("connection error: {e:?}")
+            }
         }
-    });
+        .instrument(error_span!("jellyfin_connection")),
+    );
 }
 
 async fn get_stream(host: &ServerName<'static>, port: u16) -> Result<TcpStream> {

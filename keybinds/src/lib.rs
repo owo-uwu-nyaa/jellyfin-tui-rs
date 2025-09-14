@@ -2,8 +2,8 @@ pub mod parse_config;
 pub mod stream;
 pub mod widget;
 
+use color_eyre::Result;
 use crossterm::event::{EventStream, KeyCode};
-use eyre::Result;
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
@@ -13,7 +13,7 @@ use tracing::{Span, debug, info_span};
 
 ///reexport for proc macro
 #[doc(hidden)]
-pub use eyre as __eyre;
+pub use color_eyre::eyre as __eyre;
 
 pub use keybinds_derive::{Command, keybind_config};
 

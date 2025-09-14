@@ -1,0 +1,18 @@
+[package]
+name = "config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+keybinds = {path = "../keybinds"}
+jellyfin-tui-core = {path = "../jellyfin-tui-core"}
+libmpv = {path = "../libmpv-rs"}
+
+log = {workspace=true}
+color-eyre = {workspace=true}
+serde = {workspace=true}
+toml = {workspace = true}
+tracing = {workspace=true}
+sqlx = {workspace=true}
+tokio = { workspace=true, features = ["macros", "rt", "time"] }
+dirs = {workspace=true}

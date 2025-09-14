@@ -22,15 +22,24 @@ use protocol::ProtocolContextType;
 
 use crate::{mpv::mpv_err, *};
 
-use std::ffi::{CString, c_void};
+use std::ffi::CString;
+#[cfg(feature = "async")]
+use std::ffi::c_void;
+#[cfg(feature = "async")]
 use std::future::{Future, pending, poll_fn};
+#[cfg(feature = "async")]
 use std::marker::PhantomPinned;
 use std::os::raw as ctype;
+#[cfg(feature = "async")]
 use std::pin::Pin;
+#[cfg(feature = "async")]
 use std::process::abort;
 use std::ptr::NonNull;
 use std::slice;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(feature = "async")]
+use std::sync::Mutex;
+#[cfg(feature = "async")]
 use std::task::{Poll, Waker};
 
 /// An `Event`'s ID.
@@ -59,7 +68,9 @@ pub mod mpv_event_id {
     pub use libmpv_sys::mpv_event_id_MPV_EVENT_VIDEO_RECONFIG as VideoReconfig;
 }
 
+#[cfg(feature = "async")]
 struct PanicAbort;
+#[cfg(feature = "async")]
 impl Drop for PanicAbort {
     fn drop(&mut self) {
         eprintln!("waking waker paniced");
@@ -67,16 +78,19 @@ impl Drop for PanicAbort {
     }
 }
 
+#[cfg(feature = "async")]
 pub struct WakerContext {
     location: Pin<Box<WakerLocation>>,
     interval: interval::DefaultInterval,
 }
 
+#[cfg(feature = "async")]
 pub struct WakerLocation {
     inner: Mutex<Option<Waker>>,
     _pin: PhantomPinned,
 }
 
+#[cfg(feature = "async")]
 #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
 pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
     let abort_guard = PanicAbort;
@@ -137,7 +151,7 @@ impl<'a> PropertyData<'a> {
 pub enum Event<'a> {
     /// Received when the player is shutting down
     Shutdown,
-    /// *Has not been tested*, received when explicitly asked to MPV
+    /// received when explicitly asked to MPV
     LogMessage {
         prefix: &'a str,
         level: &'a str,
@@ -193,6 +207,7 @@ pub struct EventContextSync {
 unsafe impl Send for EventContextSync {}
 unsafe impl Sync for EventContextSync {}
 
+#[cfg(feature = "async")]
 pub struct EventContextAsync {
     inner: EventContextSync,
     waker: WakerContext,
@@ -203,14 +218,17 @@ pub struct EmptyEventContext;
 pub trait EventContextType: sealed::EventContextType {}
 impl EventContextType for EmptyEventContext {}
 impl EventContextType for EventContextSync {}
+#[cfg(feature = "async")]
 impl EventContextType for EventContextAsync {}
 
 pub trait EventContext: sealed::EventContext {}
 
 impl EventContext for EventContextSync {}
 
+#[cfg(feature = "async")]
 impl EventContext for EventContextAsync {}
 
+#[cfg(feature = "async")]
 unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Pin<Box<WakerLocation>> {
     let waker = Box::pin(WakerLocation {
         inner: Mutex::new(None),
@@ -226,6 +244,7 @@ unsafe fn setup_waker_ptr(ctx: NonNull<libmpv_sys::mpv_handle>) -> Pin<Box<Waker
     waker
 }
 
+#[cfg(feature = "async")]
 impl EventContextSync {
     pub fn enable_async(self) -> EventContextAsync {
         let location = unsafe { setup_waker_ptr(self.ctx) };
@@ -239,6 +258,7 @@ impl EventContextSync {
     }
 }
 
+#[cfg(feature = "async")]
 impl<Protocol: ProtocolContextType> Mpv<EventContextSync, Protocol> {
     pub fn enable_async(self) -> Mpv<EventContextAsync, Protocol> {
         let location = unsafe { setup_waker_ptr(self.ctx) };
@@ -471,11 +491,13 @@ pub trait EventContextExt: sealed::EventContextExt {
 
 impl<T: sealed::EventContextExt> EventContextExt for T {}
 
+#[cfg(feature = "async")]
 fn poll(wake: &mut WakerContext, cx: &mut std::task::Context<'_>) {
     *wake.location.inner.lock().unwrap() = Some(cx.waker().clone());
     interval::Interval::poll(&mut wake.interval, cx);
 }
 
+#[cfg(feature = "async")]
 pub trait EventContextAsyncExt:
     sealed::EventContextAsyncExt + EventContextExt + Send + Sync
 {
@@ -490,6 +512,7 @@ pub trait EventContextAsyncExt:
     }
 }
 
+#[cfg(feature = "async")]
 impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {
     async fn wait_event_async(&mut self) -> Result<Event<'_>> {
         poll_fn(|cx| {
@@ -507,10 +530,9 @@ impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventConte
 mod sealed {
     use std::ptr::NonNull;
 
-    use super::{
-        EmptyEventContext, EventContextAsync, EventContextSync, Mpv, WakerContext,
-        protocol::ProtocolContextType,
-    };
+    use super::{EmptyEventContext, EventContextSync, Mpv, protocol::ProtocolContextType};
+    #[cfg(feature = "async")]
+    use super::{EventContextAsync, WakerContext};
 
     pub trait EventContextType {
         type Inlined;
@@ -518,6 +540,7 @@ mod sealed {
     impl EventContextType for EventContextSync {
         type Inlined = ();
     }
+    #[cfg(feature = "async")]
     impl EventContextType for EventContextAsync {
         type Inlined = WakerContext;
     }
@@ -546,6 +569,7 @@ mod sealed {
         fn to_inlined(self) -> Self::Inlined {}
     }
 
+    #[cfg(feature = "async")]
     impl EventContext for EventContextAsync {
         fn exract<Protocol: ProtocolContextType>(
             inline: Self::Inlined,
@@ -573,6 +597,7 @@ mod sealed {
         }
     }
 
+    #[cfg(feature = "async")]
     unsafe impl EventContextExt for EventContextAsync {
         fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
             self.inner.ctx
@@ -585,19 +610,23 @@ mod sealed {
         }
     }
 
+    #[cfg(feature = "async")]
     unsafe impl<Protocol: ProtocolContextType> EventContextExt for Mpv<EventContextAsync, Protocol> {
         fn get_ctx(&self) -> NonNull<libmpv_sys::mpv_handle> {
             self.ctx
         }
     }
+    #[cfg(feature = "async")]
     pub trait EventContextAsyncExt: EventContextExt {
         fn get_waker(&mut self) -> &mut WakerContext;
     }
+    #[cfg(feature = "async")]
     impl EventContextAsyncExt for EventContextAsync {
         fn get_waker(&mut self) -> &mut WakerContext {
             &mut self.waker
         }
     }
+    #[cfg(feature = "async")]
     impl<Protocol: ProtocolContextType> EventContextAsyncExt for Mpv<EventContextAsync, Protocol> {
         fn get_waker(&mut self) -> &mut WakerContext {
             &mut self.event_inline
@@ -605,6 +634,7 @@ mod sealed {
     }
 }
 
+#[cfg(feature = "async")]
 mod interval {
     use std::{task::Context, time::Duration};
 
@@ -628,4 +658,7 @@ mod interval {
 
     #[cfg(feature = "tokio")]
     pub type DefaultInterval = tokio::time::Interval;
+
+    #[cfg(not(any(feature = "tokio")))]
+    compile_error!("some async runtime must be enabled");
 }

@@ -11,26 +11,13 @@
   bundle_sqlite ? false,
 }:
 let
-  fileset_src =
-    base:
-    lib.fileset.unions [
-      (lib.fileset.maybeMissing (base + "/Cargo.lock"))
-      (base + "/Cargo.toml")
-      (base + "/src")
-      (lib.fileset.maybeMissing (base + "/build.rs"))
-    ];
   fileset = lib.fileset.unions [
-    (fileset_src ./.)
+    (lib.fileset.fileFilter (file: file.hasExt "rs"|| file.name == "Cargo.toml" || file.name == "Cargo.lock") ./. )
     ./.sqlx
+    ./config/config.toml
+    ./config/keybinds.toml
     ./migrations
-    ./config
-    (fileset_src ./jellyfin-rs)
-    (fileset_src ./libmpv-rs)
     ./libmpv-rs/test-data
-    (fileset_src ./libmpv-rs/libmpv-sys)
-    (fileset_src ./keybinds-derive)
-    (fileset_src ./keybinds-derive-impl)
-    (fileset_src ./keybinds)
   ];
 
   src = lib.fileset.toSource {
@@ -84,15 +71,14 @@ let
         features =
           (lib.optionals use_bindgen [ "use-bindgen" ])
           ++ (if bundle_sqlite then [ "sqlite-bundled" ] else [ "sqlite-unbundled" ]);
-      })
-      .overrideAttrs
+      }
+    ).overrideAttrs
       (
         _: prev: {
           passthru = (prev.passthru or { }) // {
             inherit checkKeybinds;
           };
         }
-      )
-    ;
+      );
 in
 jellyfin-tui

@@ -7,7 +7,7 @@ use tracing::{debug, warn};
 use crate::Key;
 
 use super::{Command, KeyBinding, KeybindEvent, KeybindEventStream, Text};
-use eyre::Result;
+use color_eyre::Result;
 
 impl<T: Command> FusedStream for KeybindEventStream<'_, T> {
     fn is_terminated(&self) -> bool {

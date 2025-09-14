@@ -4,8 +4,8 @@ use std::{
     sync::Arc,
 };
 
+use color_eyre::eyre::{Context, Result, eyre};
 use crossterm::event::KeyCode;
-use eyre::{Context, Result, eyre};
 use serde::Deserialize;
 
 use super::{BindingMap, Command, Key, KeyBinding};

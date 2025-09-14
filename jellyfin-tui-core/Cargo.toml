@@ -1,0 +1,21 @@
+[package]
+name = "jellyfin-tui-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jellyfin = { path = "../jellyfin-rs"}
+keybinds = {path = "../keybinds"}
+libmpv = { path = "../libmpv-rs", default-features = false }
+entries = { path = "../entries" }
+player-core = {path = "../player-core"}
+
+color-eyre = {workspace=true}
+ratatui = {workspace=true}
+ratatui-image = {workspace=true}
+image = {workspace=true}
+sqlx = {workspace=true}
+either = {workspace=true}
+parking_lot = {workspace=true}
+tracing = {workspace=true}
+

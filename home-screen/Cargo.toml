@@ -1,0 +1,17 @@
+[package]
+name = "home-screen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jellyfin-tui-core = {path = "../jellyfin-tui-core"}
+keybinds = {path = "../keybinds"}
+jellyfin = { path = "../jellyfin-rs"}
+entries = {path = "../entries"}
+fetch = {path = "../fetch"}
+
+color-eyre = {workspace=true}
+tracing = {workspace=true}
+ratatui = {workspace=true}
+tokio = { workspace=true, features = ["macros"] }
+futures-util = {workspace=true}

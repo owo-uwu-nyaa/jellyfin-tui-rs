@@ -1,0 +1,15 @@
+[package]
+name = "fetch"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jellyfin-tui-core = {path = "../jellyfin-tui-core"}
+jellyfin = { path = "../jellyfin-rs"}
+keybinds = {path = "../keybinds"}
+
+color-eyre = {workspace=true}
+ratatui = {workspace=true}
+tracing = {workspace=true}
+futures-util = {workspace=true}
+tokio = { workspace=true, features = ["macros"] }

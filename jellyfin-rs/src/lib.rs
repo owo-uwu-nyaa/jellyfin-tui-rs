@@ -1,4 +1,4 @@
-use std::{borrow::Cow, future::Future, ops::Deref, sync::Arc};
+use std::{borrow::Cow, fmt::Debug, future::Future, ops::Deref, sync::Arc};
 
 use color_eyre::eyre::{OptionExt, eyre};
 use connect::Connection;
@@ -43,7 +43,9 @@ impl<A: AuthStatus> Deref for JellyfinClient<A> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct NoAuth;
+#[derive(Debug, Clone)]
 pub struct Auth {
     pub user: User,
     pub access_token: String,
@@ -51,6 +53,7 @@ pub struct Auth {
     pub device_id: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct KeyAuth {
     pub access_key: String,
     pub header: HeaderValue,
@@ -65,7 +68,7 @@ mod sealed {
     impl AuthSealed for KeyAuth {}
 }
 
-pub trait AuthStatus: AuthSealed {
+pub trait AuthStatus: AuthSealed + Clone + Debug {
     fn add_auth_header(&self, builder: http::request::Builder) -> http::request::Builder;
 }
 impl AuthStatus for NoAuth {

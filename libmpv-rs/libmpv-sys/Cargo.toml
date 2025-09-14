@@ -28,11 +28,9 @@ repository = "https://github.com/ParadoxSpiral/libmpv-rs"
 keywords = ["media", "playback", "mpv", "libmpv"]
 
 [build-dependencies]
-pkg-config = "0.3.31"
+pkg-config = {workspace=true}
+bindgen = {workspace=true, optional = true}
 
-[build-dependencies.bindgen]
-version = "0.69"
-optional = true
 
 # Workaround for https://github.com/rust-lang/rust-bindgen/issues/1313
 [lib]

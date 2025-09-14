@@ -1,0 +1,24 @@
+[package]
+name = "entries"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+keybinds = {path = "../keybinds"}
+jellyfin = { path = "../jellyfin-rs"}
+spawn = {path = "../spawn"}
+
+parking_lot = {workspace=true}
+rayon = {workspace=true}
+color-eyre = {workspace=true}
+crossterm = {workspace=true}
+ratatui = {workspace=true}
+ratatui-image = {workspace=true}
+tracing = {workspace=true}
+sqlx = {workspace=true}
+image = {workspace=true}
+bytes = {workspace=true}
+either = {workspace=true}
+tokio = { workspace=true, features = ["macros"] }
+tokio-util = {workspace=true}

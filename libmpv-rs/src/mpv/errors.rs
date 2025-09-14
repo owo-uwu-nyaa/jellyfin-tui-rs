@@ -38,6 +38,7 @@ pub enum Error {
     Raw(crate::MpvError),
     IntConversion(TryFromIntError),
     HandleMismatch,
+    UnknownProfile(String),
 }
 
 impl fmt::Debug for Error {
@@ -60,6 +61,10 @@ impl fmt::Debug for Error {
                 write!(f, "Int conversion error: {try_from_int_error:?}")
             }
             Error::HandleMismatch => f.write_str("tried to combine different handles"),
+            Error::UnknownProfile(name) => {
+                f.write_str("unknown profile: ")?;
+                f.write_str(name)
+            }
         }
     }
 }
@@ -68,11 +73,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Error::Loadfiles { index, error } => {
-                write!(f, "error loading file at index {index}:\n{error}")
+                write!(f, "error loading file at index {index}:\n    {error}")
             }
             Error::VersionMismatch { linked, loaded } => write!(
                 f,
-                "version mismatch with libmpv: linked: {linked}, loaded: {loaded}"
+                "version mismatch with libmpv:\n    linked: {linked}\n    loaded: {loaded}"
             ),
             Error::InvalidUtf8 => f.write_str("Invalid utf-8"),
             Error::Null => f.write_str("libmpc handle is null"),
@@ -81,6 +86,10 @@ impl fmt::Display for Error {
                 write!(f, "Int conversion error: {try_from_int_error}")
             }
             Error::HandleMismatch => f.write_str("tried to combine different handles"),
+            Error::UnknownProfile(name) => {
+                f.write_str("unknown profile: ")?;
+                f.write_str(name)
+            }
         }
     }
 }

@@ -42,6 +42,7 @@
           jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix { };
         in
         {
+          formatter = pkgs.nixfmt-tree;
           packages = {
             default = jellyfin-tui;
             inherit jellyfin-tui;
@@ -55,7 +56,9 @@
                 buildInputs = [
                   pkgs.cargo-nextest
                   pkgs.cargo-audit
+                  pkgs.cargo-expand
                   pkgs.rust-bin.nightly.latest.rust-analyzer
+                  (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
                   pkgs.sqlx-cli
                   pkgs.pkg-config
                   pkgs.sqlite

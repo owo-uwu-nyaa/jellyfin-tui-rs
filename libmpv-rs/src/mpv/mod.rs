@@ -16,9 +16,9 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use std::ffi::CStr;
 use std::ptr::null_mut;
 use std::sync::Arc;
+use std::{ffi::CStr, str::FromStr};
 
 macro_rules! mpv_cstr_to_str {
     ($cstr: expr) => {
@@ -42,6 +42,9 @@ pub mod render;
 use events::{EventContextSync, EventContextType};
 use node::{BorrowingMpvNode, BorrowingMpvNodeList, ToNode};
 use protocol::{ProtocolContextType, UninitProtocolContext};
+
+#[cfg(feature = "tracing")]
+use tracing::info;
 
 pub use self::errors::*;
 use super::*;
@@ -190,6 +193,42 @@ impl Cycle {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MpvProfile {
+    Fast,
+    HighQuality,
+    Default,
+}
+
+impl FromStr for MpvProfile {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "fast" => Ok(Self::Fast),
+            "high-quality" => Ok(Self::HighQuality),
+            "default" => Ok(Self::Default),
+            v => Err(Error::UnknownProfile(v.to_string())),
+        }
+    }
+}
+
+impl MpvProfile {
+    pub fn to_str(self) -> &'static str {
+        match self {
+            MpvProfile::Fast => "fast",
+            MpvProfile::HighQuality => "high-quality",
+            MpvProfile::Default => "default",
+        }
+    }
+}
+
+impl Default for MpvProfile {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
 /// Context passed to the `initializer` of `Mpv::with_initialzer`.
 pub struct MpvInitializer {
     ctx: NonNull<libmpv_sys::mpv_handle>,
@@ -206,6 +245,33 @@ impl MpvInitializer {
                 data.to_node().node().cast(),
             )
         })
+    }
+    pub fn with_profile(&self, profile: MpvProfile) -> Result<()> {
+        {
+            #[cfg(feature = "tracing")]
+            {
+                info!("using {} profile", profile.to_str())
+            }
+            match profile {
+                MpvProfile::Fast => {
+                    self.set_option(c"scale", c"bilinear")?;
+                    self.set_option(c"dscale", c"bilinear")?;
+                    self.set_option(c"dither", false)?;
+                    self.set_option(c"correct-downscaling", false)?;
+                    self.set_option(c"linear-downscaling", false)?;
+                    self.set_option(c"sigmoid-upscaling", false)?;
+                    self.set_option(c"hdr-compute-peak", false)?;
+                    self.set_option(c"hdr-compute-peak", true)?;
+                }
+                MpvProfile::HighQuality => {
+                    self.set_option(c"scale", c"ewa_lanczossharp")?;
+                    self.set_option(c"hdr-peak-percentile", 99.995)?;
+                    self.set_option(c"hdr-contrast-recovery", 0.30)?;
+                }
+                MpvProfile::Default => {}
+            }
+            Ok(())
+        }
     }
 }
 
@@ -382,6 +448,10 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     /// Multiply any property with any positive factor.
     pub fn multiply_property(&self, property: &CStr, factor: i64) -> Result<()> {
         self.command(&[c"multiply".to_node(), property.to_node(), factor.to_node()])
+    }
+
+    pub fn quit(&self) -> Result<()> {
+        self.command(&[c"quit".to_node()])
     }
 
     pub fn set_pause(&self, pause: bool) -> Result<()> {

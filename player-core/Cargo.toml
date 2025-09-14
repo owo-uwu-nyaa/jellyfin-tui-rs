@@ -1,0 +1,20 @@
+[package]
+name = "player-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libmpv = { path = "../libmpv-rs", default-features = false, features = ["tracing", "tokio"] }
+jellyfin = { path = "../jellyfin-rs"}
+spawn = {path = "../spawn"}
+
+pin-project-lite = {workspace=true}
+color-eyre = {workspace=true}
+tokio = { workspace=true, features = ["macros", "rt", "time"] }
+tracing = {workspace=true}
+tracing-core = { workspace = true }
+parking_lot = {workspace=true}
+futures-util = {workspace=true}
+
+[features]
+use-bindgen = ["libmpv/use-bindgen"]

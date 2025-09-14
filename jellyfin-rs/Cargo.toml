@@ -18,25 +18,25 @@ include = [
 [features]
 
 [dependencies]
-base64 = "0.22.1"
-bytes = "1.9.0"
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = "1.0.97"
-tracing = "0.1.41"
-tokio-websockets = { version = "0.12.0", features = ["client", "getrandom", "aws_lc_rs"] }
-futures-core = "0.3.31"
-tokio = { version = "1.28.2", features = ["time"] }
-futures-sink = "0.3.31"
-pin-project-lite = "0.2.16"
-hyper = { version = "1.7.0", features = ["client", "http1", "http2"] }
-tokio-rustls = { version = "0.26.2", default-features = false, features = ["aws_lc_rs", "logging"] }
-rustls-native-certs = "0.8.1"
-aws-lc-rs = { version = "1.13.3", default-features = false }
-http = "1.3.1"
-hyper-util = { version = "0.1.16", features = ["tokio"] }
-futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
-serde_urlencoded = "0.7.1"
-color-eyre = "0.6.5"
+base64 = {workspace = true}
+bytes = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+tracing = {workspace = true}
+tokio-websockets = {workspace = true}
+futures-core = {workspace = true}
+tokio = { workspace = true, features = ["time"] }
+futures-sink ={workspace = true}
+pin-project-lite = {workspace = true}
+hyper = {workspace = true}
+tokio-rustls = {workspace = true}
+rustls-native-certs = {workspace = true}
+aws-lc-rs = {workspace = true}
+http = {workspace = true}
+hyper-util = {workspace = true}
+futures-util = {workspace = true}
+serde_urlencoded = {workspace = true}
+color-eyre = {workspace = true}
 
 [dev-dependencies]
 tokio = { version = "1.28.2", features = ["macros"] }
