@@ -92,9 +92,7 @@ impl Future for PollState {
                             if let Err(e) = this.mpv.command(&[
                                 c"playlist-play-index".to_node(),
                                 i64::try_from(
-                                    this.initial_index
-                                        .checked_add(1)
-                                        .expect("adding 1 should not overflow"),
+                                    *this.initial_index
                                 )
                                 .expect("initial index should be valid")
                                 .to_node(),
