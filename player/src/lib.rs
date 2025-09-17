@@ -23,6 +23,7 @@ use spawn::spawn;
 use tokio::select;
 use tracing::{error_span, info, instrument};
 
+#[instrument(skip_all)]
 pub fn mk_player(
     cx: Pin<&mut TuiContext>,
     items: Vec<MediaItem>,

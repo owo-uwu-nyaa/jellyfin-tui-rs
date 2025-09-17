@@ -54,6 +54,27 @@ in
       default = builtins.fromTOML (builtins.readFile ./config/keybinds.toml);
       description = "prefixes for keybind help";
     };
+    login = mkOption {
+      type = lib.types.nullOr (lib.types.submodule {
+        options = {
+          server_url = mkOption {
+            type = lib.types.str;
+          };
+          username = mkOption {
+            type = lib.types.str;
+          };
+          password = mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          password_cmd = mkOption {
+            type = lib.types.nullOr (lib.types.listOf lib.types.str);
+            default = null;
+          };
+        };
+      });
+      default = null;
+    };
   };
   config = mkIf cfg.enable {
     home.packages = [ cfg.package ];

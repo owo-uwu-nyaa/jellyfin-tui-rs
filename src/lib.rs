@@ -81,7 +81,7 @@ async fn login_jellyfin(
     )
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level="debug")]
 async fn login(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
@@ -99,7 +99,7 @@ async fn login(
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level="debug")]
 async fn run_state(mut cx: Pin<&mut TuiContext>) {
     let mut state = State::new();
     while let Some(screen) = state.pop() {
@@ -133,7 +133,7 @@ async fn run_app_inner(
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level="debug")]
 #[tokio::main(flavor = "current_thread")]
 pub async fn run_app(
     term: DefaultTerminal,
