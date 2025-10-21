@@ -84,13 +84,17 @@ pub fn read_spawner() -> Spawner {
 }
 
 impl Spawner {
-    pub fn spaen_bare(&self, fut: impl Future<Output = ()> + Send + 'static) {
-        let _ = unsafe { self.sender.as_ref() }.send(Box::new(move |join_set| {
+    pub fn raw(&self, f: impl FnOnce(&mut JoinSet<()>) + 'static) {
+        let _ = unsafe { self.sender.as_ref() }.send(Box::new(f));
+    }
+
+    pub fn spawn_bare(&self, fut: impl Future<Output = ()> + Send + 'static) {
+        self.raw(move |join_set| {
             join_set.spawn(fut);
-        }));
+        });
     }
     pub fn spawn(&self, fut: impl Future<Output = ()> + Send + 'static, span: Span) {
-        self.spaen_bare(fut.instrument(span));
+        self.spawn_bare(fut.instrument(span));
     }
     pub fn spawn_res<T>(
         &self,
@@ -109,7 +113,7 @@ impl Spawner {
 }
 
 pub fn spawn_bare(fut: impl Future<Output = ()> + Send + 'static) {
-    read_spawner().spaen_bare(fut);
+    read_spawner().spawn_bare(fut);
 }
 
 pub fn spawn(fut: impl Future<Output = ()> + Send + 'static, span: Span) {

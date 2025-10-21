@@ -2,7 +2,7 @@ use std::{mem, sync::Arc};
 
 use color_eyre::eyre::Context;
 use jellyfin::{JellyfinClient, playback_status::ProgressBody};
-use player_core::PlayerRef;
+use player_core::PlayerHandle;
 use spawn::spawn_res;
 use tracing::{error_span, instrument};
 
@@ -40,7 +40,7 @@ fn send_progress(id: Arc<String>, position: f64, paused: bool, jellyfin: &Jellyf
     );
 }
 
-fn send_playing_stopped(id: Arc<String>, position: f64, jellyfin: &JellyfinClient) {
+fn send_playing_stopped(id: String, position: f64, jellyfin: &JellyfinClient) {
     let span = error_span!("send_playing_stopped");
     let finished = jellyfin.prepare_set_playing_stopped();
     spawn_res(
@@ -58,32 +58,54 @@ fn send_playing_stopped(id: Arc<String>, position: f64, jellyfin: &JellyfinClien
 }
 
 #[instrument(skip_all)]
-pub async fn player_jellyfin(mut player: PlayerRef, jellyfin: JellyfinClient) {
+pub async fn player_jellyfin(mut player: PlayerHandle, jellyfin: JellyfinClient) {
+    let mut send_tick = 10u8;
     let (mut current, mut old_id, mut old_position) = {
         let state = player.state().borrow();
-        let id = Arc::new(state.current.id.clone());
-        send_playing(id.clone(), &jellyfin);
-        (state.index, id, state.position)
+        let id = state
+            .current
+            .map(|i| Arc::new(state.playlist[i].item.id.clone()));
+        if let Some(id) = id.as_ref() {
+            send_playing(id.clone(), &jellyfin);
+        }
+        (state.current, id, state.position)
     };
     loop {
-        let res = player.state_mut().changed().await;
-        match res {
-            Err(_) => {
-                send_playing_stopped(old_id, old_position, &jellyfin);
-                break;
+        if player.state_mut().changed().await.is_err() {
+            if let Some(id) = old_id.as_mut() {
+                send_playing_stopped(mem::take(Arc::make_mut(id)), old_position, &jellyfin);
             }
-            Ok(()) => {
-                let state = player.state().borrow();
-                if current != state.index {
-                    let old = mem::replace(&mut old_id, Arc::new(state.current.id.clone()));
-                    send_playing_stopped(old, old_position, &jellyfin);
-                    current = state.index;
-                    send_playing(old_id.clone(), &jellyfin);
-                } else {
+            break;
+        } else {
+            let state = player.state().borrow();
+            if current != state.current {
+                if let Some(index) = state.current {
+                    let new_id = if let Some(old_id) = old_id.as_mut() {
+                        let old = mem::replace(
+                            Arc::make_mut(old_id),
+                            state.playlist[index].item.id.clone(),
+                        );
+                        send_playing_stopped(old, old_position, &jellyfin);
+                        old_id.clone()
+                    } else {
+                        let new = Arc::new(state.playlist[index].item.id.clone());
+                        old_id = Some(new.clone());
+                        new
+                    };
+                    send_playing(new_id, &jellyfin);
+                } else if let Some(old_id) = old_id.as_mut() {
+                    send_playing_stopped(mem::take(Arc::make_mut(old_id)), old_position, &jellyfin);
+                }
+                current = state.current;
+                send_tick = 11;
+            } else if send_tick == 0 {
+                if let Some(old_id) = old_id.as_ref() {
                     send_progress(old_id.clone(), state.position, state.pause, &jellyfin);
                 }
-                old_position = state.position
+                send_tick = 11;
             }
+            old_position = state.position;
+            send_tick = send_tick.saturating_sub(1)
         }
     }
 }

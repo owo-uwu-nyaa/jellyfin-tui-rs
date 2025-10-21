@@ -1,95 +1,104 @@
 use std::{
-    fmt::Debug,
-    ops::{Deref, DerefMut},
+    fmt::{Debug, Display},
+    num::ParseIntError,
+    ops::Deref,
+    str::FromStr,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
 };
 
-use color_eyre::Result;
-use jellyfin::{JellyfinClient, items::MediaItem};
-use libmpv::MpvProfile;
+use jellyfin::items::MediaItem;
 use tokio::sync::{mpsc, watch};
 
 mod create;
+pub mod diff;
 mod log;
 mod mpv_stream;
 mod poll;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default)]
+pub struct PlaylistItemIdGen {
+    id: u64,
+}
+
+impl PlaylistItemIdGen {
+    fn next(&mut self) -> PlaylistItemId {
+        let r = self.id;
+        self.id = self.id.wrapping_add(1);
+        PlaylistItemId { id: r }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlaylistItemId {
+    pub(crate) id: u64,
+}
+
+impl Display for PlaylistItemId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.id, f)
+    }
+}
+
+impl FromStr for PlaylistItemId {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(PlaylistItemId {
+            id: FromStr::from_str(s)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Command {
-    Close,
-    Play,
-    Pause,
-    PlayPause,
+    Pause(bool),
+    Fullscreen(bool),
+    Minimized(bool),
+    Next,
+    Previous,
+    Seek(f64),
+    Play(PlaylistItemId),
+    AddTrack {
+        item: Box<MediaItem>,
+        after: Option<PlaylistItemId>,
+        play: bool,
+    },
+    Remove(PlaylistItemId),
+    ReplacePlaylist {
+        items: Vec<MediaItem>,
+        first: usize,
+    },
+    Stop,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlayerState {
-    pub index: usize,
-    pub current: Arc<MediaItem>,
+    pub playlist: Arc<Vec<Arc<PlaylistItem>>>,
+    pub current: Option<usize>,
     pub pause: bool,
+    pub idle: bool,
     pub position: f64,
+    pub fullscreen: bool,
+    pub minimized: bool,
 }
 
-pub struct PlayerHandle {
-    inner: PlayerRef,
-}
-
-impl Debug for PlayerHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PlayerHandle")
-            .field("closed", &self.inner.closed.load(Ordering::Relaxed))
-            .field("state", &self.inner.state.borrow().deref())
-            .finish()
-    }
-}
-
-impl PlayerHandle {
-    pub fn new(
-        jellyfin: &JellyfinClient,
-        hwdec: &str,
-        profile: MpvProfile,
-        log_level: &str,
-        items: Vec<MediaItem>,
-        index: usize,
-    ) -> Result<Self> {
-        create::player(jellyfin, hwdec, profile, log_level, items, index)
-    }
-    pub fn new_ref(&self) -> PlayerRef {
-        self.inner.clone()
-    }
-}
-
-impl Deref for PlayerHandle {
-    type Target = PlayerRef;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for PlayerHandle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl Drop for PlayerHandle {
-    fn drop(&mut self) {
-        self.send(Command::Close);
-    }
+#[derive(Debug, Clone)]
+pub struct PlaylistItem {
+    pub item: MediaItem,
+    pub id: PlaylistItemId,
 }
 
 #[derive(Clone)]
-pub struct PlayerRef {
+pub struct PlayerHandle {
     closed: Arc<AtomicBool>,
     send: mpsc::UnboundedSender<Command>,
     state: watch::Receiver<PlayerState>,
 }
 
-impl PlayerRef {
+impl PlayerHandle {
     pub fn send(&self, command: Command) {
         if !self.closed.load(Ordering::Relaxed) && self.send.send(command).is_err() {
             self.closed.store(true, Ordering::Relaxed);
@@ -103,7 +112,7 @@ impl PlayerRef {
     }
 }
 
-impl Debug for PlayerRef {
+impl Debug for PlayerHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PlayerRef")
             .field("closed", &self.closed.load(Ordering::Relaxed))

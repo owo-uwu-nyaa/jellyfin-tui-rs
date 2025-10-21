@@ -30,7 +30,7 @@ struct LoginInfo {
     server_url: String,
     username: String,
     password: String,
-    password_cmd: Option<Vec<String>>
+    password_cmd: Option<Vec<String>>,
 }
 
 enum LoginSelection {
@@ -83,7 +83,9 @@ async fn get_login_info(
                 .title("Username"),
             );
             let password = Paragraph::new(
-                Text::from(if info.password_cmd.is_some() {"from command"} else if info.password.is_empty() {
+                Text::from(if info.password_cmd.is_some() {
+                    "from command"
+                } else if info.password.is_empty() {
                     ""
                 } else {
                     "<hidden>"
@@ -309,16 +311,30 @@ pub async fn login(
     Ok(Some(client))
 }
 
-async fn get_password_from_cmd(cmd: &[String])-> Result<String>{
-    let mut command = if let Some(cmd) = cmd.first(){tokio::process::Command::new(cmd)} else {return Err(eyre!("Password cmd is empty"))};
-    for arg in cmd[1..].iter(){
+async fn get_password_from_cmd(cmd: &[String]) -> Result<String> {
+    let mut command = if let Some(cmd) = cmd.first() {
+        tokio::process::Command::new(cmd)
+    } else {
+        return Err(eyre!("Password cmd is empty"));
+    };
+    for arg in cmd[1..].iter() {
         command.arg(arg);
     }
-    let output = command.kill_on_drop(true).output().await.context("Executing password cmd failed")?;
-    if output.status.success(){
-        Ok(String::from_utf8(output.stdout).context("password cmd output is not utf-8")?.trim().to_string())
-    }else{
-        Err(eyre!("command failed with:\n{}",String::from_utf8(output.stderr).context("password cmd error output is not utf-8")?))
+    let output = command
+        .kill_on_drop(true)
+        .output()
+        .await
+        .context("Executing password cmd failed")?;
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout)
+            .context("password cmd output is not utf-8")?
+            .trim()
+            .to_string())
+    } else {
+        Err(eyre!(
+            "command failed with:\n{}",
+            String::from_utf8(output.stderr).context("password cmd error output is not utf-8")?
+        ))
     }
 }
 
@@ -327,7 +343,7 @@ async fn jellyfin_login(
     cache: &SqlitePool,
     username: &str,
     password: &str,
-    password_cmd: Option<&[String]>
+    password_cmd: Option<&[String]>,
 ) -> std::result::Result<JellyfinClient<Auth>, (JellyfinClient<NoAuth>, Report)> {
     let device_name = client.get_device_name();
     let client_name = client.get_client_info().name.as_ref();
@@ -369,12 +385,12 @@ async fn jellyfin_login(
         }
     }
     info!("connecting to server");
-    let password = if let Some(cmd) = password_cmd{
-        match get_password_from_cmd(cmd).await{
+    let password = if let Some(cmd) = password_cmd {
+        match get_password_from_cmd(cmd).await {
             Ok(v) => v,
-            Err(e) => return Err((client, e))
+            Err(e) => return Err((client, e)),
         }
-    } else{
+    } else {
         password.to_string()
     };
     let client = match client.auth_user_name(username, password).await {

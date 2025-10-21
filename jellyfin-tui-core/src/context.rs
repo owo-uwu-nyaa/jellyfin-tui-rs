@@ -4,6 +4,7 @@ use crate::config::Config;
 use ::keybinds::KeybindEvents;
 use entries::image::cache::ImageProtocolCache;
 use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
+use player_core::PlayerHandle;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use sqlx::SqlitePool;
@@ -17,6 +18,7 @@ pub struct TuiContext {
     pub image_picker: Picker,
     pub cache: SqlitePool,
     pub image_cache: ImageProtocolCache,
+    pub mpv_handle: PlayerHandle,
 }
 
 pub struct TuiContextProj<'p> {
@@ -28,6 +30,7 @@ pub struct TuiContextProj<'p> {
     pub image_picker: &'p mut Picker,
     pub cache: &'p SqlitePool,
     pub image_cache: &'p mut ImageProtocolCache,
+    pub mpv_handle: &'p mut PlayerHandle,
 }
 
 impl TuiContext {
@@ -44,6 +47,7 @@ impl TuiContext {
                 image_picker,
                 cache,
                 image_cache,
+                mpv_handle,
             } = self.get_unchecked_mut();
             TuiContextProj {
                 jellyfin,
@@ -54,6 +58,7 @@ impl TuiContext {
                 image_picker,
                 cache,
                 image_cache,
+                mpv_handle,
             }
         }
     }

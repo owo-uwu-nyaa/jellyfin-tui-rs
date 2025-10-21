@@ -14,6 +14,34 @@ use ratatui::{
     widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
+pub trait ResultDisplayExt<T> {
+    fn display_error(
+        self,
+        term: &mut DefaultTerminal,
+        events: &mut KeybindEvents,
+        keybinds: &Keybinds,
+    ) -> impl Future<Output = Option<T>>;
+}
+
+impl<T> ResultDisplayExt<T> for Result<T> {
+    async fn display_error(
+        self,
+        term: &mut DefaultTerminal,
+        events: &mut KeybindEvents,
+        keybinds: &Keybinds,
+    ) -> Option<T> {
+        match self {
+            Err(e) => {
+                if let Some(e) = display_error(term, events, keybinds, e).await.err() {
+                    tracing::error!("Error displaying error: {e:?}");
+                }
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+}
+
 pub async fn display_error(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,

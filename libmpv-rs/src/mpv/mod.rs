@@ -345,6 +345,10 @@ impl Mpv {
 }
 
 impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol> {
+    pub fn client_name(&self) -> &CStr {
+        unsafe { CStr::from_ptr(libmpv_sys::mpv_client_name(self.ctx.as_ptr())) }
+    }
+
     pub fn set_log_level(&self, level: &CStr) -> Result<()> {
         mpv_err((), unsafe {
             libmpv_sys::mpv_request_log_messages(self.ctx.as_ptr(), level.as_ptr())
@@ -468,6 +472,14 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
         self.set_pause(false)
     }
 
+    pub fn set_fullscreen(&self, fullscreen: bool) -> Result<()> {
+        self.set_property(c"fullscreen", fullscreen)
+    }
+
+    pub fn set_minimized(&self, minimized: bool) -> Result<()> {
+        self.set_property(c"window-minimized", minimized)
+    }
+
     // --- Seek functions ---
     pub fn seek(&self, position: f64, flags: &CStr) -> Result<()> {
         self.command(&[c"seek".to_node(), position.to_node(), flags.to_node()])
@@ -579,6 +591,14 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     // --- Playlist functions ---
     //
 
+    /**
+      * Stop playback and clear entire playlist (including current item).
+      * The player will switch to idle.
+     *   */
+    pub fn stop(&self) -> Result<()> {
+        self.command(&[c"stop".to_node()])
+    }
+    
     /// Play the next item of the current playlist.
     /// Does nothing if the current item is the last item.
     pub fn playlist_next_weak(&self) -> Result<()> {
@@ -599,6 +619,10 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     /// See `playlist_next_force`.
     pub fn playlist_previous_force(&self) -> Result<()> {
         self.command(&[c"playlist-prev".to_node(), c"force".to_node()])
+    }
+
+    pub fn playlist_play_index(&self, index: i64) -> Result<()> {
+        self.command(&[c"playlist-play-index".to_node(), index.to_node()])
     }
 
     pub fn playlist_replace(&self, file: &CStr) -> Result<()> {

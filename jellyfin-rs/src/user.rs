@@ -636,12 +636,6 @@ struct GetUsersQuery {
     is_disabled: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct AuthUserStdQuery {
-    pw: String,
-    password: String,
-}
-
 impl<Auth: Authed> JellyfinClient<Auth> {
     /// Gets a list of all users that the `UserAuth` has access to, given some filters.
     pub async fn get_users(

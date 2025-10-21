@@ -136,7 +136,7 @@ pub async fn fetch_screen(cx: Pin<&mut TuiContext>, item: LoadPlay) -> Result<Na
             let (items, index) = fetch_items(jellyfin, item)
                 .await
                 .context("loading home screen data")?;
-            Ok(Navigation::Replace(NextScreen::MkPlayer { items, index }))
+            Ok(Navigation::Replace(NextScreen::Play { items, index }))
         },
         cx.events,
         cx.config.keybinds.fetch.clone(),
