@@ -193,6 +193,9 @@ pub async fn display_item_list_details(
             ItemListDetailsCommand::Right => {
                 entries.right();
             }
+            ItemListDetailsCommand::Reload => {
+                break Ok(Navigation::Replace(NextScreen::FetchItemListDetails(item)));
+            }
             ItemListDetailsCommand::Play => {
                 if let Some(entry) = entries.get()
                     && let Some(next) = entry.play()

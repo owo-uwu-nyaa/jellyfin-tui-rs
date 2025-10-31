@@ -122,6 +122,9 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
             ItemDetailsCommand::Down => {
                 scrollbar_pos = scrollbar_pos.saturating_sub(1);
             }
+            ItemDetailsCommand::Reload => {
+                break Ok(Navigation::Replace(NextScreen::FetchItemDetails(item.id)));
+            }
             ItemDetailsCommand::Play => {
                 let next = NextScreen::LoadPlayItem(jellyfin_tui_core::entries::play(&item));
                 break Ok(Navigation::Push {

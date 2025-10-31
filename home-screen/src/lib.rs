@@ -167,7 +167,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     let next = entry.open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }
@@ -177,7 +177,7 @@ pub async fn display_home_screen(
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }
@@ -187,7 +187,7 @@ pub async fn display_home_screen(
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }
@@ -197,7 +197,7 @@ pub async fn display_home_screen(
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }
@@ -207,7 +207,7 @@ pub async fn display_home_screen(
                     && let Some(next) = entry.play()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }
@@ -216,7 +216,7 @@ pub async fn display_home_screen(
                 if let Some(entry) = screen.get() {
                     let next = entry.play_open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::HomeScreen(screen),
+                        current: NextScreen::LoadHomeScreen,
                         next,
                     });
                 }

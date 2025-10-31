@@ -79,11 +79,13 @@ pub enum ItemDetailsCommand {
     Up,
     Down,
     Play,
+    Reload,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
 pub enum ItemListDetailsCommand {
     Quit,
+    Reload,
     Up,
     Down,
     Left,

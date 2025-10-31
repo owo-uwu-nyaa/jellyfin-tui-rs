@@ -63,7 +63,7 @@ tracing = "0.1.41"
 tracing-core = { version = "0.1.33", default-features = false }
 tokio = { version = "1.28.2" }
 tokio-util = "0.7.13"
-tokio-websockets = { version = "0.12.0", features = ["client", "getrandom", "aws_lc_rs"] }
+tokio-websockets = { version = "0.13.0", features = ["client", "getrandom", "aws_lc_rs"] }
 futures-core = "0.3.31"
 futures-sink = "0.3.31"
 futures-util = { version = "0.3.31", default-features = false, features = ["std"] }

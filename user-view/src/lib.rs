@@ -151,7 +151,7 @@ pub async fn display_user_view(
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::LoadHomeScreen,
+                        current: NextScreen::LoadUserView(view),
                         next,
                     });
                 }
@@ -161,7 +161,7 @@ pub async fn display_user_view(
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::LoadHomeScreen,
+                        current: NextScreen::LoadUserView(view),
                         next,
                     });
                 }
@@ -171,7 +171,7 @@ pub async fn display_user_view(
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::LoadHomeScreen,
+                        current: NextScreen::LoadUserView(view),
                         next,
                     });
                 }

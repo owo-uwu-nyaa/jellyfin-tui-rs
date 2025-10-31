@@ -25,6 +25,7 @@ enter = "play-open"
 [item_list_details]
 template = ["m", "o"]
 enter = "play"
+r = "reload"
 
 [login_info]
 backspace = "delete"
@@ -43,6 +44,7 @@ k = "kill"
 template = ["ud", "q"]
 p = "play"
 enter = "play"
+r = "reload"
 
 [template.q]
 q = "quit"
