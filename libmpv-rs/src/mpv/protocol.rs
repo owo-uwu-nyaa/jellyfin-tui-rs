@@ -59,7 +59,7 @@ where
         (*info).close_fn = Some(close_wrapper::<T, U>);
 
         panic::catch_unwind(|| {
-            let uri = mpv_cstr_to_str!(uri as *const _).unwrap();
+            let uri = mpv_cstr_to_str(uri as *const _).unwrap();
             ptr::write(
                 (*data).cookie,
                 ((*data).open_fn)(&mut (*data).user_data, uri),

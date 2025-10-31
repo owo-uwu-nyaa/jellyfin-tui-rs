@@ -6,7 +6,7 @@ use std::{
     ptr::null_mut,
 };
 
-use crate::{mpv_error, mpv_format};
+use crate::{mpv::mpv_cstr_to_str, mpv_error, mpv_format};
 
 use super::{Format, GetData, Result, errors::Error};
 
@@ -59,7 +59,7 @@ impl<'parent> Iterator for MpvNodeMapIter<'parent> {
             let offset = self.curr.try_into().ok()?;
             let (key, value) = unsafe {
                 (
-                    mpv_cstr_to_str!(*self.list.keys.offset(offset)),
+                    mpv_cstr_to_str(*self.list.keys.offset(offset)),
                     *self.list.values.offset(offset),
                 )
             };
@@ -90,7 +90,7 @@ impl MpvNode {
             mpv_format::Int64 => MpvNodeValue::Int64(unsafe { node.u.int64 }),
             mpv_format::Double => MpvNodeValue::Double(unsafe { node.u.double_ }),
             mpv_format::String => {
-                let text = unsafe { mpv_cstr_to_str!(node.u.string) }?;
+                let text = unsafe { mpv_cstr_to_str(node.u.string) }?;
                 MpvNodeValue::String(text)
             }
 

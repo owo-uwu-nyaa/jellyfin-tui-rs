@@ -16,17 +16,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use std::ptr::null_mut;
-use std::sync::Arc;
-use std::{ffi::CStr, str::FromStr};
-
-macro_rules! mpv_cstr_to_str {
-    ($cstr: expr) => {
-        std::ffi::CStr::from_ptr($cstr)
-            .to_str()
-            .map_err(Error::from)
-    };
-}
+#[cfg(feature = "async")]
+use std::task::Waker;
 
 mod errors;
 
@@ -46,17 +37,26 @@ use protocol::{ProtocolContextType, UninitProtocolContext};
 #[cfg(feature = "tracing")]
 use tracing::info;
 
+#[cfg(feature = "async")]
+use crate::events::EventCallbackContext;
+
 pub use self::errors::*;
 use super::*;
 
 use std::{
-    ffi::CString,
+    ffi::{CStr, CString},
     mem::MaybeUninit,
     ops::Deref,
     os::raw as ctype,
-    ptr::{self, NonNull},
+    ptr::{self, NonNull, null_mut},
     result::Result as StdResult,
+    str::FromStr,
+    sync::Arc,
 };
+
+unsafe fn mpv_cstr_to_str(ptr:*const i8)->Result<&'static str>{
+    unsafe{CStr::from_ptr(ptr)}.to_str().map_err(Error::from)
+}
 
 fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
     if err == 0 {
@@ -104,7 +104,7 @@ unsafe impl GetData for String {
         let ptr = &mut ptr::null();
         let _ = fun(ptr as *mut *const ctype::c_char as _)?;
 
-        let ret = unsafe { mpv_cstr_to_str!(*ptr) }?.to_owned();
+        let ret = unsafe { mpv_cstr_to_str(*ptr) }?.to_owned();
         unsafe { libmpv_sys::mpv_free(*ptr as *mut _) };
         Ok(ret)
     }
@@ -137,7 +137,7 @@ unsafe impl<'a> GetData for MpvStr<'a> {
         let ptr = &mut ptr::null();
         let _ = fun(ptr as *mut *const ctype::c_char as _)?;
 
-        Ok(MpvStr(unsafe { mpv_cstr_to_str!(*ptr) }?))
+        Ok(MpvStr(unsafe { mpv_cstr_to_str(*ptr) }?))
     }
 
     fn get_format() -> Format {
@@ -277,6 +277,10 @@ impl MpvInitializer {
 
 struct MpvDropHandle {
     ctx: NonNull<libmpv_sys::mpv_handle>,
+    #[cfg(feature = "async")]
+    handler_data: Box<EventCallbackContext>,
+    #[cfg(feature = "async")]
+    delayed_drop: Option<Box<Waker>>,
 }
 
 impl Drop for MpvDropHandle {
@@ -331,7 +335,13 @@ impl Mpv {
         }
 
         let ctx = unsafe { NonNull::new_unchecked(ctx) };
-        let drop_handle = Arc::new(MpvDropHandle { ctx });
+        let drop_handle = Arc::new(MpvDropHandle {
+            ctx,
+            #[cfg(feature = "async")]
+            handler_data: Box::new(EventCallbackContext::default()),
+            #[cfg(feature = "async")]
+            delayed_drop: None,
+        });
 
         initializer(MpvInitializer { ctx })?;
         mpv_err((), unsafe { libmpv_sys::mpv_initialize(ctx.as_ptr()) })?;
