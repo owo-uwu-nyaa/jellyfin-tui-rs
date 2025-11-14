@@ -81,18 +81,32 @@ unsafe fn drop_waker(waker: Option<NonNull<WakerSlot>>) {
     }
 }
 
+struct Dropper<'s> {
+    slot: &'s mut WakerSlot,
+}
+impl<'s> Drop for Dropper<'s> {
+    fn drop(&mut self) {
+        drop_if_init(self.slot);
+    }
+}
+
+fn drop_if_init(slot: &mut WakerSlot) {
+    if slot.used {
+        unsafe {
+            slot.slot.assume_init_drop();
+        }
+    }
+}
+
 impl Drop for WakerHazardPtr {
     fn drop(&mut self) {
-        fn drop_slot(slot: &mut WakerSlot) {
-            if slot.used {
-                unsafe {
-                    slot.slot.assume_init_drop();
-                }
-            }
-        }
-        drop_slot(self.waker_slot_1.get_mut());
-        drop_slot(self.waker_slot_2.get_mut());
-        drop_slot(self.waker_slot_3.get_mut());
+        let _slot_1 = Dropper {
+            slot: self.waker_slot_1.get_mut(),
+        };
+        let _slot_2 = Dropper {
+            slot: self.waker_slot_2.get_mut(),
+        };
+        drop_if_init(self.waker_slot_3.get_mut());
     }
 }
 
@@ -136,7 +150,6 @@ impl WakerHazardPtr {
                     current: &self.current,
                     waker: unsafe { w.as_ref().slot.assume_init_ref() },
                 });
-            } else {
             }
         }
     }
@@ -215,7 +228,6 @@ mod tests {
     use std::{
         sync::{Arc, atomic::AtomicBool},
         task::{Wake, Waker},
-        thread::JoinHandle,
     };
 
     use crate::hazard::WakerHazardPtr;
@@ -226,19 +238,12 @@ mod tests {
     }
     impl Wake for DebugWaker {
         fn wake(self: Arc<Self>) {
-            self.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            self.flag.store(true, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
-    fn wake_loop(ptr: Arc<WakerHazardPtr>) -> JoinHandle<()> {
-        std::thread::spawn(move || {
-            for _ in 0..1024 {
-                if let Some(waker) = unsafe { ptr.waker() } {
-                    waker.wake_by_ref();
-                }
-            }
-        })
-    }
+    const REP_WAKE: usize = 1024;
+    const REP_REPLACE: usize = 64;
 
     #[test]
     fn test_replace() {
@@ -247,8 +252,18 @@ mod tests {
         let waker2: Arc<DebugWaker> = Arc::default();
         let waker1_w = Waker::from(waker1.clone());
         let waker2_w = Waker::from(waker2.clone());
-        let wake_handle = wake_loop(ptr.clone());
-        for _ in 0..64 {
+        let wake_handle = {
+            let ptr = ptr.clone();
+            std::thread::spawn(move || {
+                for _ in 0..REP_WAKE {
+                    if let Some(waker) = unsafe { ptr.waker() } {
+                        waker.wake_by_ref();
+                    }
+                }
+            })
+        };
+        unsafe { ptr.replace_waker(&waker2_w) };
+        for _ in 0..REP_REPLACE {
             unsafe {
                 ptr.replace_waker(&waker1_w);
             }
