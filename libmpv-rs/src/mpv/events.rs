@@ -32,11 +32,8 @@ use std::{ffi::CString, os::raw as ctype, ptr::NonNull, slice, sync::Arc};
 use std::{
     ffi::c_void,
     future::{Future, pending, poll_fn},
-    ops::Deref,
     process::abort,
-    ptr::{self, null_mut},
-    sync::atomic::{AtomicPtr, Ordering::SeqCst},
-    task::{Poll, Waker},
+    task::Poll,
 };
 
 use super::node::MpvNode;
@@ -73,59 +70,8 @@ impl Drop for PanicAbort {
 }
 
 #[cfg(feature = "async")]
-#[derive(Default, Debug)]
-pub(super) struct EventCallbackContext {
-    waker: AtomicPtr<Waker>,
-    current: AtomicPtr<Waker>,
-}
-
-#[cfg(feature = "async")]
-struct WakerGuard<'s> {
-    current: &'s AtomicPtr<Waker>,
-    waker: &'s Waker,
-}
-
-#[cfg(feature = "async")]
-impl<'s> Deref for WakerGuard<'s> {
-    type Target = Waker;
-
-    fn deref(&self) -> &Self::Target {
-        self.waker
-    }
-}
-
-#[cfg(feature = "async")]
-impl<'s> Drop for WakerGuard<'s> {
-    fn drop(&mut self) {
-        self.current.store(null_mut(), SeqCst);
-    }
-}
-
-#[cfg(feature = "async")]
-impl EventCallbackContext {
-    unsafe fn waker(&self) -> Option<WakerGuard<'_>> {
-        let mut waker = self.waker.load(SeqCst);
-        loop {
-            self.current.store(waker, SeqCst);
-            let c_waker = self.waker.load(SeqCst);
-            if waker == c_waker {
-                break NonNull::new(waker).map(|w| WakerGuard {
-                    current: &self.current,
-                    waker: unsafe { w.as_ref() },
-                });
-            } else {
-                waker = c_waker
-            }
-        }
-    }
-}
-
-#[cfg(feature = "async")]
 pub struct AsyncContext {
     interval: interval::DefaultInterval,
-    waker: *const AtomicPtr<Waker>,
-    current: *const AtomicPtr<Waker>,
-    drop_delay: *mut Option<Box<Waker>>,
 }
 
 #[cfg(feature = "async")]
@@ -138,9 +84,9 @@ pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
     }
     let waker = unsafe {
         cx.cast_const()
-            .cast::<EventCallbackContext>()
+            .cast::<crate::hazard::WakerHazardPtr>()
             .as_ref()
-            .unwrap_unchecked()
+            .unwrap()
             .waker()
     };
     if let Some(waker) = waker {
@@ -238,7 +184,7 @@ pub enum Event<'a> {
 }
 
 pub struct EventContextSync {
-    _drop: Arc<MpvDropHandle>,
+    drop_handle: Arc<MpvDropHandle>,
     /// The handle to the mpv core
     ctx: NonNull<libmpv_sys::mpv_handle>,
 }
@@ -274,21 +220,18 @@ fn setup_waker(ctx: &MpvDropHandle) -> AsyncContext {
         libmpv_sys::mpv_set_wakeup_callback(
             ctx.ctx.as_ptr(),
             Some(wake_callback),
-            (&raw const *ctx.handler_data).cast_mut().cast(),
+            (&raw const ctx.waker).cast_mut().cast(),
         );
     };
     AsyncContext {
         interval: <DefaultInterval as interval::Interval>::new(),
-        waker: &ctx.handler_data.waker,
-        current: &ctx.handler_data.current,
-        drop_delay: (&ctx.delayed_drop as *const Option<Box<Waker>>).cast_mut(),
     }
 }
 
 #[cfg(feature = "async")]
 impl EventContextSync {
     pub fn enable_async(self) -> EventContextAsync {
-        let cx = setup_waker(&self._drop);
+        let cx = setup_waker(&self.drop_handle);
         EventContextAsync { inner: self, cx }
     }
 }
@@ -531,51 +474,13 @@ pub trait EventContextExt: sealed::EventContextExt {
 impl<T: sealed::EventContextExt> EventContextExt for T {}
 
 #[cfg(feature = "async")]
-fn poll(async_cx: &mut AsyncContext, cx: &mut std::task::Context<'_>) {
+fn poll(handle: &MpvDropHandle, async_cx: &mut AsyncContext, cx: &mut std::task::Context<'_>) {
     let new_waker = cx.waker();
-    //if the current waker is the same as the new one, we don't have to do anything
-    if let Some(c_waker) = unsafe { (&*async_cx.waker).load(SeqCst).as_ref() } //needs SeqCst because could have been set by another thread
-        && c_waker.will_wake(new_waker)
-    {
-    } else {
-        let new_waker = Box::into_raw(Box::new(new_waker.clone()));
-        replace_waker(async_cx, new_waker);
+    unsafe {
+        handle.waker.replace_waker(new_waker);
     }
     //mpv doesn't run the callback on destruction, poll regularly anyway to avoid deadlocks
     interval::Interval::poll(&mut async_cx.interval, cx);
-}
-
-#[cfg(feature = "async")]
-fn replace_waker(async_cx: &mut AsyncContext, new_waker: *mut Waker) {
-    let old_waker = unsafe {
-        let w = &*async_cx.waker;
-        let old = w.load(SeqCst);
-        w.store(new_waker, SeqCst);
-        NonNull::new(old).map(|p| Box::from_raw(p.as_ptr()))
-    };
-    let drop_delay = unsafe { &mut *async_cx.drop_delay };
-    let current = unsafe { &*async_cx.current }.load(SeqCst);
-    if current.is_null() {
-        *drop_delay = None;
-    } else if let Some(drop_delay_filled) = drop_delay {
-        if !ptr::eq(current, drop_delay_filled.deref().deref()) {
-            //old waker must be current
-            debug_assert!(ptr::eq(
-                current,
-                old_waker.as_deref().expect("must be non null")
-            ));
-            //save drop delay
-            *drop_delay = old_waker;
-        }
-    } else {
-        //old waker must be current
-        debug_assert!(ptr::eq(
-            current,
-            old_waker.as_deref().expect("must be non null")
-        ));
-        //save drop delay
-        *drop_delay = old_waker;
-    }
 }
 
 #[cfg(feature = "async")]
@@ -584,11 +489,11 @@ pub trait EventContextAsyncExt:
 {
     fn wait_event_async(&mut self) -> impl Future<Output = Result<Event<'_>>> + Send + Sync;
     fn poll_wait_event(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<Event<'_>>> {
-        poll(self.get_waker(), cx);
         if let Some(v) = unsafe { self.wait_event_unsafe(0.0) } {
             return Poll::Ready(v);
         }
-        poll(self.get_waker(), cx);
+        let (async_cx, drop_handle) = self.get_waker_ctx();
+        poll(drop_handle, async_cx, cx);
         if let Some(v) = self.wait_event(0.0) {
             Poll::Ready(v)
         } else {
@@ -601,7 +506,8 @@ pub trait EventContextAsyncExt:
 impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventContextAsyncExt for T {
     async fn wait_event_async(&mut self) -> Result<Event<'_>> {
         poll_fn(|cx| {
-            poll(self.get_waker(), cx);
+            let (async_cx, drop_handle) = self.get_waker_ctx();
+            poll(drop_handle, async_cx, cx);
             Poll::Ready(())
         })
         .await;
@@ -615,7 +521,7 @@ impl<T: sealed::EventContextAsyncExt + EventContextExt + Send + Sync> EventConte
 mod sealed {
     use std::ptr::NonNull;
 
-    use crate::protocol::ProtocolContextType;
+    use crate::{mpv::MpvDropHandle, protocol::ProtocolContextType};
 
     #[cfg(feature = "async")]
     use super::{AsyncContext, EventContextAsync};
@@ -650,7 +556,7 @@ mod sealed {
         ) -> Self {
             EventContextSync {
                 ctx: cx.ctx,
-                _drop: cx.drop_handle.clone(),
+                drop_handle: cx.drop_handle.clone(),
             }
         }
         fn to_inlined(self) -> Self::Inlined {}
@@ -706,18 +612,18 @@ mod sealed {
     }
     #[cfg(feature = "async")]
     pub trait EventContextAsyncExt: EventContextExt {
-        fn get_waker(&mut self) -> &mut AsyncContext;
+        fn get_waker_ctx(&mut self) -> (&mut AsyncContext, &MpvDropHandle);
     }
     #[cfg(feature = "async")]
     impl EventContextAsyncExt for EventContextAsync {
-        fn get_waker(&mut self) -> &mut AsyncContext {
-            &mut self.cx
+        fn get_waker_ctx(&mut self) -> (&mut AsyncContext, &MpvDropHandle) {
+            (&mut self.cx, &self.inner.drop_handle)
         }
     }
     #[cfg(feature = "async")]
     impl<Protocol: ProtocolContextType> EventContextAsyncExt for Mpv<EventContextAsync, Protocol> {
-        fn get_waker(&mut self) -> &mut AsyncContext {
-            &mut self.event_inline
+        fn get_waker_ctx(&mut self) -> (&mut AsyncContext, &MpvDropHandle) {
+            (&mut self.event_inline, &self.drop_handle)
         }
     }
 }

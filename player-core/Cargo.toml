@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libmpv = { path = "../libmpv-rs", default-features = false, features = ["tracing", "tokio"] }
+libmpv = { path = "../libmpv-rs", default-features = false, features = ["tracing", "tokio", "use-bindgen"] }
 jellyfin = { path = "../jellyfin-rs"}
 spawn = {path = "../spawn"}
 

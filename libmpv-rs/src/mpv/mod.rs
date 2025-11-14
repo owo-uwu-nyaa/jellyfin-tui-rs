@@ -16,9 +16,6 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-#[cfg(feature = "async")]
-use std::task::Waker;
-
 mod errors;
 
 /// Event handling
@@ -37,9 +34,6 @@ use protocol::{ProtocolContextType, UninitProtocolContext};
 #[cfg(feature = "tracing")]
 use tracing::info;
 
-#[cfg(feature = "async")]
-use crate::events::EventCallbackContext;
-
 pub use self::errors::*;
 use super::*;
 
@@ -54,8 +48,8 @@ use std::{
     sync::Arc,
 };
 
-unsafe fn mpv_cstr_to_str(ptr:*const i8)->Result<&'static str>{
-    unsafe{CStr::from_ptr(ptr)}.to_str().map_err(Error::from)
+unsafe fn mpv_cstr_to_str(ptr: *const i8) -> Result<&'static str> {
+    unsafe { CStr::from_ptr(ptr) }.to_str().map_err(Error::from)
 }
 
 fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
@@ -193,10 +187,11 @@ impl Cycle {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum MpvProfile {
     Fast,
     HighQuality,
+    #[default]
     Default,
 }
 
@@ -220,12 +215,6 @@ impl MpvProfile {
             MpvProfile::HighQuality => "high-quality",
             MpvProfile::Default => "default",
         }
-    }
-}
-
-impl Default for MpvProfile {
-    fn default() -> Self {
-        Self::Default
     }
 }
 
@@ -275,24 +264,28 @@ impl MpvInitializer {
     }
 }
 
-struct MpvDropHandle {
-    ctx: NonNull<libmpv_sys::mpv_handle>,
-    #[cfg(feature = "async")]
-    handler_data: Box<EventCallbackContext>,
-    #[cfg(feature = "async")]
-    delayed_drop: Option<Box<Waker>>,
-}
+use drop_handle::MpvDropHandle;
 
-impl Drop for MpvDropHandle {
-    fn drop(&mut self) {
-        unsafe {
-            libmpv_sys::mpv_terminate_destroy(self.ctx.as_ptr());
+mod drop_handle {
+    use std::ptr::NonNull;
+
+    pub struct MpvDropHandle {
+        pub(super) ctx: NonNull<libmpv_sys::mpv_handle>,
+        #[cfg(feature = "async")]
+        pub(super) waker: crate::hazard::WakerHazardPtr,
+    }
+
+    impl Drop for MpvDropHandle {
+        fn drop(&mut self) {
+            unsafe {
+                libmpv_sys::mpv_terminate_destroy(self.ctx.as_ptr());
+            }
         }
     }
-}
 
-unsafe impl Send for MpvDropHandle {}
-unsafe impl Sync for MpvDropHandle {}
+    unsafe impl Send for MpvDropHandle {}
+    unsafe impl Sync for MpvDropHandle {}
+}
 
 /// The central mpv context.
 pub struct Mpv<
@@ -338,9 +331,7 @@ impl Mpv {
         let drop_handle = Arc::new(MpvDropHandle {
             ctx,
             #[cfg(feature = "async")]
-            handler_data: Box::new(EventCallbackContext::default()),
-            #[cfg(feature = "async")]
-            delayed_drop: None,
+            waker: Default::default(),
         });
 
         initializer(MpvInitializer { ctx })?;

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::thread;
 use std::time::Duration;
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn initializer() {
     let mpv = Mpv::with_initializer(|init| -> Result<()> {
@@ -41,7 +41,7 @@ fn initializer() {
     assert_eq!(true, mpv.get_property("input-default-bindings").unwrap());
     assert_eq!(30i64, mpv.get_property("volume").unwrap());
 }
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn test_file_exists() {
     assert!(
@@ -49,7 +49,7 @@ fn test_file_exists() {
         "Unable to open test file at test-data/speech_12kbps_mb.wav"
     )
 }
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn properties() {
     let mpv = Mpv::new().unwrap();
@@ -91,7 +91,7 @@ macro_rules! assert_event_occurs {
         }
     }
 }
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn events() {
     let mut mpv = Mpv::with_initializer(|mpv| mpv.set_option(c"ytdl", false)).unwrap();
@@ -171,7 +171,7 @@ fn events() {
     assert_event_occurs!(mpv, 3., Ok(Event::PlaybackRestart));
     assert!(mpv.wait_event(3.).is_none());
 }
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn node_map() -> Result<()> {
     let mpv = Mpv::new()?;
@@ -202,7 +202,7 @@ fn node_map() -> Result<()> {
 
     Ok(())
 }
-
+#[cfg_attr(miri, ignore)]
 #[test]
 fn node_array() -> Result<()> {
     let mpv = Mpv::new()?;
