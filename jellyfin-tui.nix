@@ -7,7 +7,7 @@
   rust-build,
   runCommand,
   remarshal,
-  attach?false,
+  attach ? false,
 }:
 let
   fileset = lib.fileset.unions [
@@ -49,6 +49,7 @@ let
           buildInputs = [ mpv-unwrapped ];
           nativeBuildInputs = [
             pkg-config
+            rustPlatform.bindgenHook
           ];
         };
         libsqlite3-sys =
