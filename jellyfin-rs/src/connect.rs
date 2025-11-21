@@ -63,6 +63,18 @@ enum ConnectionInner {
 }
 
 impl Connection {
+    pub fn clone_new(&self)->Self{
+        Self{
+            authority: self.authority.clone(),
+            host: self.host.clone(),
+            port: self.port,
+            tls: self.tls,
+            inner: Mutex::new(ConnectionInner::Disconnected),
+            general_config: self.general_config.clone(),
+            http1_config: self.http1_config.clone(),
+        }
+    }
+    
     pub fn authority(&self) -> &Authority {
         &self.authority
     }

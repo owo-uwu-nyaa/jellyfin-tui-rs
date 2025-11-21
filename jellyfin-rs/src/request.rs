@@ -7,7 +7,7 @@ use serde::Serialize;
 
 impl<Auth: AuthStatus> JellyfinClient<Auth> {
     pub fn build_path(&self, uri: impl PathBuilder, query: impl Query) -> Result<String> {
-        let mut path = self.uri_base.clone();
+        let mut path = self.inner.uri_base.clone();
         uri.append(&mut path);
         query.append(&mut path)?;
         Ok(path)
@@ -19,8 +19,8 @@ impl<Auth: AuthStatus> JellyfinClient<Auth> {
     ) -> Result<http::request::Builder> {
         let builder = http::request::Builder::new()
             .uri(self.build_path(uri, query)?)
-            .header(HOST, self.host_header.clone());
-        Ok(self.auth.add_auth_header(builder))
+            .header(HOST, self.inner.host_header.clone());
+        Ok(self.inner.auth.add_auth_header(builder))
     }
 
     pub fn get(&self, uri: impl PathBuilder, query: impl Query) -> Result<http::request::Builder> {

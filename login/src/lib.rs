@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     fs::{OpenOptions, create_dir_all},
     io::Write,
+    ops::DerefMut,
     os::unix::fs::OpenOptionsExt,
     pin::pin,
 };
@@ -19,10 +20,11 @@ use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::Text,
-    widgets::{Block, BorderType, Padding, Paragraph, Wrap},
+    widgets::{Block, BorderType, Padding, Paragraph, Widget, Wrap},
 };
+use ratatui_fallible_widget::{FallibleWidget, TermExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, query, query_scalar};
+use sqlx::{SqliteConnection, query, query_scalar};
 use tracing::{error, info, instrument};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,14 +32,97 @@ struct LoginInfo {
     server_url: String,
     username: String,
     password: String,
-    password_cmd: Option<Vec<String>>
+    password_cmd: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Copy)]
 enum LoginSelection {
     Server,
     Username,
     Password,
     Retry,
+}
+
+struct LoginWidget<'s> {
+    info: &'s mut LoginInfo,
+    selection: LoginSelection,
+    error: String,
+}
+
+impl FallibleWidget for LoginWidget<'_> {
+    fn render_fallible(
+        &mut self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> Result<()> {
+        let error = Paragraph::new(self.error.to_string())
+            .block(Block::bordered().border_style(Color::Red))
+            .wrap(Wrap::default());
+        let normal_block = Block::bordered();
+        let current_block = Block::bordered().border_type(ratatui::widgets::BorderType::Double);
+        let outer_block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .padding(Padding::uniform(4))
+            .title("Enter Jellyfin Server / Login Information");
+        let server = Paragraph::new(self.info.server_url.as_str()).block(
+            if let LoginSelection::Server = self.selection {
+                current_block.clone()
+            } else {
+                normal_block.clone()
+            }
+            .title("Jellyfin URL"),
+        );
+        let username = Paragraph::new(self.info.username.as_str()).block(
+            if let LoginSelection::Username = self.selection {
+                current_block.clone()
+            } else {
+                normal_block.clone()
+            }
+            .title("Username"),
+        );
+        let password = Paragraph::new(
+            Text::from(if self.info.password_cmd.is_some() {
+                "from command"
+            } else if self.info.password.is_empty() {
+                ""
+            } else {
+                "<hidden>"
+            })
+            .style(Style::default().add_modifier(Modifier::HIDDEN)),
+        )
+        .block(
+            if let LoginSelection::Password = self.selection {
+                current_block.clone()
+            } else {
+                normal_block.clone()
+            }
+            .title("Password"),
+        );
+        let outer_area = area;
+        let button =
+            Paragraph::new("Connect").block(if let LoginSelection::Retry = self.selection {
+                current_block.clone()
+            } else {
+                Block::bordered().border_type(BorderType::Thick)
+            });
+
+        let [layout_s, layout_u, layout_p, layout_b, layout_e] = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Min(3),
+        ])
+        .vertical_margin(1)
+        .areas(outer_block.inner(outer_area));
+        outer_block.render(outer_area, buf);
+        server.render(layout_s, buf);
+        username.render(layout_u, buf);
+        password.render(layout_p, buf);
+        button.render(layout_b, buf);
+        error.render(layout_e, buf);
+        Ok(())
+    }
 }
 
 #[instrument(skip_all)]
@@ -49,100 +134,41 @@ async fn get_login_info(
     events: &mut KeybindEvents,
     keybinds: &Keybinds,
 ) -> Result<bool> {
-    let mut selection = if info.server_url.is_empty() {
+    let selection = if info.server_url.is_empty() {
         LoginSelection::Server
     } else {
         LoginSelection::Password
     };
-    let error = Paragraph::new(error.to_string())
-        .block(Block::bordered().border_style(Color::Red))
-        .wrap(Wrap::default());
-    let normal_block = Block::bordered();
-    let current_block = Block::bordered().border_type(ratatui::widgets::BorderType::Double);
-    let outer_block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .padding(Padding::uniform(4))
-        .title("Enter Jellyfin Server / Login Information");
-    let mut events = KeybindEventStream::new(events, keybinds.login_info.clone());
+    let error = error.to_string();
+    let mut widget = LoginWidget {
+        info,
+        selection,
+        error,
+    };
+    let mut events = KeybindEventStream::new(events, &mut widget, keybinds.login_info.clone());
     loop {
-        term.draw(|frame| {
-            let server = Paragraph::new(info.server_url.as_str()).block(
-                if let LoginSelection::Server = selection {
-                    current_block.clone()
-                } else {
-                    normal_block.clone()
-                }
-                .title("Jellyfin URL"),
-            );
-            let username = Paragraph::new(info.username.as_str()).block(
-                if let LoginSelection::Username = selection {
-                    current_block.clone()
-                } else {
-                    normal_block.clone()
-                }
-                .title("Username"),
-            );
-            let password = Paragraph::new(
-                Text::from(if info.password_cmd.is_some() {"from command"} else if info.password.is_empty() {
-                    ""
-                } else {
-                    "<hidden>"
-                })
-                .style(Style::default().add_modifier(Modifier::HIDDEN)),
-            )
-            .block(
-                if let LoginSelection::Password = selection {
-                    current_block.clone()
-                } else {
-                    normal_block.clone()
-                }
-                .title("Password"),
-            );
-            let outer_area = events.inner(frame.area());
-            let button =
-                Paragraph::new("Connect").block(if let LoginSelection::Retry = selection {
-                    current_block.clone()
-                } else {
-                    Block::bordered().border_type(BorderType::Thick)
-                });
-
-            let [layout_s, layout_u, layout_p, layout_b, layout_e] = Layout::vertical([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Min(3),
-            ])
-            .vertical_margin(1)
-            .areas(outer_block.inner(outer_area));
-            frame.render_widget(&outer_block, outer_area);
-            frame.render_widget(server, layout_s);
-            frame.render_widget(username, layout_u);
-            frame.render_widget(password, layout_p);
-            frame.render_widget(button, layout_b);
-            frame.render_widget(&error, layout_e);
-            frame.render_widget(&mut events, frame.area());
-        })?;
+        term.draw_fallible(&mut events)?;
+        let selection = events.get_inner().selection;
         events.set_text_input(!matches!(selection, LoginSelection::Retry));
         match events.next().await {
             Some(Ok(KeybindEvent::Command(LoginInfoCommand::Delete))) => match selection {
                 LoginSelection::Server => {
-                    info.server_url.pop();
+                    events.get_inner().info.server_url.pop();
                     *changed = true;
                 }
                 LoginSelection::Username => {
-                    info.username.pop();
+                    events.get_inner().info.username.pop();
                     *changed = true;
                 }
                 LoginSelection::Password => {
-                    info.password.pop();
+                    events.get_inner().info.password.pop();
                     *changed = true;
                 }
                 LoginSelection::Retry => {}
             },
             Some(Ok(KeybindEvent::Command(LoginInfoCommand::Submit))) => break Ok(true),
             Some(Ok(KeybindEvent::Command(LoginInfoCommand::Prev))) => {
-                selection = match selection {
+                events.get_inner().selection = match selection {
                     LoginSelection::Server => LoginSelection::Retry,
                     LoginSelection::Username => LoginSelection::Server,
                     LoginSelection::Password => LoginSelection::Username,
@@ -150,7 +176,7 @@ async fn get_login_info(
                 }
             }
             Some(Ok(KeybindEvent::Command(LoginInfoCommand::Next))) => {
-                selection = match selection {
+                events.get_inner().selection = match selection {
                     LoginSelection::Server => LoginSelection::Username,
                     LoginSelection::Username => LoginSelection::Password,
                     LoginSelection::Password => LoginSelection::Retry,
@@ -160,9 +186,9 @@ async fn get_login_info(
             Some(Ok(KeybindEvent::Command(LoginInfoCommand::Quit))) => break Ok(false),
             Some(Ok(KeybindEvent::Text(text))) => {
                 let dest = match selection {
-                    LoginSelection::Server => &mut info.server_url,
-                    LoginSelection::Username => &mut info.username,
-                    LoginSelection::Password => &mut info.password,
+                    LoginSelection::Server => &mut events.get_inner().info.server_url,
+                    LoginSelection::Username => &mut events.get_inner().info.username,
+                    LoginSelection::Password => &mut events.get_inner().info.password,
                     LoginSelection::Retry => {
                         unreachable!("selecting reply should disable text input")
                     }
@@ -185,11 +211,11 @@ pub async fn login(
     term: &mut DefaultTerminal,
     config: &Config,
     events: &mut KeybindEvents,
-    cache: &SqlitePool,
+    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Result<Option<JellyfinClient<Auth>>> {
     let mut login_info: LoginInfo;
     let mut error: Option<Report>;
-    let connect_msg = Paragraph::new("Connecting to Server")
+    let mut connect_msg = Paragraph::new("Connecting to Server")
         .centered()
         .block(Block::bordered());
     match std::fs::read_to_string(&config.login_file)
@@ -259,10 +285,10 @@ pub async fn login(
             login_info.password_cmd.as_deref()
         ));
 
-        let mut events = KeybindEventStream::new(events, config.keybinds.fetch.clone());
+        let mut events =
+            KeybindEventStream::new(events, &mut connect_msg, config.keybinds.fetch.clone());
         loop {
-            term.draw(|frame| frame.render_widget(&connect_msg, frame.area()))
-                .context("rendering ui")?;
+            term.draw_fallible(&mut events)?;
             tokio::select! {
                 event = events.next() => {
                     match event {
@@ -309,35 +335,50 @@ pub async fn login(
     Ok(Some(client))
 }
 
-async fn get_password_from_cmd(cmd: &[String])-> Result<String>{
-    let mut command = if let Some(cmd) = cmd.first(){tokio::process::Command::new(cmd)} else {return Err(eyre!("Password cmd is empty"))};
-    for arg in cmd[1..].iter(){
+async fn get_password_from_cmd(cmd: &[String]) -> Result<String> {
+    let mut command = if let Some(cmd) = cmd.first() {
+        tokio::process::Command::new(cmd)
+    } else {
+        return Err(eyre!("Password cmd is empty"));
+    };
+    for arg in cmd[1..].iter() {
         command.arg(arg);
     }
-    let output = command.kill_on_drop(true).output().await.context("Executing password cmd failed")?;
-    if output.status.success(){
-        Ok(String::from_utf8(output.stdout).context("password cmd output is not utf-8")?.trim().to_string())
-    }else{
-        Err(eyre!("command failed with:\n{}",String::from_utf8(output.stderr).context("password cmd error output is not utf-8")?))
+    let output = command
+        .kill_on_drop(true)
+        .output()
+        .await
+        .context("Executing password cmd failed")?;
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout)
+            .context("password cmd output is not utf-8")?
+            .trim()
+            .to_string())
+    } else {
+        Err(eyre!(
+            "command failed with:\n{}",
+            String::from_utf8(output.stderr).context("password cmd error output is not utf-8")?
+        ))
     }
 }
 
 async fn jellyfin_login(
     mut client: JellyfinClient<NoAuth>,
-    cache: &SqlitePool,
+    cache: &tokio::sync::Mutex<SqliteConnection>,
     username: &str,
     password: &str,
-    password_cmd: Option<&[String]>
+    password_cmd: Option<&[String]>,
 ) -> std::result::Result<JellyfinClient<Auth>, (JellyfinClient<NoAuth>, Report)> {
     let device_name = client.get_device_name();
     let client_name = client.get_client_info().name.as_ref();
     let client_version = client.get_client_info().version.as_ref();
+    let mut cache = cache.lock().await;
     match query_scalar!("select access_token from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
                         device_name,
                         client_name,
                         client_version,
                         username
-    ).fetch_optional(cache).await{
+    ).fetch_optional(cache.deref_mut()).await{
         Ok(None) => {}
         Err(e) => return Err((client,e.into())),
         Ok(Some(access_token)) => {
@@ -358,7 +399,7 @@ async fn jellyfin_login(
                                  client_name,
                                  client_version,
                                  username
-                    ).execute(cache).await{
+                    ).execute(cache.deref_mut()).await{
                         Ok(_)=>{},
                         Err(e) => {
                             return Err((client,e.into()))
@@ -369,12 +410,12 @@ async fn jellyfin_login(
         }
     }
     info!("connecting to server");
-    let password = if let Some(cmd) = password_cmd{
-        match get_password_from_cmd(cmd).await{
+    let password = if let Some(cmd) = password_cmd {
+        match get_password_from_cmd(cmd).await {
             Ok(v) => v,
-            Err(e) => return Err((client, e))
+            Err(e) => return Err((client, e)),
         }
-    } else{
+    } else {
         password.to_string()
     };
     let client = match client.auth_user_name(username, password).await {
@@ -391,7 +432,7 @@ async fn jellyfin_login(
                  client_version,
                  username,
                  access_token,
-    ).execute(cache).await{
+    ).execute(cache.deref_mut()).await{
         Ok(_)=> {},
         Err(e)=> return Err((client.without_auth(), e.into())),
     }

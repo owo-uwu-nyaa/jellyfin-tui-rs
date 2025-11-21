@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    pin::{Pin, pin},
+    pin::{Pin, pin}, sync::Arc,
 };
 
 use color_eyre::{Result, eyre::Context};
@@ -15,7 +15,7 @@ use jellyfin_tui_core::{
 use keybinds::KeybindEvents;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
-use sqlx::SqlitePool;
+use sqlx::SqliteConnection;
 use tokio_util::sync::CancellationToken;
 use tracing::{error_span, instrument};
 pub mod error;
@@ -29,8 +29,8 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
             views,
             latest,
         } => home_screen::handle_home_screen_data(cx, resume, next_up, views, latest),
-        NextScreen::HomeScreen(entry_screen) => {
-            home_screen::display_home_screen(cx, entry_screen).await
+        NextScreen::HomeScreen(entry_screen, images_available) => {
+            home_screen::display_home_screen(cx, entry_screen, images_available).await
         }
         NextScreen::LoadUserView(user_view) => user_view::fetch_user_view(cx, user_view).await,
         NextScreen::UserView { view, items } => user_view::display_user_view(cx, view, items).await,
@@ -49,8 +49,8 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
         NextScreen::ItemListDetailsData(media_item, media_items) => {
             item_view::item_list_details::handle_item_list_details_data(cx, media_item, media_items)
         }
-        NextScreen::ItemListDetails(media_item, entry_list) => {
-            item_view::item_list_details::display_item_list_details(cx, media_item, entry_list)
+        NextScreen::ItemListDetails(media_item, entry_list, images_available) => {
+            item_view::item_list_details::display_item_list_details(cx, media_item, entry_list, images_available)
                 .await
         }
         NextScreen::FetchItemListDetails(media_item) => {
@@ -69,7 +69,7 @@ async fn login_jellyfin(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
     config: &Config,
-    cache: &SqlitePool,
+    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Result<Option<(JellyfinClient, JellyfinWebSocket)>> {
     Ok(
         if let Some(client) = login::login(term, config, events, cache).await? {
@@ -86,7 +86,7 @@ async fn login(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
     config: &Config,
-    cache: &SqlitePool,
+    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Option<(JellyfinClient, JellyfinWebSocket)> {
     loop {
         match login_jellyfin(term, events, config, cache).await {
@@ -114,7 +114,7 @@ async fn run_app_inner(
     mut term: DefaultTerminal,
     mut events: KeybindEvents,
     config: Config,
-    cache: SqlitePool,
+    cache: Arc<tokio::sync::Mutex<SqliteConnection>>,
     image_picker: Picker,
 ) {
     if let Some((jellyfin, jellyfin_socket)) = login(&mut term, &mut events, &config, &cache).await
@@ -125,7 +125,7 @@ async fn run_app_inner(
             term,
             config,
             events,
-            image_picker,
+            image_picker: Arc::new(image_picker),
             cache,
             image_cache: ImageProtocolCache::new()
         });
@@ -151,6 +151,5 @@ pub async fn run_app(
         error_span!("jellyfin-tui"),
     )
     .await;
-    cache.close().await;
     Ok(())
 }

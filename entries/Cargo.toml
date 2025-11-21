@@ -8,6 +8,7 @@ edition = "2024"
 keybinds = {path = "../keybinds"}
 jellyfin = { path = "../jellyfin-rs"}
 spawn = {path = "../spawn"}
+ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
 
 parking_lot = {workspace=true}
 rayon = {workspace=true}

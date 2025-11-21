@@ -419,19 +419,19 @@ impl JellyfinClient<Auth> {
     pub fn get_socket(&self) -> Result<JellyfinWebSocket> {
         let uri = http::uri::Builder::new()
             .scheme(if self.tls() { "wss" } else { "ws" })
-            .authority(self.connection.authority().clone())
+            .authority(self.inner.connection.authority().clone())
             .path_and_query(self.build_path(
                 "/socket",
                 SocketQuery {
-                    api_key: &self.auth.access_token,
-                    deviceid: &self.auth.device_id,
+                    api_key: &self.inner.auth.access_token,
+                    deviceid: &self.inner.auth.device_id,
                 },
             )?)
             .build()?;
 
         let connect = ConnectInfo {
             uri,
-            connection: self.connection.clone(),
+            connection: Arc::new(self.inner.connection.clone_new()),
         };
         let state = make_handshake(None, &connect);
         Ok(JellyfinWebSocket { connect, state })

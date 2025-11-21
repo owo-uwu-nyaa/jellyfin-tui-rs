@@ -1,15 +1,20 @@
+use std::sync::Arc;
+
 use aws_lc_rs::digest;
-use http::{HeaderValue, header::AUTHORIZATION};
+use http::{header::AUTHORIZATION, HeaderValue};
 use serde::Serialize;
 
-use base64::{Engine, engine::general_purpose::URL_SAFE};
+use base64::{engine::general_purpose::URL_SAFE, Engine};
 use tracing::{instrument, trace};
 
 use crate::{
-    Auth, ClientInfo, JellyfinClient, KeyAuth, NoAuth,
+    client_with_auth,
     request::{NoQuery, RequestBuilderExt},
     user::{User, UserAuth},
+    Auth, AuthStatus, ClientInfo, ClientInner, JellyfinClient, KeyAuth, NoAuth,
 };
+
+use std::result::Result as StdResult;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -18,23 +23,31 @@ struct AuthUserNameReq<'a> {
     pw: &'a str,
 }
 impl JellyfinClient<NoAuth> {
-    pub fn auth_key(self, key: String, user_name: impl AsRef<str>) -> JellyfinClient<KeyAuth> {
+    pub fn auth_key(
+        self,
+        key: String,
+        user_name: impl AsRef<str>,
+    ) -> JellyfinClient<KeyAuth> {
         let key = key.to_string();
-        let device_id =
-            make_user_client_id(user_name.as_ref(), &self.client_info, &self.device_name);
-        let auth_header = make_auth_header(&key, &self.client_info, &self.device_name, &device_id);
-        JellyfinClient {
-            client_info: self.client_info,
-            device_name: self.device_name,
-            auth: KeyAuth {
+        let device_id = make_user_client_id(
+            user_name.as_ref(),
+            &self.inner.client_info,
+            &self.inner.device_name,
+        );
+        let auth_header = make_auth_header(
+            &key,
+            &self.inner.client_info,
+            &self.inner.device_name,
+            &device_id,
+        );
+        client_with_auth(
+            self,
+            KeyAuth {
                 access_key: key,
                 header: auth_header,
                 device_id,
             },
-            host_header: self.host_header,
-            uri_base: self.uri_base,
-            connection: self.connection,
-        }
+        )
     }
 
     #[instrument(skip_all)]
@@ -42,17 +55,18 @@ impl JellyfinClient<NoAuth> {
         self,
         username: impl AsRef<str>,
         password: impl AsRef<str>,
-    ) -> Result<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
+    ) -> StdResult<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
         let username = username.as_ref();
-        let device_id = make_user_client_id(username, &self.client_info, &self.device_name);
-        let auth: Result<UserAuth, color_eyre::Report> = async {
+        let device_id =
+            make_user_client_id(username, &self.inner.client_info, &self.inner.device_name);
+        let auth: StdResult<UserAuth, color_eyre::Report> = async {
             self.send_request_json(
                 self.post("/Users/AuthenticateByName", NoQuery)?
                     .header(
                         AUTHORIZATION,
                         make_auth_handshake_header(
-                            &self.client_info,
-                            &self.device_name,
+                            &self.inner.client_info,
+                            &self.inner.device_name,
                             &device_id,
                         ),
                     )
@@ -72,28 +86,50 @@ impl JellyfinClient<NoAuth> {
         };
         let auth_header = make_auth_header(
             &auth.access_token,
-            &self.client_info,
-            &self.device_name,
+            &self.inner.client_info,
+            &self.inner.device_name,
             &device_id,
         );
-        Ok(JellyfinClient {
-            client_info: self.client_info,
-            device_name: self.device_name,
-            auth: Auth {
-                user: auth.user,
-                access_token: auth.access_token,
-                header: auth_header,
-                device_id,
-            },
-            host_header: self.host_header,
-            uri_base: self.uri_base,
-            connection: self.connection,
-        })
+
+        let auth = Auth {
+            user: auth.user,
+            access_token: auth.access_token,
+            header: auth_header,
+            device_id,
+        };
+        Ok(make_auth_or_return(self, auth))
+    }
+}
+
+fn make_auth_or_return<Auth1: AuthStatus, Auth2: AuthStatus>(
+    this: JellyfinClient<Auth1>,
+    auth: Auth2,
+) -> JellyfinClient<Auth2> {
+    let inner = match Arc::try_unwrap(this.inner) {
+        Ok(client) => ClientInner {
+            uri_base: client.uri_base,
+            host_header: client.host_header,
+            connection: client.connection,
+            device_name: client.device_name,
+            client_info: client.client_info,
+            auth,
+        },
+        Err(client) => ClientInner {
+            host_header: client.host_header.clone(),
+            uri_base: client.uri_base.clone(),
+            connection: client.connection.clone_new(),
+            client_info: client.client_info.clone(),
+            device_name: client.device_name.clone(),
+            auth,
+        },
+    };
+    JellyfinClient {
+        inner: Arc::new(inner),
     }
 }
 
 impl JellyfinClient<KeyAuth> {
-    pub async fn get_self(self) -> Result<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
+    pub async fn get_self(self) -> StdResult<JellyfinClient<Auth>, (Self, color_eyre::Report)> {
         let user = async {
             self.send_request_json(self.get("/Users/Me", NoQuery)?.empty_body()?)
                 .await?
@@ -104,19 +140,14 @@ impl JellyfinClient<KeyAuth> {
             Ok(v) => v,
             Err(e) => return Err((self, e)),
         };
-        Ok(JellyfinClient {
-            client_info: self.client_info,
-            device_name: self.device_name,
-            auth: Auth {
-                user,
-                access_token: self.auth.access_key,
-                header: self.auth.header,
-                device_id: self.auth.device_id,
-            },
-            host_header: self.host_header,
-            uri_base: self.uri_base,
-            connection: self.connection,
-        })
+
+        let auth = Auth {
+            user,
+            access_token: self.inner.auth.access_key.clone(),
+            header: self.inner.auth.header.clone(),
+            device_id: self.inner.auth.device_id.clone(),
+        };
+        Ok(make_auth_or_return(self, auth))
     }
 }
 

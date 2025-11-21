@@ -9,13 +9,13 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+use ratatui_fallible_widget::FallibleWidget;
 use tracing::trace;
 
 use super::{Command, KeybindEventStream};
 
-impl<T: Command> KeybindEventStream<'_, T> {
-    pub fn inner(&self, area: Rect) -> Rect {
-        let len: usize = self.next_maps.iter().map(|v| v.len()).sum();
+fn inner_area(stream: &KeybindEventStream<'_, impl Command, impl FallibleWidget>, area: Rect)-> Rect{
+    let len: usize = stream.next_maps.iter().map(|v| v.len()).sum();
         if len > 0 {
             let width = (area.width - 4) / 20;
             let full_usable_height = len.div_ceil(width as usize);
@@ -30,10 +30,12 @@ impl<T: Command> KeybindEventStream<'_, T> {
         } else {
             area
         }
-    }
 }
-impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+
+
+impl<T: Command, W: FallibleWidget> FallibleWidget for KeybindEventStream<'_, T, W> {
+    fn render_fallible(&mut self, area: Rect, buf: &mut Buffer) -> color_eyre::eyre::Result<()> {
+        self.inner_widget.render_fallible(inner_area(self,area), buf)?;
         let len: usize = self.next_maps.iter().map(|v| v.len()).sum();
         if len > 0 {
             let width = (area.width - 4) / 20;
@@ -123,5 +125,6 @@ impl<T: Command> Widget for &mut KeybindEventStream<'_, T> {
                 );
             }
         }
+        Ok(())
     }
 }

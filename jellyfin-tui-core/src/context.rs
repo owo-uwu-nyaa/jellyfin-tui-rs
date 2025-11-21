@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use crate::config::Config;
 use ::keybinds::KeybindEvents;
@@ -6,7 +6,8 @@ use entries::image::cache::ImageProtocolCache;
 use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
-use sqlx::SqlitePool;
+use sqlx::SqliteConnection;
+use tokio::sync::Mutex;
 
 pub struct TuiContext {
     pub jellyfin: JellyfinClient<Auth>,
@@ -14,8 +15,8 @@ pub struct TuiContext {
     pub term: DefaultTerminal,
     pub config: Config,
     pub events: KeybindEvents,
-    pub image_picker: Picker,
-    pub cache: SqlitePool,
+    pub image_picker: Arc<Picker>,
+    pub cache: Arc<Mutex<SqliteConnection>>,
     pub image_cache: ImageProtocolCache,
 }
 
@@ -25,8 +26,8 @@ pub struct TuiContextProj<'p> {
     pub term: &'p mut DefaultTerminal,
     pub config: &'p Config,
     pub events: &'p mut KeybindEvents,
-    pub image_picker: &'p mut Picker,
-    pub cache: &'p SqlitePool,
+    pub image_picker: &'p Arc<Picker>,
+    pub cache: &'p Arc<Mutex<SqliteConnection>>,
     pub image_cache: &'p mut ImageProtocolCache,
 }
 

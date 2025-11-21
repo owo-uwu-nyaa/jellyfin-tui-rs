@@ -7,12 +7,12 @@ use ratatui::{
         Wrap,
     },
 };
-use ratatui_image::{FontSize, picker::Picker};
+use ratatui_fallible_widget::FallibleWidget;
+use ratatui_image::FontSize;
 use tracing::{instrument, trace};
 
 use crate::{
     entry::{ENTRY_WIDTH, Entry, entry_height},
-    image::available::ImagesAvailable,
 };
 
 #[derive(Debug)]
@@ -20,34 +20,12 @@ pub struct EntryList {
     entries: Vec<Entry>,
     current: usize,
     title: String,
+    pub active: bool,
 }
 
-impl EntryList {
-    pub fn new(entries: Vec<Entry>, title: String) -> Self {
-        Self {
-            entries,
-            current: 0,
-            title,
-        }
-    }
-
-    #[instrument(skip_all, name = "prefetch_list")]
-    pub fn prefetch(&mut self, availabe: &ImagesAvailable, area: Rect) {
-        let visible = self.visible(area.width);
-        for entry in self.entries.iter_mut().take(visible) {
-            entry.prefetch(availabe);
-        }
-    }
-
+impl FallibleWidget for EntryList {
     #[instrument(skip_all, name = "render_list")]
-    pub fn render(
-        &mut self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        availabe: &ImagesAvailable,
-        picker: &Picker,
-        active: bool,
-    ) {
+    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));
@@ -58,7 +36,7 @@ impl EntryList {
             Paragraph::new("insufficient space")
                 .wrap(Wrap { trim: true })
                 .render(main, buf);
-            return;
+            return Ok(());
         }
         let mut entries = self.entries.as_mut_slice();
         let mut current = self.current;
@@ -75,17 +53,15 @@ impl EntryList {
             .flex(Flex::Start)
             .split(main);
         for i in 0..visible {
-            let border_type = if active && i == current {
+            let border_type = if self.active && i == current {
                 BorderType::Double
             } else {
                 BorderType::Rounded
             };
-            entries[i].render(areas[i], buf, availabe, picker, border_type)
+            let entry = &mut entries[i];
+            entry.border_type = border_type;
+            entry.render_fallible(areas[i], buf)?
         }
-        if visible < entries.len() {
-            entries[visible].prefetch(availabe);
-        }
-
         if visible < self.entries.len() {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::HorizontalBottom).render(
                 area,
@@ -94,6 +70,18 @@ impl EntryList {
                     .position(self.current)
                     .viewport_content_length(ENTRY_WIDTH as usize + 1),
             );
+        }
+        Ok(())
+    }
+}
+
+impl EntryList {
+    pub fn new(entries: Vec<Entry>, title: String) -> Self {
+        Self {
+            entries,
+            current: 0,
+            title,
+            active: false,
         }
     }
 

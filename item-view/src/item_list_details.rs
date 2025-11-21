@@ -19,8 +19,9 @@ use keybinds::{KeybindEvent, KeybindEventStream};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
     text::Text,
-    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, Widget},
+    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget},
 };
+use ratatui_fallible_widget::{FallibleWidget, TermExt};
 
 pub async fn display_fetch_item_list(
     cx: Pin<&mut TuiContext>,
@@ -91,82 +92,107 @@ pub fn handle_item_list_details_data(
     childs: Vec<MediaItem>,
 ) -> Result<Navigation> {
     let name = item.name.clone();
+    let images_available = ImagesAvailable::new();
     Ok(Navigation::Replace(NextScreen::ItemListDetails(
         item,
         EntryList::new(
             childs
                 .iter()
                 .map(|item| {
-                    Entry::from_media_item(item.clone(), &cx.jellyfin, &cx.cache, &cx.image_cache)
+                    Entry::from_media_item(
+                        item.clone(),
+                        &cx.jellyfin,
+                        &cx.cache,
+                        &cx.image_cache,
+                        &images_available,
+                        &cx.image_picker,
+                    )
                 })
                 .collect::<Result<Vec<_>>>()?,
             name,
         ),
+        images_available,
     )))
+}
+
+struct ItemListDetails<'s> {
+    height: u16,
+    width: Option<u16>,
+    scrollbar_state: ScrollbarState,
+    scrollbar_pos: u16,
+    scrollbar_len: u16,
+    entries: &'s mut EntryList,
+    item: &'s MediaItem,
+    block: Block<'static>,
+}
+
+impl FallibleWidget for ItemListDetails<'_> {
+    fn render_fallible(
+        &mut self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> Result<()> {
+        let main = self.block.inner(area);
+        let [entry_area, descripton_area] =
+            Layout::vertical([Constraint::Length(self.height), Constraint::Min(1)])
+                .spacing(1)
+                .areas(main);
+        self.entries.render_fallible(entry_area, buf)?;
+        let w = descripton_area.width.saturating_sub(4);
+        if self.width != Some(w) {
+            self.width = Some(w);
+            if let Some(d) = &self.item.overview {
+                let lines = textwrap::wrap(d, w as usize);
+                self.scrollbar_state = self.scrollbar_state.content_length(lines.len());
+                self.scrollbar_len = lines.len() as u16;
+                self.scrollbar_pos = min(self.scrollbar_pos, self.scrollbar_len.saturating_sub(1));
+                Paragraph::new(Text::from_iter(lines))
+                    .block(
+                        Block::bordered()
+                            .title("Overview")
+                            .padding(Padding::uniform(1)),
+                    )
+                    .scroll((self.scrollbar_pos, 0))
+                    .render(descripton_area, buf);
+                Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight).render(
+                    descripton_area.inner(Margin {
+                        horizontal: 0,
+                        vertical: 2,
+                    }),
+                    buf,
+                    &mut self.scrollbar_state,
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 pub async fn display_item_list_details(
     cx: Pin<&mut TuiContext>,
     item: MediaItem,
     mut entries: EntryList,
+    images_available: ImagesAvailable,
 ) -> Result<Navigation> {
-    let images_available = ImagesAvailable::new();
     let cx = cx.project();
-    let mut events =
-        KeybindEventStream::new(cx.events, cx.config.keybinds.item_list_details.clone());
-    let block = Block::bordered().padding(ratatui::widgets::Padding::uniform(1));
-    let mut width = None;
-    let mut scrollbar_state = ScrollbarState::new(0);
-    let mut scrollbar_pos = 0;
-    let mut scrollbar_len = 0;
-    let mut descr = None;
+    entries.active = true;
+    let mut details = ItemListDetails {
+        height: entry_list_height(cx.image_picker.font_size()),
+        width: None,
+        scrollbar_state: ScrollbarState::new(0),
+        scrollbar_pos: 0,
+        scrollbar_len: 0,
+        entries: &mut entries,
+        item: &item,
+        block: Block::bordered().padding(ratatui::widgets::Padding::uniform(1)),
+    };
+    let mut events = KeybindEventStream::new(
+        cx.events,
+        &mut details,
+        cx.config.keybinds.item_list_details.clone(),
+    );
     loop {
-        cx.term
-            .draw(|frame| {
-                let height = entry_list_height(cx.image_picker.font_size());
-                let main = block.inner(events.inner(frame.area()));
-                let [entry_area, descripton_area] =
-                    Layout::vertical([Constraint::Length(height), Constraint::Min(1)])
-                        .spacing(1)
-                        .areas(main);
-                entries.render(
-                    entry_area,
-                    frame.buffer_mut(),
-                    &images_available,
-                    cx.image_picker,
-                    true,
-                );
-                let w = descripton_area.width.saturating_sub(4);
-                if width != Some(w) {
-                    width = Some(w);
-                    if let Some(d) = &item.overview {
-                        let lines = textwrap::wrap(d, w as usize);
-                        scrollbar_state = scrollbar_state.content_length(lines.len());
-                        scrollbar_len = lines.len() as u16;
-                        scrollbar_pos = min(scrollbar_pos, scrollbar_len.saturating_sub(1));
-                        descr = Some(
-                            Paragraph::new(Text::from_iter(lines.into_iter())).block(
-                                Block::bordered()
-                                    .title("Overview")
-                                    .padding(Padding::uniform(1)),
-                            ),
-                        );
-                    }
-                }
-                if let Some(descr) = &mut descr {
-                    frame.render_widget(descr.clone().scroll((scrollbar_pos, 0)), descripton_area);
-                    frame.render_stateful_widget(
-                        Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight),
-                        descripton_area.inner(Margin {
-                            horizontal: 0,
-                            vertical: 2,
-                        }),
-                        &mut scrollbar_state,
-                    );
-                }
-                events.render(frame.area(), frame.buffer_mut());
-            })
-            .context("drawing item list details")?;
+        cx.term.draw_fallible(&mut events)?;
         let cmd = tokio::select! {
             _ = images_available.wait_available() => {continue          }
             term = events.next() => {
@@ -182,65 +208,69 @@ pub async fn display_item_list_details(
         match cmd {
             ItemListDetailsCommand::Quit => break Ok(Navigation::PopContext),
             ItemListDetailsCommand::Up => {
-                scrollbar_pos = min(scrollbar_pos + 1, scrollbar_len.saturating_sub(1));
+                events.get_inner().scrollbar_pos = min(
+                    events.get_inner().scrollbar_pos + 1,
+                    events.get_inner().scrollbar_len.saturating_sub(1),
+                );
             }
             ItemListDetailsCommand::Down => {
-                scrollbar_pos = scrollbar_pos.saturating_sub(1);
+                events.get_inner().scrollbar_pos =
+                    events.get_inner().scrollbar_pos.saturating_sub(1);
             }
             ItemListDetailsCommand::Left => {
-                entries.left();
+                events.get_inner().entries.left();
             }
             ItemListDetailsCommand::Right => {
-                entries.right();
+                events.get_inner().entries.right();
             }
             ItemListDetailsCommand::Reload => {
                 break Ok(Navigation::Replace(NextScreen::FetchItemListDetails(item)));
             }
             ItemListDetailsCommand::Play => {
-                if let Some(entry) = entries.get()
+                if let Some(entry) = events.get_inner().entries.get()
                     && let Some(next) = entry.play()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries),
+                        current: NextScreen::ItemListDetails(item, entries,images_available),
                         next,
                     });
                 }
             }
             ItemListDetailsCommand::Open => {
-                if let Some(entry) = entries.get() {
+                if let Some(entry) = events.get_inner().entries.get() {
                     let next = entry.open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries),
+                        current: NextScreen::ItemListDetails(item, entries,images_available),
                         next,
                     });
                 }
             }
             ItemListDetailsCommand::OpenEpisode => {
-                if let Some(entry) = entries.get()
+                if let Some(entry) = events.get_inner().entries.get()
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries),
+                        current: NextScreen::ItemListDetails(item, entries,images_available),
                         next,
                     });
                 }
             }
             ItemListDetailsCommand::OpenSeason => {
-                if let Some(entry) = entries.get()
+                if let Some(entry) = events.get_inner().entries.get()
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries),
+                        current: NextScreen::ItemListDetails(item, entries,images_available),
                         next,
                     });
                 }
             }
             ItemListDetailsCommand::OpenSeries => {
-                if let Some(entry) = entries.get()
+                if let Some(entry) = events.get_inner().entries.get()
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries),
+                        current: NextScreen::ItemListDetails(item, entries,images_available),
                         next,
                     });
                 }

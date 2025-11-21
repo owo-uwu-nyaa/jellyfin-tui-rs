@@ -2,6 +2,7 @@ use std::task::Poll;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures_util::{Stream, StreamExt, stream::FusedStream};
+use ratatui_fallible_widget::FallibleWidget;
 use tracing::{debug, warn};
 
 use crate::Key;
@@ -9,9 +10,9 @@ use crate::Key;
 use super::{Command, KeyBinding, KeybindEvent, KeybindEventStream, Text};
 use color_eyre::Result;
 
-impl<T: Command> FusedStream for KeybindEventStream<'_, T> {
+impl<T: Command, W: FallibleWidget> FusedStream for KeybindEventStream<'_, T, W> {
     fn is_terminated(&self) -> bool {
-        self.inner.finished
+        self.keybind_events.finished
     }
 }
 
@@ -19,7 +20,7 @@ fn if_non_empty<T>(v: &Vec<T>) -> Option<&Vec<T>> {
     if v.is_empty() { None } else { Some(v) }
 }
 
-impl<T: Command> Stream for KeybindEventStream<'_, T> {
+impl<T: Command, W: FallibleWidget> Stream for KeybindEventStream<'_, T, W> {
     type Item = Result<KeybindEvent<T>>;
 
     fn poll_next(
@@ -28,11 +29,11 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
     ) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         let e = this.span.enter();
-        if this.inner.finished {
+        if this.keybind_events.finished {
             Poll::Ready(None)
         } else {
             let event = 'outer: loop {
-                let event = std::task::ready!(this.inner.events.poll_next_unpin(cx));
+                let event = std::task::ready!(this.keybind_events.events.poll_next_unpin(cx));
                 debug!(?event, "received event from terminal");
                 match event {
                     None
@@ -43,7 +44,7 @@ impl<T: Command> Stream for KeybindEventStream<'_, T> {
                         state: _,
                     }))) => {
                         debug!("finished");
-                        this.inner.finished = true;
+                        this.keybind_events.finished = true;
                         break None;
                     }
                     Some(Err(e)) => break Some(Err(e.into())),

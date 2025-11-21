@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select val from image_cache where\n             item_id = ? and\n             image_type = ? and\n             tag = ? and\n             size_x = ? and\n             size_y = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "val",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "10e048a641895ec81ff9d1d17318af738d686979cd56666561662d109fb51f43"
+}

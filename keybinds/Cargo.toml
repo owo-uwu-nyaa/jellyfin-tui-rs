@@ -4,12 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
+keybinds-derive = {path = "../keybinds-derive"}
+
 crossterm = {workspace = true}
 color-eyre = {workspace = true}
 futures-util = {workspace = true}
 ratatui = {workspace = true}
 serde = {workspace = true}
 tracing = {workspace = true}
-keybinds-derive = {path = "../keybinds-derive"}
 either = {workspace = true}
 itertools = {workspace = true}

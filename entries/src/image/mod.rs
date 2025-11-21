@@ -1,176 +1,214 @@
 use std::{
     cmp::min,
-    ops::DerefMut,
-    sync::{Arc, Weak, atomic::Ordering},
-};
-
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui_image::{
-    FilterType, Resize, ResizeEncodeRender, picker::Picker, protocol::StatefulProtocol,
-};
-use spawn::spawn;
-use tracing::{error_span, instrument, trace};
-
-use crate::{
-    entry::{IMAGE_WIDTH, image_height},
-    image::{
-        available::{ImagesAvailable, ImagesAvailableInner},
-        cache::ImageProtocolKey,
-        fetch::fetch_image,
-        state::{ImageStateInner, ImageStateInnerState, JellyfinImageState},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
     },
+};
+
+use color_eyre::{Result, eyre::Context};
+use image::DynamicImage;
+use jellyfin::{JellyfinClient, items::ImageType};
+use parking_lot::Mutex;
+use ratatui::layout::Rect;
+use ratatui::widgets::Widget;
+use ratatui_fallible_widget::FallibleWidget;
+use ratatui_image::{Image, Resize, picker::Picker, protocol::Protocol};
+use sqlx::SqliteConnection;
+use tracing::{debug, instrument, trace};
+
+use crate::image::{
+    available::ImagesAvailable,
+    cache::{ImageProtocolCache, ImageProtocolKey, ImageProtocolKeyRef},
 };
 
 pub mod available;
 pub mod cache;
 mod fetch;
-mod parse;
-pub mod state;
 
-#[instrument(skip_all)]
-fn resize_image(
-    resize: Resize,
-    area: ratatui::layout::Rect,
-    out: &Weak<ImageStateInner>,
-    wake: &ImagesAvailableInner,
-) {
-    trace!("resizing image");
-    if let Some(out) = out.upgrade() {
-        let mut value = out.value.lock();
-        if let ImageStateInnerState::Image(protocol, _, _) = value.deref_mut() {
-            protocol.resize_encode(&resize, area);
-            trace!("resized");
-        } else {
-            *value = ImageStateInnerState::Invalid;
-            panic!("tried to resize invalid state");
-        }
-        out.ready.store(true, Ordering::SeqCst);
-        wake.wake();
-    } else {
-        trace!("cancelled");
-    }
+struct ReadyImage {
+    available: AtomicBool,
+    image: Mutex<Option<Result<(DynamicImage, Rect)>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImageSize {
+    pub p_width: u32,
+    pub p_height: u32,
 }
 
 pub struct JellyfinImage {
-    resize: Resize,
+    item_id: String,
+    tag: String,
+    image_type: ImageType,
+    jellyfin: JellyfinClient,
+    db: Arc<tokio::sync::Mutex<SqliteConnection>>,
+    image: Option<(Protocol, ImageProtocolKey, Rect)>,
+    size: Option<Rect>,
+    available: ImagesAvailable,
+    ready_image: Arc<ReadyImage>,
+    cache: ImageProtocolCache,
+    picker: Arc<Picker>,
+    loading: bool,
 }
 
-impl Default for JellyfinImage {
-    fn default() -> Self {
-        Self {
-            resize: Resize::Scale(FilterType::Triangle.into()),
+impl FallibleWidget for JellyfinImage {
+    #[instrument(skip_all, name = "render_image")]
+    fn render_fallible(
+        &mut self,
+        mut area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> color_eyre::Result<()> {
+        if let Some(old_area) = self.size.replace(area)
+            && (old_area.width != area.width || old_area.height != area.height)
+        {
+            self.image = None;
         }
+        if let Some((image, size)) = self.get_image()? {
+            trace!("received_image");
+            trace!("area: {area:?}, size: {size:?}");
+            area.x += (area.width - size.width) / 2;
+            area.y += (area.height - size.height) / 2;
+            area.width = size.width;
+            area.height = size.height;
+            trace!("final area: {area:?}");
+            Image::new(image).render(area, buf)
+        }
+        Ok(())
     }
 }
 
 impl JellyfinImage {
-    #[allow(unused)]
-    pub fn resize(self, resize: Resize) -> JellyfinImage {
-        JellyfinImage { resize }
-    }
-
-    #[instrument(skip_all)]
     #[allow(clippy::too_many_arguments)]
-    fn render_image_inner(
-        self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        mut image: StatefulProtocol,
-        key: ImageProtocolKey,
-        state_mut: &mut ImageStateInnerState,
-        state: &JellyfinImageState,
-        availabe: &ImagesAvailable,
-        width: u16,
-    ) {
-        let [area] = Layout::horizontal([Constraint::Length(width)])
-            .flex(Flex::Center)
-            .areas(area);
-        if let Some(area) = image.needs_resize(&self.resize, area) {
-            trace!("image needs resize");
-            state.inner.ready.store(false, Ordering::SeqCst);
-            *state_mut = ImageStateInnerState::Image(image, key, width);
-            let resize = self.resize;
-            let out = Arc::downgrade(&state.inner);
-            let wake = availabe.inner.clone();
-            rayon::spawn(move || resize_image(resize, area, &out, &wake));
-        } else {
-            image.render(area, buf);
-            *state_mut = ImageStateInnerState::Image(image, key, width);
+    pub fn new(
+        item_id: String,
+        tag: String,
+        image_type: ImageType,
+        jellyfin: JellyfinClient,
+        db: Arc<tokio::sync::Mutex<SqliteConnection>>,
+        available: ImagesAvailable,
+        cache: ImageProtocolCache,
+        picker: Arc<Picker>,
+    ) -> Self {
+        Self {
+            item_id,
+            tag,
+            image_type,
+            jellyfin,
+            db,
+            image: None,
+            size: None,
+            available,
+            ready_image: Arc::new(ReadyImage {
+                available: AtomicBool::new(false),
+                image: Mutex::new(None),
+            }),
+            cache,
+            picker,
+            loading: false,
         }
     }
 
-    #[instrument(skip_all, name = "render_image")]
-    pub fn render(
-        self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        state: &mut JellyfinImageState,
-        availabe: &ImagesAvailable,
-        picker: &Picker,
-    ) {
-        if state.inner.ready.load(Ordering::SeqCst) {
-            let mut value_ref = state.inner.value.lock();
-            let value = std::mem::take(value_ref.deref_mut());
-            match value {
-                ImageStateInnerState::Invalid => panic!("image in invalid state"),
-                ImageStateInnerState::ImageReady(dynamic_image, key) => {
-                    trace!("image ready");
-                    let image_height = image_height(picker.font_size());
-                    let height = image_height * picker.font_size().1;
-                    let height: f64 = height.into();
-                    let width =
-                        (height / (dynamic_image.height() as f64)) * (dynamic_image.width() as f64);
-                    let width = width / (picker.font_size().0 as f64);
-                    let width = min(width.ceil() as u16, IMAGE_WIDTH);
-                    let image = picker.new_resize_protocol(dynamic_image);
-                    self.render_image_inner(
-                        area,
-                        buf,
-                        image,
-                        key,
-                        value_ref.deref_mut(),
-                        state,
-                        availabe,
-                        width,
-                    );
+    /// size must be set before calling this
+    #[instrument(skip_all)]
+    fn get_image(&mut self) -> Result<Option<(&Protocol, Rect)>> {
+        if self.image.is_some() {
+            Ok(self.image.as_ref().map(|(p, _, s)| (p, *s)))
+        } else if let Some(size) = self.size {
+            let p_height = (size.height as u32) * (self.picker.font_size().1 as u32);
+            let p_width = (size.width as u32) * (self.picker.font_size().0 as u32);
+            if self.loading {
+                if self.ready_image.available.swap(false, Ordering::SeqCst) {
+                    self.loading = false;
+                    let (image, new_size) = self
+                        .ready_image
+                        .image
+                        .lock()
+                        .take()
+                        .expect("available is already set")?;
+                    if size.width != new_size.width || size.height != new_size.height {
+                        debug!("size mismatch, retrying");
+                        self.loading = false;
+                        self.get_image()
+                    } else {
+                        let width = min(
+                            size.width as u32,
+                            image.width()
+                                .div_ceil(self.picker.font_size().0 as u32),
+                        ) as u16;
+                        let height = min(
+                            size.height as u32,
+                            image.height()
+                                .div_ceil(self.picker.font_size().1 as u32),
+                        ) as u16;
+                        let image_size = Rect {
+                                    x: 0,
+                                    y: 0,
+                                    width,
+                                    height,
+                        };
+                        let image = self
+                            .picker
+                            .new_protocol(
+                                image,
+                               image_size ,
+                                Resize::Fit(None),
+                            )
+                            .context("generating protocol")?;
+                        let (image, _, _) = self.image.insert((
+                            image,
+                            ImageProtocolKey {
+                                image_type: self.image_type,
+                                item_id: self.item_id.clone(),
+                                tag: self.tag.clone(),
+                                size: ImageSize { p_width, p_height },
+                            },
+                            image_size
+                        ));
+                        Ok(Some((image, image_size)))
+                    }
+                } else {
+                    Ok(None)
                 }
-                ImageStateInnerState::Image(image, key, width) => {
-                    self.render_image_inner(
-                        area,
-                        buf,
+            } else {
+                let cached = self.cache.remove(&ImageProtocolKeyRef::new(
+                    self.image_type,
+                    &self.item_id,
+                    &self.tag,
+                    ImageSize { p_width, p_height },
+                ));
+                if let Some((image, size)) = cached {
+                    let (image, _, _) = self.image.insert((
                         image,
-                        key,
-                        value_ref.deref_mut(),
-                        state,
-                        availabe,
-                        width,
-                    );
-                }
-                ImageStateInnerState::Lazy {
-                    get_image,
-                    db,
-                    tag,
-                    item_id,
-                    image_type,
-                    cancel,
-                } => {
-                    state.inner.ready.store(false, Ordering::SeqCst);
-                    spawn(
-                        fetch_image(
-                            get_image,
-                            db,
-                            tag,
-                            item_id,
-                            image_type,
-                            cancel,
-                            Arc::downgrade(&state.inner),
-                            availabe.inner.clone(),
-                            state.inner.cache.clone(),
-                        ),
-                        error_span!("fetch_image"),
-                    );
+                        ImageProtocolKey {
+                            image_type: self.image_type,
+                            item_id: self.item_id.clone(),
+                            tag: self.tag.clone(),
+                            size: ImageSize { p_width, p_height },
+                        },
+                        size,
+                    ));
+                    Ok(Some((image, size)))
+                } else {
+                    tokio::spawn(fetch::get_image(
+                        ImageProtocolKey {
+                            image_type: self.image_type,
+                            item_id: self.item_id.clone(),
+                            tag: self.tag.clone(),
+                            size: ImageSize { p_width, p_height },
+                        },
+                        self.ready_image.clone(),
+                        self.available.clone(),
+                        self.db.clone(),
+                        self.jellyfin.clone(),
+                        size,
+                    ));
+                    self.loading=true;
+                    Ok(None)
                 }
             }
+        } else {
+            panic!("size is not set")
         }
     }
 }

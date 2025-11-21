@@ -1,15 +1,15 @@
-use std::{cmp::min, iter::repeat_n};
+use std::{cmp::min, iter::repeat_n, sync::Arc};
 
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget, Wrap},
 };
+use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::picker::Picker;
 use tracing::{instrument, trace};
 
 use crate::{
     entry::{ENTRY_WIDTH, Entry},
-    image::available::ImagesAvailable,
     list::{EntryList, entry_list_height},
 };
 
@@ -18,37 +18,24 @@ pub struct EntryScreen {
     entries: Vec<EntryList>,
     current: usize,
     title: String,
+    picker: Arc<Picker>,
 }
 
-impl EntryScreen {
-    pub fn new(entries: Vec<EntryList>, title: String) -> Self {
-        Self {
-            entries,
-            current: 0,
-            title,
-        }
-    }
-
+impl FallibleWidget for EntryScreen {
     #[instrument(skip_all, name = "render_screen")]
-    pub fn render(
-        &mut self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        availabe: &ImagesAvailable,
-        picker: &Picker,
-    ) {
+    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));
         let main = outer.inner(area);
         outer.render(area, buf);
-        let entry_height = entry_list_height(picker.font_size());
+        let entry_height = entry_list_height(self.picker.font_size());
         let visible = self.visible(area.height, entry_height);
         if visible == 0 && !self.entries.is_empty() {
             Paragraph::new("insufficient space")
                 .wrap(Wrap { trim: true })
                 .render(main, buf);
-            return;
+            return Ok(());
         }
         let mut entries = self.entries.as_mut_slice();
         let mut current = self.current;
@@ -66,10 +53,9 @@ impl EntryScreen {
             .flex(Flex::Start)
             .split(main);
         for i in 0..areas.len() {
-            entries[i].render(areas[i], buf, availabe, picker, i == current)
-        }
-        if visible < entries.len() {
-            entries[visible].prefetch(availabe, areas[0]);
+            let entry = &mut entries[i];
+            entry.active = i == current;
+            entry.render_fallible(areas[i], buf)?
         }
         if visible < self.entries.len() {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight).render(
@@ -79,6 +65,18 @@ impl EntryScreen {
                     .position(self.current)
                     .viewport_content_length(ENTRY_WIDTH as usize + 1),
             );
+        }
+        Ok(())
+    }
+}
+
+impl EntryScreen {
+    pub fn new(entries: Vec<EntryList>, title: String, picker: Arc<Picker>) -> Self {
+        Self {
+            entries,
+            current: 0,
+            title,
+            picker,
         }
     }
 

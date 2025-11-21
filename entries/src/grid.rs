@@ -1,6 +1,5 @@
 use crate::{
     entry::{ENTRY_WIDTH, Entry, entry_height},
-    image::available::ImagesAvailable,
 };
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
@@ -9,8 +8,9 @@ use ratatui::{
         Wrap,
     },
 };
+use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::picker::Picker;
-use std::{cmp::min, iter::repeat_n};
+use std::{cmp::min, iter::repeat_n, sync::Arc};
 use tracing::{debug, instrument, trace};
 
 pub struct EntryGrid {
@@ -18,40 +18,26 @@ pub struct EntryGrid {
     current: usize,
     width: usize,
     title: String,
+    picker: Arc<Picker>,
 }
 
-impl EntryGrid {
-    pub fn new(entries: Vec<Entry>, title: String) -> Self {
-        Self {
-            entries,
-            current: 0,
-            width: 1,
-            title,
-        }
-    }
-
+impl FallibleWidget for EntryGrid {
     #[instrument(name = "render_grid", skip_all)]
-    pub fn render(
-        &mut self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        availabe: &ImagesAvailable,
-        picker: &Picker,
-    ) {
+    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));
         let main = outer.inner(area);
         outer.render(area, buf);
         self.width = ((main.width + 1) / (ENTRY_WIDTH + 1)).into();
-        let entry_height = entry_height(picker.font_size());
+        let entry_height = entry_height(self.picker.font_size());
         debug!("entry_height: {entry_height}");
         let height: usize = ((main.height + 1) / (entry_height + 1)).into();
         if height == 0 || self.width == 0 {
             Paragraph::new("insufficient space")
                 .wrap(Wrap { trim: true })
                 .render(main, buf);
-            return;
+            return Ok(());
         }
         debug!("height: {height}");
         let rows = self.entries.len().div_ceil(self.width);
@@ -86,17 +72,10 @@ impl EntryGrid {
                     BorderType::Rounded
                 };
                 if let Some(entry) = self.entries.get_mut(entry) {
-                    entry.render(area, buf, availabe, picker, border_type);
+                    entry.border_type = border_type;
+                    entry.render_fallible(area, buf)?
                 }
             }
-        }
-        for entry in self
-            .entries
-            .iter_mut()
-            .skip(skip_rows + rendered_rows)
-            .take(self.width)
-        {
-            entry.prefetch(availabe);
         }
         if height < rows {
             Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight).render(
@@ -107,7 +86,21 @@ impl EntryGrid {
                     .viewport_content_length(entry_height as usize + 1),
             );
         }
+        Ok(())
     }
+}
+
+impl EntryGrid {
+    pub fn new(entries: Vec<Entry>, title: String, picker: Arc<Picker>) -> Self {
+        Self {
+            entries,
+            current: 0,
+            width: 1,
+            title,
+            picker,
+        }
+    }
+
     #[instrument(skip_all)]
     pub fn up(&mut self) {
         self.current = self.current.saturating_sub(self.width);

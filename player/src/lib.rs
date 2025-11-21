@@ -1,6 +1,6 @@
 pub mod fetch_items;
 
-use std::{borrow::Cow, io::Stdout, pin::Pin};
+use std::{borrow::Cow, pin::Pin};
 
 use color_eyre::eyre::{Context, Result, eyre};
 use futures_util::StreamExt;
@@ -14,13 +14,12 @@ use keybinds::{KeybindEvent, KeybindEventStream};
 use player_core::{PlayerHandle, PlayerState};
 use player_jellyfin::player_jellyfin;
 use ratatui::{
-    Terminal,
     layout::{Constraint, Layout},
-    prelude::CrosstermBackend,
-    widgets::{Block, Padding, Paragraph},
+    widgets::{Block, Padding, Paragraph, Widget},
 };
+use ratatui_fallible_widget::{FallibleWidget, TermExt};
 use spawn::spawn;
-use tokio::select;
+use tokio::{select, sync::watch};
 use tracing::{error_span, info, instrument};
 
 #[instrument(skip_all)]
@@ -53,11 +52,14 @@ pub fn mk_player(
 #[instrument(skip_all)]
 pub async fn play(cx: Pin<&mut TuiContext>, mut player: PlayerHandle) -> Result<Navigation> {
     let cx = cx.project();
-    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.play_mpv.clone());
+    let mut widget = PlayerWidget {
+        state: player.state().clone(),
+    };
+    let mut events =
+        KeybindEventStream::new(cx.events, &mut widget, cx.config.keybinds.play_mpv.clone());
     loop {
         cx.term.clear()?;
-        render(cx.term, &player.state().borrow(), &mut events)?;
-
+        cx.term.draw_fallible(&mut events)?;
         select! {
             res = player.state_mut().changed()=> {
                 if res.is_err(){
@@ -81,14 +83,19 @@ pub async fn play(cx: Pin<&mut TuiContext>, mut player: PlayerHandle) -> Result<
     Ok(Navigation::PopContext)
 }
 
-fn render(
-    term: &mut Terminal<CrosstermBackend<Stdout>>,
-    state: &PlayerState,
-    events: &mut KeybindEventStream<'_, MpvCommand>,
-) -> Result<()> {
-    term.draw(|frame| {
+struct PlayerWidget {
+    state: watch::Receiver<PlayerState>,
+}
+
+impl FallibleWidget for PlayerWidget {
+    fn render_fallible(
+        &mut self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> Result<()> {
+        let state = self.state.borrow();
         let media_item = state.current.as_ref();
-        let block_area = events.inner(frame.area());
+        let block_area = area;
         let block = Block::bordered()
             .title("Now playing")
             .padding(Padding::uniform(1));
@@ -96,7 +103,9 @@ fn render(
         let area = block.inner(block_area);
         match &media_item.item_type {
             jellyfin::items::ItemType::Movie => {
-                frame.render_widget(Paragraph::new(media_item.name.clone()).centered(), area);
+                Paragraph::new(media_item.name.clone())
+                    .centered()
+                    .render(area, buf);
             }
             jellyfin::items::ItemType::Episode {
                 season_id: _,
@@ -121,8 +130,10 @@ fn render(
                     }
                 }
 
-                frame.render_widget(Paragraph::new(series_str).centered(), series);
-                frame.render_widget(Paragraph::new(media_item.name.clone()).centered(), episode);
+                Paragraph::new(series_str).centered().render(series, buf);
+                Paragraph::new(media_item.name.clone())
+                    .centered()
+                    .render(episode, buf);
             }
             jellyfin::items::ItemType::Episode {
                 season_id: _,
@@ -153,17 +164,19 @@ fn render(
                         series_str.to_mut().push_str(&episode.to_string());
                     }
                 }
-                frame.render_widget(Paragraph::new(series_str).centered(), series);
-                frame.render_widget(Paragraph::new(season_name.clone()).centered(), season);
-                frame.render_widget(Paragraph::new(media_item.name.clone()).centered(), episode);
+                Paragraph::new(series_str).centered().render(series, buf);
+                Paragraph::new(season_name.clone())
+                    .centered()
+                    .render(season, buf);
+                Paragraph::new(media_item.name.clone())
+                    .centered()
+                    .render(episode, buf);
             }
             _ => {
                 panic!("unexpected media item type: {media_item:#?}");
             }
         }
-        frame.render_widget(block, block_area);
-        frame.render_widget(events, frame.area());
-    })
-    .context("rendering playing item")?;
-    Ok(())
+        block.render(block_area, buf);
+        Ok(())
+    }
 }

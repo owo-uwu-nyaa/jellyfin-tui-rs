@@ -12,7 +12,7 @@ use jellyfin_tui_core::{
     keybinds::HomeScreenCommand,
     state::{Navigation, NextScreen},
 };
-use ratatui::widgets::Widget;
+use ratatui_fallible_widget::TermExt;
 use tracing::{debug, instrument};
 
 use keybinds::{KeybindEvent, KeybindEventStream};
@@ -23,6 +23,7 @@ fn create_from_media_item_vec(
     items: Vec<MediaItem>,
     title: &str,
     context: &TuiContext,
+    images_available: &ImagesAvailable,
 ) -> Result<Option<EntryList>> {
     Ok(if items.is_empty() {
         None
@@ -36,6 +37,8 @@ fn create_from_media_item_vec(
                         &context.jellyfin,
                         &context.cache,
                         &context.image_cache,
+                        images_available,
+                        &context.image_picker,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -49,6 +52,7 @@ fn create_from_user_views_vec(
     items: Vec<UserView>,
     title: &str,
     context: &TuiContext,
+    images_available: &ImagesAvailable,
 ) -> Result<Option<EntryList>> {
     Ok(if items.is_empty() {
         None
@@ -62,6 +66,8 @@ fn create_from_user_views_vec(
                         &context.jellyfin,
                         &context.cache,
                         &context.image_cache,
+                        images_available,
+                        &context.image_picker,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -77,21 +83,28 @@ fn create_home_screen(
     views: Vec<UserView>,
     mut latest: HashMap<String, Vec<MediaItem>>,
     context: &TuiContext,
+    images_available: &ImagesAvailable,
 ) -> Result<EntryScreen> {
     let entries = [
-        create_from_media_item_vec(resume, "Continue Watching", context).transpose(),
-        create_from_media_item_vec(next_up, "Next Up", context).transpose(),
-        create_from_user_views_vec(views.clone(), "Library", context).transpose(),
+        create_from_media_item_vec(resume, "Continue Watching", context, images_available)
+            .transpose(),
+        create_from_media_item_vec(next_up, "Next Up", context, images_available).transpose(),
+        create_from_user_views_vec(views.clone(), "Library", context, images_available).transpose(),
     ]
     .into_iter()
     .chain(views.iter().map(|view| {
         latest.remove(view.id.as_str()).and_then(|items| {
-            create_from_media_item_vec(items, view.name.as_str(), context).transpose()
+            create_from_media_item_vec(items, view.name.as_str(), context, images_available)
+                .transpose()
         })
     }))
     .flatten()
     .collect::<Result<_>>()?;
-    Ok(EntryScreen::new(entries, "Home".to_string()))
+    Ok(EntryScreen::new(
+        entries,
+        "Home".to_string(),
+        context.image_picker.clone(),
+    ))
 }
 
 pub fn handle_home_screen_data(
@@ -101,8 +114,11 @@ pub fn handle_home_screen_data(
     views: Vec<UserView>,
     latest: HashMap<String, Vec<MediaItem>>,
 ) -> Result<Navigation> {
+    let images_available = ImagesAvailable::new();
+    let screen = create_home_screen(resume, next_up, views, latest, &context, &images_available)?;
     Ok(Navigation::Replace(NextScreen::HomeScreen(
-        create_home_screen(resume, next_up, views, latest, &context)?,
+        screen,
+        images_available,
     )))
 }
 
@@ -110,25 +126,16 @@ pub fn handle_home_screen_data(
 pub async fn display_home_screen(
     context: Pin<&mut TuiContext>,
     mut screen: EntryScreen,
+    images_available: ImagesAvailable,
 ) -> Result<Navigation> {
-    let images_available = ImagesAvailable::new();
     let context = context.project();
-    let mut events =
-        KeybindEventStream::new(context.events, context.config.keybinds.home_screen.clone());
+    let mut events = KeybindEventStream::new(
+        context.events,
+        &mut screen,
+        context.config.keybinds.home_screen.clone(),
+    );
     loop {
-        context
-            .term
-            .draw(|frame| {
-                let area = events.inner(frame.area());
-                screen.render(
-                    area,
-                    frame.buffer_mut(),
-                    &images_available,
-                    context.image_picker,
-                );
-                events.render(frame.area(), frame.buffer_mut());
-            })
-            .context("rendering home screen")?;
+        context.term.draw_fallible(&mut events)?;
         let cmd = tokio::select! {
             _ = images_available.wait_available() => {continue ;
             }
@@ -151,20 +158,20 @@ pub async fn display_home_screen(
                 break Ok(Navigation::Replace(NextScreen::LoadHomeScreen));
             }
             HomeScreenCommand::Left => {
-                screen.left();
+                events.get_inner().left();
                 continue;
             }
             HomeScreenCommand::Right => {
-                screen.right();
+                events.get_inner().right();
             }
             HomeScreenCommand::Up => {
-                screen.up();
+                events.get_inner().up();
             }
             HomeScreenCommand::Down => {
-                screen.down();
+                events.get_inner().down();
             }
             HomeScreenCommand::Open => {
-                if let Some(entry) = screen.get() {
+                if let Some(entry) = events.get_inner().get() {
                     let next = entry.open();
                     break Ok(Navigation::Push {
                         current: NextScreen::LoadHomeScreen,
@@ -173,7 +180,7 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::OpenEpisode => {
-                if let Some(entry) = screen.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
@@ -183,7 +190,7 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::OpenSeason => {
-                if let Some(entry) = screen.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
@@ -193,7 +200,7 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::OpenSeries => {
-                if let Some(entry) = screen.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {
@@ -203,7 +210,7 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::Play => {
-                if let Some(entry) = screen.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.play()
                 {
                     break Ok(Navigation::Push {
@@ -213,7 +220,7 @@ pub async fn display_home_screen(
                 }
             }
             HomeScreenCommand::PlayOpen => {
-                if let Some(entry) = screen.get() {
+                if let Some(entry) = events.get_inner().get() {
                     let next = entry.play_open();
                     break Ok(Navigation::Push {
                         current: NextScreen::LoadHomeScreen,

@@ -15,6 +15,7 @@ use ratatui::{
     DefaultTerminal,
     widgets::{Block, Paragraph},
 };
+use ratatui_fallible_widget::TermExt;
 use tracing::instrument;
 
 pub async fn fetch_screen(
@@ -24,15 +25,11 @@ pub async fn fetch_screen(
     keybinds: BindingMap<LoadingCommand>,
     term: &mut DefaultTerminal,
 ) -> Result<Navigation> {
-    let msg = Paragraph::new(title).centered().block(Block::bordered());
+    let mut msg = Paragraph::new(title).centered().block(Block::bordered());
     let mut fetch = pin!(fetch);
-    let mut events = KeybindEventStream::new(events, keybinds);
+    let mut events = KeybindEventStream::new(events, &mut msg, keybinds);
     loop {
-        term.draw(|frame| {
-            frame.render_widget(&msg, events.inner(frame.area()));
-            frame.render_widget(&mut events, frame.area());
-        })
-        .context("rendering ui")?;
+        term.draw_fallible(&mut events)?;
         tokio::select! {
             data = &mut fetch => {
                 break data

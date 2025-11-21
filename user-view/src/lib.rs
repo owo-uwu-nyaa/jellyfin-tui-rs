@@ -13,6 +13,7 @@ use jellyfin_tui_core::{
     keybinds::UserViewCommand,
     state::{Navigation, NextScreen, ToNavigation},
 };
+use ratatui_fallible_widget::TermExt;
 use std::pin::Pin;
 use tracing::debug;
 
@@ -74,28 +75,29 @@ pub async fn display_user_view(
     view: UserView,
     items: Vec<MediaItem>,
 ) -> Result<Navigation> {
+    let images_available = ImagesAvailable::new();
     let mut grid = EntryGrid::new(
         items
             .into_iter()
-            .map(|item| Entry::from_media_item(item, &cx.jellyfin, &cx.cache, &cx.image_cache))
+            .map(|item| {
+                Entry::from_media_item(
+                    item,
+                    &cx.jellyfin,
+                    &cx.cache,
+                    &cx.image_cache,
+                    &images_available,
+                    &cx.image_picker,
+                )
+            })
             .collect::<Result<Vec<_>>>()?,
         view.name.clone(),
+        cx.image_picker.clone(),
     );
-    let images_available = ImagesAvailable::new();
     let cx = cx.project();
-    let mut events = KeybindEventStream::new(cx.events, cx.config.keybinds.user_view.clone());
+    let mut events =
+        KeybindEventStream::new(cx.events, &mut grid, cx.config.keybinds.user_view.clone());
     loop {
-        cx.term
-            .draw(|frame| {
-                grid.render(
-                    events.inner(frame.area()),
-                    frame.buffer_mut(),
-                    &images_available,
-                    cx.image_picker,
-                );
-                frame.render_widget(&mut events, frame.area());
-            })
-            .context("drawing user view")?;
+        cx.term.draw_fallible(&mut events)?;
         let cmd = tokio::select! {
             _ = images_available.wait_available() => {continue          }
             term = events.next() => {
@@ -117,19 +119,19 @@ pub async fn display_user_view(
                 break Ok(Navigation::Replace(NextScreen::LoadUserView(view)));
             }
             UserViewCommand::Prev => {
-                grid.left();
+                events.get_inner().left();
             }
             UserViewCommand::Next => {
-                grid.right();
+                events.get_inner().right();
             }
             UserViewCommand::Up => {
-                grid.up();
+                events.get_inner().up();
             }
             UserViewCommand::Down => {
-                grid.down();
+                events.get_inner().down();
             }
             UserViewCommand::Play => {
-                if let Some(entry) = grid.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.play()
                 {
                     break Ok(Navigation::Push {
@@ -139,7 +141,7 @@ pub async fn display_user_view(
                 }
             }
             UserViewCommand::Open => {
-                if let Some(entry) = grid.get() {
+                if let Some(entry) = events.get_inner().get() {
                     break Ok(Navigation::Push {
                         current: NextScreen::LoadUserView(view),
                         next: entry.open(),
@@ -147,7 +149,7 @@ pub async fn display_user_view(
                 }
             }
             UserViewCommand::OpenEpisode => {
-                if let Some(entry) = grid.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
@@ -157,7 +159,7 @@ pub async fn display_user_view(
                 }
             }
             UserViewCommand::OpenSeason => {
-                if let Some(entry) = grid.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
@@ -167,7 +169,7 @@ pub async fn display_user_view(
                 }
             }
             UserViewCommand::OpenSeries => {
-                if let Some(entry) = grid.get()
+                if let Some(entry) = events.get_inner().get()
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {

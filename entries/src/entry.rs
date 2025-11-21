@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 use jellyfin::{
     JellyfinClient,
@@ -11,21 +11,23 @@ use ratatui::{
     text::Span,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
+use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::{FontSize, picker::Picker};
-use sqlx::SqlitePool;
+use sqlx::SqliteConnection;
 use tracing::instrument;
 
-use crate::image::{
-    JellyfinImage, available::ImagesAvailable, cache::ImageProtocolCache, state::JellyfinImageState,
+use crate::{
+    image::{JellyfinImage, available::ImagesAvailable, cache::ImageProtocolCache},
 };
 use color_eyre::Result;
 
 pub struct Entry {
-    image: Option<JellyfinImageState>,
+    image: Option<JellyfinImage>,
     title: String,
     subtitle: Option<String>,
     inner: EntryInner,
     watch_status: Option<Cow<'static, str>>,
+    pub border_type: BorderType,
 }
 
 impl Debug for Entry {
@@ -53,22 +55,11 @@ pub fn entry_height(font: FontSize) -> u16 {
     image_height(font) + 2
 }
 
-impl Entry {
-    pub fn inner(&self) -> &EntryInner {
-        &self.inner
-    }
-
+impl FallibleWidget for Entry {
     #[instrument(skip_all, name = "render_entry")]
-    pub fn render(
-        &mut self,
-        area: Rect,
-        buf: &mut ratatui::prelude::Buffer,
-        availabe: &ImagesAvailable,
-        picker: &Picker,
-        border_type: BorderType,
-    ) {
+    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
         let mut outer = Block::bordered()
-            .border_type(border_type)
+            .border_type(self.border_type)
             .title_top(self.title.as_str());
         if let Some(subtitle) = &self.subtitle {
             outer = outer.title_bottom(subtitle.as_str());
@@ -88,20 +79,20 @@ impl Entry {
                     buf,
                 );
         }
-        if let Some(state) = &mut self.image {
-            JellyfinImage::default().render(inner, buf, state, availabe, picker);
+        if let Some(image) = &mut self.image {
+            image.render_fallible(inner, buf)?;
         }
+        Ok(())
     }
+}
 
-    #[instrument(skip_all, name = "prefetch_entry")]
-    pub fn prefetch(&mut self, availabe: &ImagesAvailable) {
-        if let Some(image) = self.image.as_mut() {
-            image.prefetch(availabe);
-        }
+impl Entry {
+    pub fn inner(&self) -> &EntryInner {
+        &self.inner
     }
 
     pub fn new(
-        image: Option<JellyfinImageState>,
+        image: Option<JellyfinImage>,
         title: String,
         subtitle: Option<String>,
         inner: EntryInner,
@@ -113,14 +104,17 @@ impl Entry {
             subtitle,
             inner,
             watch_status,
+            border_type: BorderType::Rounded,
         }
     }
 
     pub fn from_media_item(
         item: MediaItem,
         jellyfin: &JellyfinClient,
-        db: &SqlitePool,
+        db: &Arc<tokio::sync::Mutex<SqliteConnection>>,
         cache: &ImageProtocolCache,
+        availabe: &ImagesAvailable,
+        picker: &Arc<Picker>,
     ) -> Result<Self> {
         let (title, subtitle) = match &item.item_type {
             ItemType::Movie => (item.name.clone(), None),
@@ -143,16 +137,17 @@ impl Entry {
             .flat_map(|map| map.iter())
             .next()
             .map(|(image_type, tag)| {
-                JellyfinImageState::new(
-                    jellyfin,
-                    db.to_owned(),
-                    tag.clone(),
+                JellyfinImage::new(
                     item.id.clone(),
+                    tag.clone(),
                     *image_type,
-                    cache.to_owned(),
+                    jellyfin.clone(),
+                    db.clone(),
+                    availabe.clone(),
+                    cache.clone(),
+                    picker.clone(),
                 )
-            })
-            .transpose()?;
+            });
         let watch_status = if let Some(user_data) = item.user_data.as_ref() {
             if let Some(num @ 1..) = user_data.unplayed_item_count {
                 Some(format!("{num}").into())
@@ -176,8 +171,10 @@ impl Entry {
     pub fn from_user_view(
         item: UserView,
         jellyfin: &JellyfinClient,
-        db: &SqlitePool,
+        db: &Arc<tokio::sync::Mutex<SqliteConnection>>,
         cache: &ImageProtocolCache,
+        availabe: &ImagesAvailable,
+        picker: &Arc<Picker>,
     ) -> Result<Self> {
         let title = item.name.clone();
         let image = item
@@ -186,16 +183,17 @@ impl Entry {
             .flat_map(|map| map.iter())
             .next()
             .map(|(image_type, tag)| {
-                JellyfinImageState::new(
-                    jellyfin,
-                    db.to_owned(),
-                    tag.clone(),
+                JellyfinImage::new(
                     item.id.clone(),
+                    tag.clone(),
                     *image_type,
-                    cache.to_owned(),
+                    jellyfin.clone(),
+                    db.clone(),
+                    availabe.clone(),
+                    cache.clone(),
+                    picker.clone(),
                 )
-            })
-            .transpose()?;
+            });
         Ok(Self::new(image, title, None, EntryInner::View(item), None))
     }
 }

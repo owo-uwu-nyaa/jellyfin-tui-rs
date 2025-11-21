@@ -42,9 +42,6 @@ pub const MPV_CLIENT_API_MINOR: ctype::c_ulong = 0;
 pub const MPV_CLIENT_API_VERSION: ctype::c_ulong =
     (MPV_CLIENT_API_MAJOR << 16) | MPV_CLIENT_API_MINOR;
 
-#[cfg(feature = "async")]
-mod hazard;
-
 mod mpv;
 #[cfg(test)]
 mod tests;

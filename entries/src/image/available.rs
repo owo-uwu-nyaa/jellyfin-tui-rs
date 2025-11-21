@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -28,8 +29,17 @@ impl ImagesAvailableInner {
     }
 }
 
+#[derive(Clone)]
 pub struct ImagesAvailable {
     pub(super) inner: Arc<ImagesAvailableInner>,
+}
+
+impl Debug for ImagesAvailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImagesAvailable")
+            .field("available", &self.inner.available.load(Ordering::SeqCst))
+            .finish()
+    }
 }
 
 impl ImagesAvailable {

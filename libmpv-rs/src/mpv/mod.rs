@@ -272,7 +272,7 @@ mod drop_handle {
     pub struct MpvDropHandle {
         pub(super) ctx: NonNull<libmpv_sys::mpv_handle>,
         #[cfg(feature = "async")]
-        pub(super) waker: crate::hazard::WakerHazardPtr,
+        pub(super) waker: parking_lot::Mutex<Option<std::task::Waker>>,
     }
 
     impl Drop for MpvDropHandle {

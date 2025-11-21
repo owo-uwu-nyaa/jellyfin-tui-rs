@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use color_eyre::{Result, eyre::Report};
-use entries::{list::EntryList, screen::EntryScreen};
+use entries::{image::available::ImagesAvailable, list::EntryList, screen::EntryScreen};
 use jellyfin::{items::MediaItem, user_views::UserView};
 use player_core::PlayerHandle;
 use tracing::{debug, instrument};
@@ -25,7 +25,7 @@ pub enum NextScreen {
         views: Vec<UserView>,
         latest: HashMap<String, Vec<MediaItem>>,
     },
-    HomeScreen(EntryScreen),
+    HomeScreen(EntryScreen, ImagesAvailable),
     LoadUserView(UserView),
     UserView {
         view: UserView,
@@ -40,7 +40,7 @@ pub enum NextScreen {
     Error(Report),
     ItemDetails(MediaItem),
     ItemListDetailsData(MediaItem, Vec<MediaItem>),
-    ItemListDetails(MediaItem, EntryList),
+    ItemListDetails(MediaItem, EntryList, ImagesAvailable),
     FetchItemListDetails(MediaItem),
     FetchItemListDetailsRef(String),
     FetchItemDetails(String),

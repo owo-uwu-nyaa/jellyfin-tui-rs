@@ -4,6 +4,7 @@ pub mod widget;
 
 use color_eyre::Result;
 use crossterm::event::{EventStream, KeyCode};
+use ratatui_fallible_widget::FallibleWidget;
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
@@ -109,8 +110,9 @@ impl KeybindEvents {
     }
 }
 
-pub struct KeybindEventStream<'e, T: Command> {
-    inner: &'e mut KeybindEvents,
+pub struct KeybindEventStream<'e, T: Command, W: FallibleWidget> {
+    keybind_events: &'e mut KeybindEvents,
+    inner_widget: &'e mut W,
     top: BindingMap<T>,
     next_maps: Vec<BindingMap<T>>,
     text_input: bool,
@@ -119,12 +121,13 @@ pub struct KeybindEventStream<'e, T: Command> {
     span: Span,
 }
 
-impl<'e, T: Command> KeybindEventStream<'e, T> {
-    pub fn new(events: &'e mut KeybindEvents, map: BindingMap<T>) -> Self {
+impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
+    pub fn new(events: &'e mut KeybindEvents, inner_widget: &'e mut W, map: BindingMap<T>) -> Self {
         let span = info_span!("KeybindEventStream");
         span.in_scope(|| debug!(?map, "new keybind stream with map"));
         Self {
-            inner: events,
+            keybind_events: events,
+            inner_widget,
             top: map,
             next_maps: Vec::with_capacity(0),
             text_input: false,
@@ -136,13 +139,15 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
 
     pub fn new_with_minor(
         events: &'e mut KeybindEvents,
+        inner_widget: &'e mut W,
         map: BindingMap<T>,
         minor: Vec<BindingMap<T>>,
     ) -> Self {
         let span = info_span!("KeybindEventStream");
         span.in_scope(|| debug!(?map, ?minor, "new keybind stream with map"));
         Self {
-            inner: events,
+            keybind_events: events,
+            inner_widget,
             top: map,
             next_maps: Vec::with_capacity(0),
             text_input: false,
@@ -162,6 +167,9 @@ impl<'e, T: Command> KeybindEventStream<'e, T> {
 
     pub fn get_minor_mut(&mut self) -> &mut Vec<BindingMap<T>> {
         &mut self.minor
+    }
+    pub fn get_inner(&mut self) -> &mut W{
+        self.inner_widget
     }
 }
 

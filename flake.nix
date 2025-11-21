@@ -61,9 +61,9 @@
                   (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
                   pkgs.sqlx-cli
                   pkgs.pkg-config
-                  pkgs.sqlite
                   pkgs.mpv-unwrapped
                   pkgs.rustPlatform.bindgenHook
+                  pkgs.sqlite-interactive
                 ];
                 DATABASE_URL = "sqlite://db.sqlite";
               };

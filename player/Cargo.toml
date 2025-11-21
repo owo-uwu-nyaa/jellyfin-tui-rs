@@ -11,6 +11,7 @@ jellyfin-tui-core = {path="../jellyfin-tui-core"}
 keybinds = {path = "../keybinds"}
 spawn = {path = "../spawn"}
 fetch = {path = "../fetch"}
+ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
 
 color-eyre = {workspace=true}
 futures-util = {workspace=true}

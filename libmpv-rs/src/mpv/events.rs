@@ -82,14 +82,15 @@ pub(crate) unsafe extern "C" fn wake_callback(cx: *mut c_void) {
     {
         tracing::trace!("wake_callback called");
     }
-    let waker = unsafe {
+    if let Some(waker) = unsafe {
         cx.cast_const()
-            .cast::<crate::hazard::WakerHazardPtr>()
+            .cast::<parking_lot::Mutex<Option<std::task::Waker>>>()
             .as_ref()
-            .unwrap()
-            .waker()
-    };
-    if let Some(waker) = waker {
+            .unwrap_unchecked()
+    }
+    .lock()
+    .as_ref()
+    {
         waker.wake_by_ref();
     }
     std::mem::forget(abort_guard);
@@ -475,9 +476,9 @@ impl<T: sealed::EventContextExt> EventContextExt for T {}
 
 #[cfg(feature = "async")]
 fn poll(handle: &MpvDropHandle, async_cx: &mut AsyncContext, cx: &mut std::task::Context<'_>) {
-    let new_waker = cx.waker();
-    unsafe {
-        handle.waker.replace_waker(new_waker);
+    match &mut *handle.waker.lock(){
+        Some(v) => cx.waker().clone_into(v),
+        v@None => *v = Some(cx.waker().clone()),
     }
     //mpv doesn't run the callback on destruction, poll regularly anyway to avoid deadlocks
     interval::Interval::poll(&mut async_cx.interval, cx);
