@@ -1,6 +1,4 @@
-use crate::{
-    entry::{ENTRY_WIDTH, Entry, entry_height},
-};
+use crate::entry::{ENTRY_WIDTH, Entry, entry_height};
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     widgets::{
@@ -23,7 +21,11 @@ pub struct EntryGrid {
 
 impl FallibleWidget for EntryGrid {
     #[instrument(name = "render_grid", skip_all)]
-    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
+    fn render_fallible(
+        &mut self,
+        area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));

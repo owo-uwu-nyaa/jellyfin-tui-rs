@@ -3,6 +3,10 @@ name = "jellyfin-tui"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "jellyfin-tui-rs"
+path = "src/main.rs"
+
 [dependencies]
 jellyfin-tui-core = {path = "jellyfin-tui-core"}
 keybinds = {path = "keybinds"}
@@ -11,6 +15,8 @@ entries = { path = "entries"}
 config = { path = "config" }
 spawn = {path = "spawn"}
 ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
+player-core = {path="player-core"}
+player-jellyfin = {path="player-jellyfin"}
 
 login = { path = "login"}
 home-screen = {path = "home-screen"}
@@ -20,7 +26,7 @@ item-view = {path = "item-view"}
 
 clap = { version = "4.5.23", features = ["derive"] }
 tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "=0.3.19", features = ["env-filter"] }
 ansi-to-tui = "7.0.0"
 
 rayon = {workspace=true}
@@ -86,17 +92,15 @@ quote = "1.0.40"
 syn = {version = "2.0.100", default-features = false}
 pkg-config = "0.3.31"
 bindgen = "0.69"
-sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite"] }
+sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite-unbundled"] }
 image = { version = "0.25.5", default-features = false, features = ["webp", "png"] }
 toml = { version = "0.9.5", default-features = false, features = ["serde", "display", "parse"] }
 whoami = { version = "1.5.2", default-features = false }
+zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
 
 [features]
-default = ["sqlite-unbundled"]
-sqlite-bundled = ["sqlx/sqlite"]
-sqlite-unbundled = ["sqlx/sqlite-unbundled"]
-use-bindgen = ["player/use-bindgen"]
 attach = []
+default = []
 
 
 [profile.dev.package."*"]

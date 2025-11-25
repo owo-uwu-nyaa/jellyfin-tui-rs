@@ -11,9 +11,7 @@ use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::FontSize;
 use tracing::{instrument, trace};
 
-use crate::{
-    entry::{ENTRY_WIDTH, Entry, entry_height},
-};
+use crate::entry::{ENTRY_WIDTH, Entry, entry_height};
 
 #[derive(Debug)]
 pub struct EntryList {
@@ -25,7 +23,11 @@ pub struct EntryList {
 
 impl FallibleWidget for EntryList {
     #[instrument(skip_all, name = "render_list")]
-    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
+    fn render_fallible(
+        &mut self,
+        area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));

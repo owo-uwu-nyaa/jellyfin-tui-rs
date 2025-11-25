@@ -28,11 +28,13 @@ pub mod protocol;
 pub mod render;
 
 use events::{EventContextSync, EventContextType};
-use node::{BorrowingMpvNode, BorrowingMpvNodeList, ToNode};
+use node::ToNode;
 use protocol::{ProtocolContextType, UninitProtocolContext};
 
 #[cfg(feature = "tracing")]
 use tracing::info;
+
+use crate::node::{MpvNodeArrayRef, MpvNodeRef};
 
 pub use self::errors::*;
 use super::*;
@@ -67,7 +69,14 @@ fn mpv_err<T>(ret: T, err: ctype::c_int) -> Result<T> {
  * The result of get_format must match the pointer consumed through get_from_c_void.
  *  */
 pub unsafe trait GetData: Sized {
-    fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(mut fun: F) -> Result<Self> {
+    /**
+     *
+     * # Safety
+     * the passed pointer must be valid for the data type
+     *   */
+    unsafe fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
+        mut fun: F,
+    ) -> Result<Self> {
         let mut val = MaybeUninit::uninit();
         let _ = fun(val.as_mut_ptr() as *mut _)?;
         Ok(unsafe { val.assume_init() })
@@ -94,7 +103,9 @@ unsafe impl GetData for bool {
 }
 
 unsafe impl GetData for String {
-    fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(mut fun: F) -> Result<String> {
+    unsafe fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
+        mut fun: F,
+    ) -> Result<String> {
         let ptr = &mut ptr::null();
         let _ = fun(ptr as *mut *const ctype::c_char as _)?;
 
@@ -125,7 +136,7 @@ impl Drop for MpvStr<'_> {
 }
 
 unsafe impl<'a> GetData for MpvStr<'a> {
-    fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
+    unsafe fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(
         mut fun: F,
     ) -> Result<MpvStr<'a>> {
         let ptr = &mut ptr::null();
@@ -346,6 +357,10 @@ impl Mpv {
 }
 
 impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol> {
+    pub fn client_name(&self) -> &CStr {
+        unsafe { CStr::from_ptr(libmpv_sys::mpv_client_name(self.ctx.as_ptr())) }
+    }
+
     pub fn set_log_level(&self, level: &CStr) -> Result<()> {
         mpv_err((), unsafe {
             libmpv_sys::mpv_request_log_messages(self.ctx.as_ptr(), level.as_ptr())
@@ -361,23 +376,23 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     }
 
     /// Send a command to the `Mpv` instance.
-    pub fn command(&self, args: &[BorrowingMpvNode<'_>]) -> Result<()> {
+    pub fn command(&self, args: &[MpvNodeRef<'_>]) -> Result<()> {
         mpv_err((), unsafe {
             libmpv_sys::mpv_command_node(
                 self.ctx.as_ptr(),
-                BorrowingMpvNodeList::new(args).to_node().node(),
+                MpvNodeArrayRef::new(args).to_node().node(),
                 null_mut(),
             )
         })
     }
 
     /// Send a command to the `Mpv` instance.
-    pub fn command_async(&self, args: &[BorrowingMpvNode<'_>], reply_userdata: u64) -> Result<()> {
+    pub fn command_async(&self, args: &[MpvNodeRef<'_>], reply_userdata: u64) -> Result<()> {
         mpv_err((), unsafe {
             libmpv_sys::mpv_command_node_async(
                 self.ctx.as_ptr(),
                 reply_userdata,
-                BorrowingMpvNodeList::new(args).to_node().node(),
+                MpvNodeArrayRef::new(args).to_node().node(),
             )
         })
     }
@@ -399,11 +414,14 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
         let name = CString::new(name)?;
 
         let format = T::get_format().as_mpv_format() as _;
-        T::get_from_c_void(|ptr| {
-            mpv_err((), unsafe {
-                libmpv_sys::mpv_get_property(self.ctx.as_ptr(), name.as_ptr(), format, ptr)
+        unsafe {
+            T::get_from_c_void(|ptr| {
+                mpv_err(
+                    (),
+                    libmpv_sys::mpv_get_property(self.ctx.as_ptr(), name.as_ptr(), format, ptr),
+                )
             })
-        })
+        }
     }
 
     /// Get the value of a property.
@@ -467,6 +485,14 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     /// Unpause playback at runtime.
     pub fn unpause(&self) -> Result<()> {
         self.set_pause(false)
+    }
+
+    pub fn set_fullscreen(&self, fullscreen: bool) -> Result<()> {
+        self.set_property(c"fullscreen", fullscreen)
+    }
+
+    pub fn set_minimized(&self, minimized: bool) -> Result<()> {
+        self.set_property(c"window-minimized", minimized)
     }
 
     // --- Seek functions ---
@@ -580,6 +606,14 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     // --- Playlist functions ---
     //
 
+    /**
+     * Stop playback and clear entire playlist (including current item).
+     * The player will switch to idle.
+     *   */
+    pub fn stop(&self) -> Result<()> {
+        self.command(&[c"stop".to_node()])
+    }
+
     /// Play the next item of the current playlist.
     /// Does nothing if the current item is the last item.
     pub fn playlist_next_weak(&self) -> Result<()> {
@@ -600,6 +634,10 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     /// See `playlist_next_force`.
     pub fn playlist_previous_force(&self) -> Result<()> {
         self.command(&[c"playlist-prev".to_node(), c"force".to_node()])
+    }
+
+    pub fn playlist_play_index(&self, index: i64) -> Result<()> {
+        self.command(&[c"playlist-play-index".to_node(), index.to_node()])
     }
 
     pub fn playlist_replace(&self, file: &CStr) -> Result<()> {

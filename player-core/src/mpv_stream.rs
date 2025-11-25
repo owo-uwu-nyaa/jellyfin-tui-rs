@@ -1,5 +1,5 @@
 use std::{
-    ffi::CString,
+    ffi::{CStr, CString},
     ops::Deref,
     task::{Poll, ready},
 };
@@ -12,7 +12,7 @@ use libmpv::{
     events::{
         Event, EventContextAsync, EventContextAsyncExt, EventContextExt, PropertyData, mpv_event_id,
     },
-    node::{BorrowingMpvNodeList, ToNode},
+    node::{MpvNodeArrayRef, ToNode},
 };
 use tracing::{info, instrument, trace, warn};
 
@@ -23,12 +23,21 @@ pub enum ObservedProperty {
     Position(f64),
     Idle(bool),
     Pause(bool),
+    Fullscreen(bool),
+    Minimized(bool),
+    PlaylistPos(i64),
+}
+
+#[derive(Debug)]
+pub enum ClientCommand {
+    Stop,
 }
 
 #[derive(Debug)]
 pub enum MpvEvent {
     PropertyChanged(ObservedProperty),
-    StartFile(i64),
+    Command(ClientCommand),
+    Seek,
 }
 
 pub struct MpvStream {
@@ -63,9 +72,12 @@ impl Stream for MpvStream {
                     text,
                     log_level,
                 } => log_message(prefix, log_level, text),
-                Event::Shutdown => break None,
-                Event::StartFile { playlist_entry_id } => {
-                    break Some(Ok(MpvEvent::StartFile(playlist_entry_id)));
+                Event::Shutdown => {
+                    info!("shutdown request received");
+                    break None;
+                }
+                Event::Seek => {
+                    break Some(Ok(MpvEvent::Seek));
                 }
                 Event::PropertyChange {
                     name,
@@ -85,10 +97,36 @@ impl Stream for MpvStream {
                             pause,
                         ))));
                     }
+                    ("fullscreen", PropertyData::Flag(fullscreen), 4) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Fullscreen(
+                            fullscreen,
+                        ))));
+                    }
+                    ("window-minimized", PropertyData::Flag(minimized), 5) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Minimized(
+                            minimized,
+                        ))));
+                    }
+                    ("playlist-pos", PropertyData::Int64(pos), 6) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(
+                            ObservedProperty::PlaylistPos(pos),
+                        )));
+                    }
                     (name, val, id) => {
                         warn!(name, ?val, id, "received unrequested property change event");
                     }
                 },
+                Event::ClientMessage(message) => {
+                    let message: Vec<_> = message.into_iter().map(CStr::to_bytes).collect();
+                    match message.as_slice() {
+                        &[b"stop-player"] => {
+                            break Some(Ok(MpvEvent::Command(ClientCommand::Stop)));
+                        }
+                        message => {
+                            warn!(?message, "received unknown client message");
+                        }
+                    }
+                }
                 _ => {}
             }
         })
@@ -102,10 +140,12 @@ impl MpvStream {
         hwdec: &str,
         profile: MpvProfile,
         log_level: &str,
+        minimized: bool,
     ) -> Result<Self> {
         let mpv = Mpv::with_initializer(|mpv| -> Result<()> {
             mpv.set_option(c"title", c"jellyfin-tui-player")?;
             mpv.set_option(c"fullscreen", true)?;
+            mpv.set_option(c"window-minimized", minimized)?;
             mpv.set_option(c"drag-and-drop", false)?;
             mpv.set_option(c"osc", true)?;
             mpv.set_option(c"vo", c"gpu-next")?;
@@ -114,7 +154,7 @@ impl MpvStream {
             header.extend_from_slice(jellyfin.get_auth().header.as_bytes());
             mpv.set_option(
                 c"http-header-fields",
-                &BorrowingMpvNodeList::new(&[CString::new(header)
+                &MpvNodeArrayRef::new(&[CString::new(header)
                     .context("converting auth header to cstr")?
                     .to_node()]),
             )?;
@@ -126,6 +166,7 @@ impl MpvStream {
                     .context("converting hwdec to cstr")?
                     .as_c_str(),
             )?;
+            mpv.set_option(c"idle", c"yes")?;
             mpv.with_profile(profile)?;
             Ok(())
         })?
@@ -134,11 +175,32 @@ impl MpvStream {
         mpv.enable_event(mpv_event_id::PropertyChange)?;
         mpv.enable_event(mpv_event_id::LogMessage)?;
         mpv.enable_event(mpv_event_id::QueueOverflow)?;
-        mpv.enable_event(mpv_event_id::StartFile)?;
+        mpv.enable_event(mpv_event_id::ClientMessage)?;
+        mpv.enable_event(mpv_event_id::Seek)?;
         mpv.observe_property("time-pos", Format::Double, 1)?;
         mpv.observe_property("idle-active", Format::Flag, 2)?;
         mpv.observe_property("pause", Format::Flag, 3)?;
+        mpv.observe_property("fullscreen", Format::Flag, 4)?;
+        mpv.observe_property("window-minimized", Format::Flag, 5)?;
+        mpv.observe_property("playlist-pos", Format::Int64, 6)?;
+        mpv.command(&[
+            c"keybind".to_node(),
+            c"q".to_node(),
+            stop_cmd(mpv.client_name()).to_node(),
+            c"on quit stop the player instead".to_node(),
+        ])?;
         info!("mpv initialized");
         Ok(Self { mpv })
     }
+}
+
+fn stop_cmd(name: &CStr) -> CString {
+    let name = name.to_bytes();
+    let first = b"script-message-to ";
+    let end = c" stop-player".to_bytes_with_nul();
+    let mut vec = Vec::with_capacity(first.len() + name.len() + end.len());
+    vec.extend_from_slice(first);
+    vec.extend_from_slice(name);
+    vec.extend_from_slice(end);
+    CString::from_vec_with_nul(vec).expect("constructed with null byte")
 }

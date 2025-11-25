@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use serde::Serialize;
 
-use crate::{items::ImageType, request::RequestBuilderExt, AuthStatus, JellyfinClient, Result};
+use crate::{AuthStatus, JellyfinClient, Result, items::ImageType, request::RequestBuilderExt};
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

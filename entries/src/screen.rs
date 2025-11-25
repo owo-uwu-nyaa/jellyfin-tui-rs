@@ -23,7 +23,11 @@ pub struct EntryScreen {
 
 impl FallibleWidget for EntryScreen {
     #[instrument(skip_all, name = "render_screen")]
-    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
+    fn render_fallible(
+        &mut self,
+        area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> color_eyre::Result<()> {
         let outer = Block::bordered()
             .title_top(self.title.as_str())
             .padding(Padding::uniform(1));

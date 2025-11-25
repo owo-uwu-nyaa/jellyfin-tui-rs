@@ -64,7 +64,7 @@ let
       }).build
       {
         inherit src;
-        pname = "jellyfin-tui";
+        pname = "jellyfin-tui-rs";
         version = "0.1.0";
         features = lib.optional attach "attach";
       }
@@ -73,6 +73,9 @@ let
         _: prev: {
           passthru = (prev.passthru or { }) // {
             inherit checkKeybinds;
+          };
+          meta = (prev.meta or {}) // {
+            mainProgramm = "jellyfin-tui-rs";
           };
         }
       );

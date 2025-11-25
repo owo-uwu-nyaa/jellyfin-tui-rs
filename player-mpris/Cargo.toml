@@ -1,0 +1,11 @@
+[package]
+name = "player-mpris"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+player-core = {path="../player-core"}
+color-eyre = {workspace=true}
+tracing = {workspace=true}
+zbus = { workspace = true }

@@ -67,6 +67,34 @@ impl FallibleWidget for ErrorWidget {
     }
 }
 
+pub trait ResultDisplayExt<T> {
+    fn display_error(
+        self,
+        term: &mut DefaultTerminal,
+        events: &mut KeybindEvents,
+        keybinds: &Keybinds,
+    ) -> impl Future<Output = Option<T>>;
+}
+
+impl<T> ResultDisplayExt<T> for Result<T> {
+    async fn display_error(
+        self,
+        term: &mut DefaultTerminal,
+        events: &mut KeybindEvents,
+        keybinds: &Keybinds,
+    ) -> Option<T> {
+        match self {
+            Err(e) => {
+                if let Some(e) = display_error(term, events, keybinds, e).await.err() {
+                    tracing::error!("Error displaying error: {e:?}");
+                }
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+}
+
 pub async fn display_error(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
@@ -94,12 +122,20 @@ pub async fn display_error(
                     events.get_inner().pos_y = events.get_inner().pos_y.saturating_sub(1);
                 }
                 ErrorCommand::Down => {
-                    events.get_inner().pos_y = min(events.get_inner().scroll_y.saturating_sub(1), events.get_inner().pos_y + 1);
+                    events.get_inner().pos_y = min(
+                        events.get_inner().scroll_y.saturating_sub(1),
+                        events.get_inner().pos_y + 1,
+                    );
                 }
                 ErrorCommand::Left => {
                     events.get_inner().pos_x = events.get_inner().pos_x.saturating_sub(1);
                 }
-                ErrorCommand::Right => events.get_inner().pos_x = min(events.get_inner().scroll_x.saturating_sub(1), events.get_inner().pos_x + 1),
+                ErrorCommand::Right => {
+                    events.get_inner().pos_x = min(
+                        events.get_inner().scroll_x.saturating_sub(1),
+                        events.get_inner().pos_x + 1,
+                    )
+                }
             },
             Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
             None => break Ok(Navigation::Exit),

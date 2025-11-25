@@ -168,7 +168,7 @@ impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
     pub fn get_minor_mut(&mut self) -> &mut Vec<BindingMap<T>> {
         &mut self.minor
     }
-    pub fn get_inner(&mut self) -> &mut W{
+    pub fn get_inner(&mut self) -> &mut W {
         self.inner_widget
     }
 }

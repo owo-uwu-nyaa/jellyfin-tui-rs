@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use color_eyre::{Result, eyre::Report};
 use entries::{image::available::ImagesAvailable, list::EntryList, screen::EntryScreen};
 use jellyfin::{items::MediaItem, user_views::UserView};
-use player_core::PlayerHandle;
 use tracing::{debug, instrument};
 
 #[allow(clippy::large_enum_variant)]
@@ -32,11 +31,10 @@ pub enum NextScreen {
         items: Vec<MediaItem>,
     },
     LoadPlayItem(LoadPlay),
-    MkPlayer {
+    Play {
         items: Vec<MediaItem>,
         index: usize,
     },
-    Play(PlayerHandle),
     Error(Report),
     ItemDetails(MediaItem),
     ItemListDetailsData(MediaItem, Vec<MediaItem>),

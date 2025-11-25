@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::{
     Authed, JellyfinClient, Result,
@@ -19,6 +20,7 @@ pub struct ProgressBody<'s> {
     pub is_paused: bool,
 }
 impl<Auth: Authed> JellyfinClient<Auth> {
+    #[instrument(skip(self))]
     pub async fn set_playing(&self, item_id: &str) -> Result<()> {
         self.send_request(
             self.post("/Sessions/Playing", NoQuery)?
@@ -28,6 +30,7 @@ impl<Auth: Authed> JellyfinClient<Auth> {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub async fn set_playing_progress(&self, body: &ProgressBody<'_>) -> Result<()> {
         self.send_request(
             self.post("/Sessions/Playing/Progress", NoQuery)?
@@ -37,6 +40,7 @@ impl<Auth: Authed> JellyfinClient<Auth> {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub async fn set_playing_stopped(&self, body: &ProgressBody<'_>) -> Result<()> {
         self.send_request(
             self.post("/Sessions/Playing/Stopped", NoQuery)?

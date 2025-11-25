@@ -1,17 +1,16 @@
 use std::sync::Arc;
 
 use aws_lc_rs::digest;
-use http::{header::AUTHORIZATION, HeaderValue};
+use http::{HeaderValue, header::AUTHORIZATION};
 use serde::Serialize;
 
-use base64::{engine::general_purpose::URL_SAFE, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE};
 use tracing::{instrument, trace};
 
 use crate::{
-    client_with_auth,
+    Auth, AuthStatus, ClientInfo, ClientInner, JellyfinClient, KeyAuth, NoAuth, client_with_auth,
     request::{NoQuery, RequestBuilderExt},
     user::{User, UserAuth},
-    Auth, AuthStatus, ClientInfo, ClientInner, JellyfinClient, KeyAuth, NoAuth,
 };
 
 use std::result::Result as StdResult;
@@ -23,11 +22,7 @@ struct AuthUserNameReq<'a> {
     pw: &'a str,
 }
 impl JellyfinClient<NoAuth> {
-    pub fn auth_key(
-        self,
-        key: String,
-        user_name: impl AsRef<str>,
-    ) -> JellyfinClient<KeyAuth> {
+    pub fn auth_key(self, key: String, user_name: impl AsRef<str>) -> JellyfinClient<KeyAuth> {
         let key = key.to_string();
         let device_id = make_user_client_id(
             user_name.as_ref(),

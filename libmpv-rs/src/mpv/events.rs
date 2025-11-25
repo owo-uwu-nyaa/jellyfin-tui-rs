@@ -26,7 +26,12 @@ use crate::{
     protocol::ProtocolContextType,
 };
 
-use std::{ffi::CString, os::raw as ctype, ptr::NonNull, slice, sync::Arc};
+use std::ffi::{CStr, CString};
+use std::fmt::Debug;
+use std::os::raw as ctype;
+use std::ptr::NonNull;
+use std::slice;
+use std::sync::Arc;
 
 #[cfg(feature = "async")]
 use std::{
@@ -165,7 +170,7 @@ pub enum Event<'a> {
     EndFile(EndFileReason),
     /// Event received when a file has been *loaded*, but has not been started
     FileLoaded,
-    ClientMessage(Vec<&'a str>),
+    ClientMessage(ClientMessage<'a>),
     VideoReconfig,
     AudioReconfig,
     /// The player changed current position
@@ -280,6 +285,57 @@ impl<Protocol: ProtocolContextType> Mpv<EmptyEventContext, Protocol> {
         }
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct ClientMessage<'e> {
+    args: &'e [*const std::ffi::c_char],
+}
+
+impl<'e> Debug for ClientMessage<'e> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(*self).finish()
+    }
+}
+
+unsafe impl<'e> Send for ClientMessage<'e> {}
+unsafe impl<'e> Sync for ClientMessage<'e> {}
+
+impl<'e> IntoIterator for ClientMessage<'e> {
+    type Item = &'e CStr;
+
+    type IntoIter = ClientMessageIter<'e>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ClientMessageIter {
+            args: self.args.iter(),
+        }
+    }
+}
+
+pub struct ClientMessageIter<'e> {
+    args: std::slice::Iter<'e, *const std::ffi::c_char>,
+}
+
+unsafe impl<'e> Send for ClientMessageIter<'e> {}
+unsafe impl<'e> Sync for ClientMessageIter<'e> {}
+
+impl<'e> Iterator for ClientMessageIter<'e> {
+    type Item = &'e CStr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.args.next().map(|s| unsafe { CStr::from_ptr(*s) })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.args.size_hint()
+    }
+}
+impl<'e> DoubleEndedIterator for ClientMessageIter<'e> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.args.next_back().map(|s| unsafe { CStr::from_ptr(*s) })
+    }
+}
+impl<'e> ExactSizeIterator for ClientMessageIter<'e> {}
 
 pub trait EventContextExt: sealed::EventContextExt {
     /// Enable an event.
@@ -405,7 +461,7 @@ pub trait EventContextExt: sealed::EventContextExt {
                     let data = unsafe { &*(event.data.cast::<libmpv_sys::mpv_event_command>()) };
                     Some(Ok(Event::CommandReply {
                         reply_userdata: event.reply_userdata,
-                        data: MpvNode::new(data.result),
+                        data: unsafe { MpvNode::new(data.result) },
                     }))
                 }
             }
@@ -428,16 +484,12 @@ pub trait EventContextExt: sealed::EventContextExt {
             mpv_event_id::ClientMessage => {
                 let client_message =
                     unsafe { *(event.data as *mut libmpv_sys::mpv_event_client_message) };
-                let messages = unsafe {
-                    slice::from_raw_parts_mut(client_message.args, client_message.num_args as _)
-                };
-                Some(Ok(Event::ClientMessage(
-                    messages
-                        .iter()
-                        .map(|msg| unsafe { mpv_cstr_to_str(*msg) })
-                        .collect::<Result<Vec<_>>>()
-                        .unwrap(),
-                )))
+
+                Some(Ok(Event::ClientMessage(ClientMessage {
+                    args: unsafe {
+                        slice::from_raw_parts(client_message.args, client_message.num_args as _)
+                    },
+                })))
             }
             mpv_event_id::VideoReconfig => Some(Ok(Event::VideoReconfig)),
             mpv_event_id::AudioReconfig => Some(Ok(Event::AudioReconfig)),
@@ -476,9 +528,9 @@ impl<T: sealed::EventContextExt> EventContextExt for T {}
 
 #[cfg(feature = "async")]
 fn poll(handle: &MpvDropHandle, async_cx: &mut AsyncContext, cx: &mut std::task::Context<'_>) {
-    match &mut *handle.waker.lock(){
+    match &mut *handle.waker.lock() {
         Some(v) => cx.waker().clone_into(v),
-        v@None => *v = Some(cx.waker().clone()),
+        v @ None => *v = Some(cx.waker().clone()),
     }
     //mpv doesn't run the callback on destruction, poll regularly anyway to avoid deadlocks
     interval::Interval::poll(&mut async_cx.interval, cx);

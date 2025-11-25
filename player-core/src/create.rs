@@ -15,24 +15,79 @@ use jellyfin::{
 use libmpv::{
     Mpv, MpvProfile,
     events::EventContextAsync,
-    node::{BorrowingCPtr, BorrowingMpvNodeMap, ToNode},
+    node::{BorrowingCPtr, MpvNodeMapRef, ToNode},
 };
 use spawn::spawn_bare;
 use tokio::time::MissedTickBehavior;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument};
 
-use crate::{PlayerHandle, PlayerRef, PlayerState, mpv_stream::MpvStream, poll::PollState};
+use crate::{
+    PlayerHandle, PlayerState, PlaylistItem, PlaylistItemIdGen, mpv_stream::MpvStream,
+    poll::PollState,
+};
 
-pub(crate) fn player(
+impl PlayerHandle {
+    pub fn new(
+        jellyfin: JellyfinClient,
+        hwdec: &str,
+        profile: MpvProfile,
+        log_level: &str,
+        stop: CancellationToken,
+        minimized: bool,
+    ) -> Result<Self> {
+        let mpv = MpvStream::new(&jellyfin, hwdec, profile, log_level, minimized)?;
+        let mut send_timer = tokio::time::interval(Duration::from_secs(1));
+        send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let playlist = Arc::new(Vec::new());
+        let (c_send, c_recv) = tokio::sync::mpsc::unbounded_channel();
+        let (s_send, s_recv) = tokio::sync::watch::channel(PlayerState {
+            playlist: playlist.clone(),
+            current: None,
+            pause: false,
+            position: 0.0,
+            fullscreen: true,
+            idle: true,
+            minimized,
+        });
+
+        spawn_bare(
+            PollState {
+                idle: true,
+                closed: false,
+                mpv,
+                commands: c_recv,
+                send: s_send,
+                send_timer,
+                paused: false,
+                position: 0.0,
+                index: None,
+                fullscreen: true,
+                stop: stop.cancelled_owned(),
+                jellyfin,
+                playlist,
+                playlist_id_gen: PlaylistItemIdGen::default(),
+                minimized,
+                seeked: false,
+            }
+            .instrument(),
+        );
+
+        Ok(Self {
+            closed: Arc::new(AtomicBool::new(false)),
+            send: c_send,
+            state: s_recv,
+        })
+    }
+}
+
+pub fn set_playlist(
+    mpv: &Mpv<EventContextAsync>,
     jellyfin: &JellyfinClient,
-    hwdec: &str,
-    profile: MpvProfile,
-    log_level: &str,
+    id_gen: &mut PlaylistItemIdGen,
     items: Vec<MediaItem>,
     index: usize,
-) -> Result<PlayerHandle> {
-    let mpv = MpvStream::new(jellyfin, hwdec, profile, log_level)?;
-
+) -> Result<Vec<Arc<PlaylistItem>>> {
     let position = items[index]
         .user_data
         .as_ref()
@@ -41,7 +96,7 @@ pub(crate) fn player(
         / 10000000;
 
     for item in items[0..index].iter() {
-        append(&mpv, jellyfin, item)?
+        append(mpv, jellyfin, item)?
     }
     debug!("previous files added");
     let uri = jellyfin.get_video_uri(&items[index])?.to_string();
@@ -53,7 +108,7 @@ pub(crate) fn player(
             .to_node(),
         c"append-play".to_node(),
         0i64.to_node(),
-        BorrowingMpvNodeMap::new(
+        MpvNodeMapRef::new(
             &[
                 BorrowingCPtr::new(c"start"),
                 BorrowingCPtr::new(c"force-media-title"),
@@ -70,48 +125,18 @@ pub(crate) fn player(
     .context("added main item")?;
     debug!("main file added to playlist at index {index}");
     for item in items[index + 1..].iter() {
-        append(&mpv, jellyfin, item)?
+        append(mpv, jellyfin, item)?
     }
     debug!("later files added");
-    let mut send_timer = tokio::time::interval(Duration::from_secs(10));
-    send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-    let items: Vec<_> = items.into_iter().map(Arc::new).collect();
-    let (c_send, c_recv) = tokio::sync::mpsc::unbounded_channel();
-    let (s_send, s_recv) = tokio::sync::watch::channel(PlayerState {
-        index,
-        current: items
-            .get(index)
-            .ok_or_eyre("accessing current media item")?
-            .clone(),
-        pause: false,
-        position: 0.0,
-    });
-
-    spawn_bare(
-        PollState {
-            closed: false,
-            started: false,
-            mpv,
-            commands: c_recv,
-            send: s_send,
-            send_timer,
-            paused: false,
-            position: 0.0,
-            index,
-            items,
-            initial_index: index,
-        }
-        .instrument(),
-    );
-
-    Ok(PlayerHandle {
-        inner: PlayerRef {
-            closed: Arc::new(AtomicBool::new(false)),
-            send: c_send,
-            state: s_recv,
-        },
-    })
+    Ok(items
+        .into_iter()
+        .map(|item| {
+            Arc::new(PlaylistItem {
+                item,
+                id: id_gen.next(),
+            })
+        })
+        .collect())
 }
 
 #[instrument(skip_all)]
@@ -125,7 +150,7 @@ fn append(mpv: &Mpv<EventContextAsync>, jellyfin: &JellyfinClient, item: &MediaI
             .to_node(),
         c"append".to_node(),
         0i64.to_node(),
-        BorrowingMpvNodeMap::new(
+        MpvNodeMapRef::new(
             &[BorrowingCPtr::new(c"force-media-title")],
             &[name(item)?.to_node()],
         )

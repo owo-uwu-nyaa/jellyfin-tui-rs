@@ -14,28 +14,31 @@ use tracing::trace;
 
 use super::{Command, KeybindEventStream};
 
-fn inner_area(stream: &KeybindEventStream<'_, impl Command, impl FallibleWidget>, area: Rect)-> Rect{
+fn inner_area(
+    stream: &KeybindEventStream<'_, impl Command, impl FallibleWidget>,
+    area: Rect,
+) -> Rect {
     let len: usize = stream.next_maps.iter().map(|v| v.len()).sum();
-        if len > 0 {
-            let width = (area.width - 4) / 20;
-            let full_usable_height = len.div_ceil(width as usize);
-            let full_height = full_usable_height + 3;
-            let height = min(full_height, max(5, area.height as usize / 4));
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: area.height - height as u16,
-            }
-        } else {
-            area
+    if len > 0 {
+        let width = (area.width - 4) / 20;
+        let full_usable_height = len.div_ceil(width as usize);
+        let full_height = full_usable_height + 3;
+        let height = min(full_height, max(5, area.height as usize / 4));
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: area.height - height as u16,
         }
+    } else {
+        area
+    }
 }
-
 
 impl<T: Command, W: FallibleWidget> FallibleWidget for KeybindEventStream<'_, T, W> {
     fn render_fallible(&mut self, area: Rect, buf: &mut Buffer) -> color_eyre::eyre::Result<()> {
-        self.inner_widget.render_fallible(inner_area(self,area), buf)?;
+        self.inner_widget
+            .render_fallible(inner_area(self, area), buf)?;
         let len: usize = self.next_maps.iter().map(|v| v.len()).sum();
         if len > 0 {
             let width = (area.width - 4) / 20;

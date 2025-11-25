@@ -231,7 +231,7 @@ pub async fn display_item_list_details(
                     && let Some(next) = entry.play()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries,images_available),
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
                         next,
                     });
                 }
@@ -240,7 +240,7 @@ pub async fn display_item_list_details(
                 if let Some(entry) = events.get_inner().entries.get() {
                     let next = entry.open();
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries,images_available),
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
                         next,
                     });
                 }
@@ -250,7 +250,7 @@ pub async fn display_item_list_details(
                     && let Some(next) = entry.episode()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries,images_available),
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
                         next,
                     });
                 }
@@ -260,7 +260,7 @@ pub async fn display_item_list_details(
                     && let Some(next) = entry.season()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries,images_available),
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
                         next,
                     });
                 }
@@ -270,7 +270,7 @@ pub async fn display_item_list_details(
                     && let Some(next) = entry.series()
                 {
                     break Ok(Navigation::Push {
-                        current: NextScreen::ItemListDetails(item, entries,images_available),
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
                         next,
                     });
                 }

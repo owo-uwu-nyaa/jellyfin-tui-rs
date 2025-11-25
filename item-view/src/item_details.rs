@@ -17,9 +17,7 @@ use keybinds::{KeybindEvent, KeybindEventStream};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
     text::Text,
-    widgets::{
-        Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget,
-    },
+    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget},
 };
 use ratatui_fallible_widget::{FallibleWidget, TermExt};
 

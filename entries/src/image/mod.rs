@@ -133,27 +133,21 @@ impl JellyfinImage {
                     } else {
                         let width = min(
                             size.width as u32,
-                            image.width()
-                                .div_ceil(self.picker.font_size().0 as u32),
+                            image.width().div_ceil(self.picker.font_size().0 as u32),
                         ) as u16;
                         let height = min(
                             size.height as u32,
-                            image.height()
-                                .div_ceil(self.picker.font_size().1 as u32),
+                            image.height().div_ceil(self.picker.font_size().1 as u32),
                         ) as u16;
                         let image_size = Rect {
-                                    x: 0,
-                                    y: 0,
-                                    width,
-                                    height,
+                            x: 0,
+                            y: 0,
+                            width,
+                            height,
                         };
                         let image = self
                             .picker
-                            .new_protocol(
-                                image,
-                               image_size ,
-                                Resize::Fit(None),
-                            )
+                            .new_protocol(image, image_size, Resize::Fit(None))
                             .context("generating protocol")?;
                         let (image, _, _) = self.image.insert((
                             image,
@@ -163,7 +157,7 @@ impl JellyfinImage {
                                 tag: self.tag.clone(),
                                 size: ImageSize { p_width, p_height },
                             },
-                            image_size
+                            image_size,
                         ));
                         Ok(Some((image, image_size)))
                     }
@@ -203,7 +197,7 @@ impl JellyfinImage {
                         self.jellyfin.clone(),
                         size,
                     ));
-                    self.loading=true;
+                    self.loading = true;
                     Ok(None)
                 }
             }

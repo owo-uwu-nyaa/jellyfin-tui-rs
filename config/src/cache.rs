@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc, time::Duration, ops::DerefMut};
+use std::{future::Future, ops::DerefMut, sync::Arc, time::Duration};
 
 use sqlx::{ConnectOptions, SqliteConnection, query, sqlite::SqliteConnectOptions};
 
@@ -42,9 +42,7 @@ async fn cache_maintainance<Fut: Future<Output = Result<()>>>(
     mut f: impl FnMut(Arc<Mutex<SqliteConnection>>) -> Fut,
     db: Arc<Mutex<SqliteConnection>>,
 ) {
-    let mut interval = interval(
-        Duration::from_secs(60 * 60),
-    );
+    let mut interval = interval(Duration::from_secs(60 * 60));
     interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     loop {
         interval.tick().await;

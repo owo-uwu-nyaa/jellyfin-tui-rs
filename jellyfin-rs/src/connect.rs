@@ -63,8 +63,8 @@ enum ConnectionInner {
 }
 
 impl Connection {
-    pub fn clone_new(&self)->Self{
-        Self{
+    pub fn clone_new(&self) -> Self {
+        Self {
             authority: self.authority.clone(),
             host: self.host.clone(),
             port: self.port,
@@ -74,7 +74,7 @@ impl Connection {
             http1_config: self.http1_config.clone(),
         }
     }
-    
+
     pub fn authority(&self) -> &Authority {
         &self.authority
     }

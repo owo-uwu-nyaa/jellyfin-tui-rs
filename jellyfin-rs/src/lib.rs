@@ -26,7 +26,7 @@ pub mod user_library;
 pub mod user_views;
 
 #[derive(Debug)]
-struct ClientInner<AuthS: AuthStatus = Auth>{
+struct ClientInner<AuthS: AuthStatus = Auth> {
     host_header: HeaderValue,
     uri_base: String,
     connection: Connection,
@@ -37,7 +37,7 @@ struct ClientInner<AuthS: AuthStatus = Auth>{
 
 #[derive(Debug, Clone)]
 pub struct JellyfinClient<AuthS: AuthStatus = Auth> {
-    inner: Arc<ClientInner<AuthS>>
+    inner: Arc<ClientInner<AuthS>>,
 }
 
 impl<A: AuthStatus> Deref for JellyfinClient<A> {
@@ -121,7 +121,6 @@ pub struct ClientInfo {
 }
 
 impl<AuthS: AuthStatus> JellyfinClient<AuthS> {
-
     /// Creates a new `JellyfinConnection`
     /// * `url` The base jellyfin server url, without a trailing "/"
     pub fn new(
@@ -142,14 +141,16 @@ impl<AuthS: AuthStatus> JellyfinClient<AuthS> {
             .path_and_query
             .map(|path| path.path().trim_end_matches("/").to_string())
             .unwrap_or(String::new());
-        Ok(JellyfinClient{inner: Arc::new(ClientInner {
-            uri_base,
-            host_header,
-            connection: Connection::new(authority, tls)?,
-            auth: NoAuth,
-            client_info,
-            device_name: device_name.into(),
-        })})
+        Ok(JellyfinClient {
+            inner: Arc::new(ClientInner {
+                uri_base,
+                host_header,
+                connection: Connection::new(authority, tls)?,
+                auth: NoAuth,
+                client_info,
+                device_name: device_name.into(),
+            }),
+        })
     }
 
     /// Creates a new `JellyfinConnection` with auth
@@ -193,38 +194,38 @@ impl<AuthS: AuthStatus> JellyfinClient<AuthS> {
     }
 }
 
-fn client_with_auth<Auth1:AuthStatus, Auth2:AuthStatus>(this:JellyfinClient<Auth1>
-    , auth: Auth2
-) -> JellyfinClient<Auth2>{
-let inner = match
-            Arc::try_unwrap(this.inner){
-                Ok(client) => ClientInner{
-                    uri_base: client.uri_base,
-                    host_header: client.host_header,
-                    connection: client.connection,
-                    device_name: client.device_name,
-                    client_info: client.client_info,
-                    auth
-                },
-                Err(client) => {
-                    ClientInner{
-                        host_header: client.host_header.clone(),
-                        uri_base: client.uri_base.clone(),
-                        connection: client.connection.clone_new(),
-                        client_info: client.client_info.clone(),
-                        device_name: client.device_name.clone(),
-                        auth,
-                    }
-                }
-            };
-        JellyfinClient { inner: Arc::new(inner) }
+fn client_with_auth<Auth1: AuthStatus, Auth2: AuthStatus>(
+    this: JellyfinClient<Auth1>,
+    auth: Auth2,
+) -> JellyfinClient<Auth2> {
+    let inner = match Arc::try_unwrap(this.inner) {
+        Ok(client) => ClientInner {
+            uri_base: client.uri_base,
+            host_header: client.host_header,
+            connection: client.connection,
+            device_name: client.device_name,
+            client_info: client.client_info,
+            auth,
+        },
+        Err(client) => ClientInner {
+            host_header: client.host_header.clone(),
+            uri_base: client.uri_base.clone(),
+            connection: client.connection.clone_new(),
+            client_info: client.client_info.clone(),
+            device_name: client.device_name.clone(),
+            auth,
+        },
+    };
+    JellyfinClient {
+        inner: Arc::new(inner),
+    }
 }
 
 impl<Auth: Authed> JellyfinClient<Auth> {
     pub fn without_auth(self) -> JellyfinClient<NoAuth> {
         client_with_auth(self, NoAuth)
-        }
     }
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]

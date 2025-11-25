@@ -16,9 +16,7 @@ use ratatui_image::{FontSize, picker::Picker};
 use sqlx::SqliteConnection;
 use tracing::instrument;
 
-use crate::{
-    image::{JellyfinImage, available::ImagesAvailable, cache::ImageProtocolCache},
-};
+use crate::image::{JellyfinImage, available::ImagesAvailable, cache::ImageProtocolCache};
 use color_eyre::Result;
 
 pub struct Entry {
@@ -57,7 +55,11 @@ pub fn entry_height(font: FontSize) -> u16 {
 
 impl FallibleWidget for Entry {
     #[instrument(skip_all, name = "render_entry")]
-    fn render_fallible(&mut self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> color_eyre::Result<()> {
+    fn render_fallible(
+        &mut self,
+        area: Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) -> color_eyre::Result<()> {
         let mut outer = Block::bordered()
             .border_type(self.border_type)
             .title_top(self.title.as_str());

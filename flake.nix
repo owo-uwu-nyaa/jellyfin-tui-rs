@@ -39,13 +39,19 @@
           pkgs = import nixpkgs {
             inherit system overlays;
           };
-          jellyfin-tui = pkgs.callPackage ./jellyfin-tui.nix { };
+          jellyfin-tui-rs = pkgs.callPackage ./jellyfin-tui.nix { };
         in
         {
           formatter = pkgs.nixfmt-tree;
           packages = {
-            default = jellyfin-tui;
-            inherit jellyfin-tui;
+            default = jellyfin-tui-rs;
+            inherit jellyfin-tui-rs;
+          };
+          apps = {
+            default = {
+              type = "app";
+              program = "${jellyfin-tui-rs}/bin/jellyfin-tui-rs";
+            };
           };
           devShells.default =
             pkgs.mkShell.override
@@ -62,8 +68,9 @@
                   pkgs.sqlx-cli
                   pkgs.pkg-config
                   pkgs.mpv-unwrapped
-                  pkgs.rustPlatform.bindgenHook
                   pkgs.sqlite-interactive
+                  pkgs.sqlite
+                  pkgs.rustPlatform.bindgenHook
                 ];
                 DATABASE_URL = "sqlite://db.sqlite";
               };
@@ -71,14 +78,14 @@
       )
       // (
         let
-          jellyfin-tui = final: prev: {
-            jellyfin-tui = final.callPackage ./jellyfin-tui.nix { };
+          jellyfin-tui-rs = final: prev: {
+            jellyfin-tui-rs = final.callPackage ./jellyfin-tui.nix { };
           };
         in
         {
           overlays = {
-            inherit jellyfin-tui;
-            default = jellyfin-tui;
+            inherit jellyfin-tui-rs;
+            default = jellyfin-tui-rs;
           };
           hmModules = {
             default = import ./hm-module.nix nix-rust-build;

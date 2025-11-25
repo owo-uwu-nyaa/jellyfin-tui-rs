@@ -1,11 +1,13 @@
-use ratatui::{CompletedFrame, Terminal, buffer::Buffer, layout::Rect, prelude::Backend, widgets::WidgetRef};
 use color_eyre::{Result, eyre::Context};
+use ratatui::{
+    CompletedFrame, Terminal, buffer::Buffer, layout::Rect, prelude::Backend, widgets::WidgetRef,
+};
 
 pub trait FallibleWidget {
     fn render_fallible(&mut self, area: Rect, buf: &mut Buffer) -> Result<()>;
 }
 
-impl<W:WidgetRef> FallibleWidget for W{
+impl<W: WidgetRef> FallibleWidget for W {
     #[inline(always)]
     fn render_fallible(&mut self, area: Rect, buf: &mut Buffer) -> Result<()> {
         self.render_ref(area, buf);

@@ -22,7 +22,7 @@ impl ImageProtocolKey {
             image_type,
             item_id,
             tag,
-            size
+            size,
         }
     }
 }
@@ -41,7 +41,7 @@ impl<'s> ImageProtocolKeyRef<'s> {
             image_type,
             item_id,
             tag,
-            size
+            size,
         }
     }
 }
@@ -55,11 +55,11 @@ impl AsKeyRef for ImageProtocolKey {
             image_type: self.image_type,
             item_id: &self.item_id,
             tag: &self.tag,
-            size: self.size
+            size: self.size,
         }
     }
 }
-impl<'s> AsKeyRef for ImageProtocolKeyRef<'s>{
+impl<'s> AsKeyRef for ImageProtocolKeyRef<'s> {
     fn as_key_ref(&self) -> ImageProtocolKeyRef<'_> {
         *self
     }
@@ -76,7 +76,7 @@ impl<'s> Hash for dyn AsKeyRef + 's {
         self.as_key_ref().hash(state);
     }
 }
-impl<'s> Debug for dyn AsKeyRef + 's{
+impl<'s> Debug for dyn AsKeyRef + 's {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.as_key_ref(), f)
     }
@@ -99,7 +99,7 @@ impl ImageProtocolCache {
         self.protocols.lock().remove(key)
     }
     #[instrument(level = "trace", skip(self, protocol))]
-    pub fn store(&self, protocol: Protocol, final_size: Rect,  key: ImageProtocolKey) {
+    pub fn store(&self, protocol: Protocol, final_size: Rect, key: ImageProtocolKey) {
         trace!("storing image protocol in cache");
         self.protocols.lock().insert(key, (protocol, final_size));
     }

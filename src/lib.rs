@@ -1,6 +1,7 @@
 use std::{
     path::PathBuf,
-    pin::{Pin, pin}, sync::Arc,
+    pin::{Pin, pin},
+    sync::Arc,
 };
 
 use color_eyre::{Result, eyre::Context};
@@ -13,11 +14,15 @@ use jellyfin_tui_core::{
     state::{Navigation, NextScreen, State},
 };
 use keybinds::KeybindEvents;
+use player_core::PlayerHandle;
+use player_jellyfin::player_jellyfin;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use sqlx::SqliteConnection;
 use tokio_util::sync::CancellationToken;
 use tracing::{error_span, instrument};
+
+use crate::error::ResultDisplayExt;
 pub mod error;
 
 async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Navigation> {
@@ -37,8 +42,7 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
         NextScreen::LoadPlayItem(load_play) => {
             player::fetch_items::fetch_screen(cx, load_play).await
         }
-        NextScreen::MkPlayer { items, index } => player::mk_player(cx, items, index),
-        NextScreen::Play(player_handle) => player::play(cx, player_handle).await,
+        NextScreen::Play { items, index } => player::play(cx, items, index).await,
         NextScreen::Error(report) => {
             let cx = cx.project();
             error::display_error(cx.term, cx.events, &cx.config.keybinds, report).await
@@ -50,8 +54,13 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
             item_view::item_list_details::handle_item_list_details_data(cx, media_item, media_items)
         }
         NextScreen::ItemListDetails(media_item, entry_list, images_available) => {
-            item_view::item_list_details::display_item_list_details(cx, media_item, entry_list, images_available)
-                .await
+            item_view::item_list_details::display_item_list_details(
+                cx,
+                media_item,
+                entry_list,
+                images_available,
+            )
+            .await
         }
         NextScreen::FetchItemListDetails(media_item) => {
             item_view::item_list_details::display_fetch_item_list(cx, media_item).await
@@ -81,7 +90,7 @@ async fn login_jellyfin(
     )
 }
 
-#[instrument(skip_all, level="debug")]
+#[instrument(skip_all, level = "debug")]
 async fn login(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
@@ -99,7 +108,7 @@ async fn login(
     }
 }
 
-#[instrument(skip_all, level="debug")]
+#[instrument(skip_all, level = "debug")]
 async fn run_state(mut cx: Pin<&mut TuiContext>) {
     let mut state = State::new();
     while let Some(screen) = state.pop() {
@@ -117,8 +126,25 @@ async fn run_app_inner(
     cache: Arc<tokio::sync::Mutex<SqliteConnection>>,
     image_picker: Picker,
 ) {
+    let stop_mpv = CancellationToken::new();
+    let stop_mpv_guard = stop_mpv.clone().drop_guard();
+
     if let Some((jellyfin, jellyfin_socket)) = login(&mut term, &mut events, &config, &cache).await
+        && let Some(mpv_handle) = PlayerHandle::new(
+            jellyfin.clone(),
+            &config.hwdec,
+            config.mpv_profile,
+            &config.mpv_log_level,
+            stop_mpv,
+            true,
+        )
+        .display_error(&mut term, &mut events, &config.keybinds)
+        .await
     {
+        spawn::spawn(
+            player_jellyfin(mpv_handle.clone(), jellyfin.clone()),
+            error_span!("player_jellyfin"),
+        );
         let cx = pin!(TuiContext {
             jellyfin,
             jellyfin_socket,
@@ -127,13 +153,15 @@ async fn run_app_inner(
             events,
             image_picker: Arc::new(image_picker),
             cache,
-            image_cache: ImageProtocolCache::new()
+            image_cache: ImageProtocolCache::new(),
+            mpv_handle
         });
         run_state(cx).await
     }
+    drop(stop_mpv_guard);
 }
 
-#[instrument(skip_all, level="debug")]
+#[instrument(skip_all, level = "debug")]
 #[tokio::main(flavor = "current_thread")]
 pub async fn run_app(
     term: DefaultTerminal,
