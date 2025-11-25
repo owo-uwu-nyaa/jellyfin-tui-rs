@@ -40,7 +40,7 @@ let
           }
           ''
             json2toml "$valuePath" "$out"
-            jellyfin-tui check-keybinds "$out"
+            jellyfin-tui-rs check-keybinds "$out"
           '';
     in
     (
