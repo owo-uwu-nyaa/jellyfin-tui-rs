@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::Authed;
 use crate::request::{NoQuery, RequestBuilderExt};
-use crate::{JellyfinClient, JellyfinVec, Result, connect::JsonResponse};
+use crate::Authed;
+use crate::{connect::JsonResponse, JellyfinClient, JellyfinVec, Result};
 use color_eyre::eyre::Context;
 use http::Uri;
 use serde::Deserialize;
@@ -14,6 +14,38 @@ use tracing::instrument;
 #[serde(rename_all = "camelCase")]
 pub struct UserIdQuery<'a> {
     pub user_id: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshItemQuery {
+    pub recursive: bool,
+    pub metadata_refresh_mode: RefreshMode,
+    pub image_refresh_mode: RefreshMode,
+    pub replace_all_metadata: bool,
+    pub replace_all_images: bool,
+    pub regenerate_trickplay: bool,
+}
+
+impl Default for RefreshItemQuery {
+    fn default() -> Self {
+        Self {
+            recursive: true,
+            metadata_refresh_mode: RefreshMode::Default,
+            image_refresh_mode: RefreshMode::Default,
+            replace_all_metadata: false,
+            replace_all_images: false,
+            regenerate_trickplay: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Hash, Eq)]
+pub enum RefreshMode {
+    None,
+    ValidationOnly,
+    Default,
+    FullRefresh,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -211,6 +243,22 @@ impl<Auth: Authed> JellyfinClient<Auth> {
     ) -> Result<JsonResponse<JellyfinVec<MediaItem>>> {
         self.send_request_json(self.get("/Items", query)?.empty_body()?)
             .await
+    }
+
+    pub async fn refresh_item(&self, item: &str, query: &RefreshItemQuery) -> Result<()> {
+        self.send_request(
+            self.post(
+                |base: &mut String| {
+                    base.push_str("/Items/");
+                    base.push_str(item);
+                    base.push_str("/Refresh")
+                },
+                query,
+            )?
+            .empty_body()?,
+        )
+        .await?;
+        Ok(())
     }
 
     pub async fn get_item(
