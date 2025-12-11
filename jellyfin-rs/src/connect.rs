@@ -206,15 +206,8 @@ impl Connection {
             match resp.await {
                 Ok(resp) => return recv_response(check_status(resp)?).await,
                 Err(e) => {
-                    if e.is_closed()
-                        || e.is_incomplete_message()
-                        || e.is_body_write_aborted()
-                        || e.is_timeout()
-                    {
-                        warn!("retrying request")
-                    } else {
-                        return Err(e.into());
-                    }
+                    warn!("received connection error: {e:?}");
+                    warn!("retrying request");
                 }
             }
         }
