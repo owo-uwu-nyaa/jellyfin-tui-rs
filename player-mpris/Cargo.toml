@@ -5,7 +5,11 @@ edition = "2024"
 
 [dependencies]
 
+jellyfin = { path = "../jellyfin-rs"}
 player-core = {path="../player-core"}
+
 color-eyre = {workspace=true}
-tracing = {workspace=true}
+tracing.workspace = true
 zbus = { workspace = true }
+serde.workspace = true
+tokio.workspace = true

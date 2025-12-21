@@ -3,12 +3,12 @@ use std::{mem, sync::Arc};
 use color_eyre::eyre::Context;
 use jellyfin::{JellyfinClient, playback_status::ProgressBody};
 use player_core::PlayerHandle;
-use spawn::spawn_res;
-use tracing::{error_span, instrument};
+use spawn::Spawner;
+use tracing::{error_span, info, instrument};
 
-fn send_playing(id: Arc<String>, jellyfin: JellyfinClient) {
+fn send_playing(id: Arc<String>, jellyfin: JellyfinClient, spawner: &Spawner) {
     let span = error_span!("send_playing");
-    spawn_res(
+    spawner.spawn_res(
         async move {
             jellyfin
                 .set_playing(&id)
@@ -19,9 +19,15 @@ fn send_playing(id: Arc<String>, jellyfin: JellyfinClient) {
     );
 }
 
-fn send_progress(id: Arc<String>, position: f64, paused: bool, jellyfin: JellyfinClient) {
+fn send_progress(
+    id: Arc<String>,
+    position: f64,
+    paused: bool,
+    jellyfin: JellyfinClient,
+    spawner: &Spawner,
+) {
     let span = error_span!("send_progress");
-    spawn_res(
+    spawner.spawn_res(
         async move {
             jellyfin
                 .set_playing_progress(&ProgressBody {
@@ -36,9 +42,14 @@ fn send_progress(id: Arc<String>, position: f64, paused: bool, jellyfin: Jellyfi
     );
 }
 
-fn send_playing_stopped(id: Arc<String>, position: f64, jellyfin: JellyfinClient) {
+fn send_playing_stopped(
+    id: Arc<String>,
+    position: f64,
+    jellyfin: JellyfinClient,
+    spawner: &Spawner,
+) {
     let span = error_span!("send_playing_stopped");
-    spawn_res(
+    spawner.spawn_res(
         async move {
             jellyfin
                 .set_playing_stopped(&ProgressBody {
@@ -53,41 +64,46 @@ fn send_playing_stopped(id: Arc<String>, position: f64, jellyfin: JellyfinClient
 }
 
 #[instrument(skip_all)]
-pub async fn player_jellyfin(mut player: PlayerHandle, jellyfin: JellyfinClient) {
+pub async fn player_jellyfin(player: PlayerHandle, jellyfin: JellyfinClient, spawner: Spawner) {
     let mut send_tick = 10u8;
+    let mut state = match player.get_state().await {
+        Ok(v) => v,
+        Err(_) => {
+            info!("player is already closed");
+            return;
+        }
+    };
     let (mut current, mut old_id, mut old_position) = {
-        let state = player.state().borrow();
         let id = state
             .current
             .map(|i| Arc::new(state.playlist[i].item.id.clone()));
         if let Some(id) = id.as_ref() {
-            send_playing(id.clone(), jellyfin.clone());
+            send_playing(id.clone(), jellyfin.clone(), &spawner);
         }
         (state.current, id, state.position)
     };
     loop {
-        if player.state_mut().changed().await.is_err() {
+        if state.receive().await.is_err() {
             if let Some(id) = old_id.as_mut() {
-                send_playing_stopped(id.clone(), old_position, jellyfin.clone());
+                send_playing_stopped(id.clone(), old_position, jellyfin.clone(), &spawner);
             }
             break;
         } else {
-            let state = player.state().borrow();
             if current != state.current {
                 if let Some(index) = state.current {
                     let new_id = if let Some(old_id) = old_id.as_mut() {
                         let new_id = Arc::new(state.playlist[index].item.id.clone());
                         let old = mem::replace(old_id, new_id.clone());
-                        send_playing_stopped(old, old_position, jellyfin.clone());
+                        send_playing_stopped(old, old_position, jellyfin.clone(), &spawner);
                         new_id
                     } else {
                         let new = Arc::new(state.playlist[index].item.id.clone());
                         old_id = Some(new.clone());
                         new
                     };
-                    send_playing(new_id, jellyfin.clone());
+                    send_playing(new_id, jellyfin.clone(), &spawner);
                 } else if let Some(old_id) = old_id.take() {
-                    send_playing_stopped(old_id, old_position, jellyfin.clone());
+                    send_playing_stopped(old_id, old_position, jellyfin.clone(), &spawner);
                 }
                 current = state.current;
                 send_tick = 11;
@@ -98,6 +114,7 @@ pub async fn player_jellyfin(mut player: PlayerHandle, jellyfin: JellyfinClient)
                         state.position,
                         state.pause,
                         jellyfin.clone(),
+                        &spawner,
                     );
                 }
                 send_tick = 11;

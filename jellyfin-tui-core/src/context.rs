@@ -4,7 +4,7 @@ use crate::config::Config;
 use ::keybinds::KeybindEvents;
 use entries::image::cache::ImageProtocolCache;
 use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
-use player_core::PlayerHandle;
+use player_core::{OwnedPlayerHandle, PlayerHandle};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use sqlx::SqliteConnection;
@@ -19,7 +19,7 @@ pub struct TuiContext {
     pub image_picker: Arc<Picker>,
     pub cache: Arc<Mutex<SqliteConnection>>,
     pub image_cache: ImageProtocolCache,
-    pub mpv_handle: PlayerHandle,
+    pub mpv_handle: OwnedPlayerHandle,
 }
 
 pub struct TuiContextProj<'p> {
@@ -31,7 +31,7 @@ pub struct TuiContextProj<'p> {
     pub image_picker: &'p Arc<Picker>,
     pub cache: &'p Arc<Mutex<SqliteConnection>>,
     pub image_cache: &'p mut ImageProtocolCache,
-    pub mpv_handle: &'p mut PlayerHandle,
+    pub mpv_handle: &'p PlayerHandle,
 }
 
 impl TuiContext {

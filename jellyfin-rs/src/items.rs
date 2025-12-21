@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::request::{NoQuery, RequestBuilderExt};
 use crate::Authed;
-use crate::{connect::JsonResponse, JellyfinClient, JellyfinVec, Result};
+use crate::request::{NoQuery, RequestBuilderExt};
+use crate::{JellyfinClient, JellyfinVec, Result, connect::JsonResponse};
 use color_eyre::eyre::Context;
 use http::Uri;
 use serde::Deserialize;
@@ -216,6 +216,7 @@ pub struct MediaItem {
     pub episode_index: Option<u64>,
     #[serde(rename = "ParentIndexNumber")]
     pub season_index: Option<u64>,
+    pub run_time_ticks: Option<u64>,
 }
 
 impl<Auth: Authed> JellyfinClient<Auth> {
@@ -299,7 +300,7 @@ impl<Auth: Authed> JellyfinClient<Auth> {
         Uri::builder()
             .scheme(if self.tls() { "https" } else { "http" })
             .authority(self.authority().to_owned())
-            .path_and_query(self.build_path(
+            .path_and_query(self.build_uri(
                 |prefix: &mut String| {
                     prefix.push_str("/Items/");
                     prefix.push_str(&item.id);

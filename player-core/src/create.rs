@@ -17,66 +17,66 @@ use libmpv::{
     events::EventContextAsync,
     node::{BorrowingCPtr, MpvNodeMapRef, ToNode},
 };
-use spawn::spawn_bare;
-use tokio::time::MissedTickBehavior;
+use spawn::Spawner;
+use tokio::{
+    sync::{broadcast, mpsc},
+    time::{MissedTickBehavior, interval},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument};
 
 use crate::{
-    PlayerHandle, PlayerState, PlaylistItem, PlaylistItemIdGen, mpv_stream::MpvStream,
+    OwnedPlayerHandle, PlayerHandle, PlaylistItem, PlaylistItemIdGen, mpv_stream::MpvStream,
     poll::PollState,
 };
 
-impl PlayerHandle {
+impl OwnedPlayerHandle {
     pub fn new(
         jellyfin: JellyfinClient,
         hwdec: &str,
         profile: MpvProfile,
         log_level: &str,
-        stop: CancellationToken,
         minimized: bool,
+        spawn: &Spawner,
     ) -> Result<Self> {
         let mpv = MpvStream::new(&jellyfin, hwdec, profile, log_level, minimized)?;
-        let mut send_timer = tokio::time::interval(Duration::from_secs(1));
-        send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let mut position_send_timer = interval(Duration::from_secs(1));
+        position_send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let playlist = Arc::new(Vec::new());
-        let (c_send, c_recv) = tokio::sync::mpsc::unbounded_channel();
-        let (s_send, s_recv) = tokio::sync::watch::channel(PlayerState {
-            playlist: playlist.clone(),
-            current: None,
-            pause: false,
-            position: 0.0,
-            fullscreen: true,
-            idle: true,
-            minimized,
-        });
+        let (c_send, c_recv) = mpsc::unbounded_channel();
+        let (send_events, _) = broadcast::channel(32);
+        let stop = CancellationToken::new();
 
-        spawn_bare(
+        spawn.spawn_bare(
             PollState {
                 idle: true,
                 closed: false,
                 mpv,
                 commands: c_recv,
-                send: s_send,
-                send_timer,
+                position_send_timer,
                 paused: false,
                 position: 0.0,
+                speed: 1.0,
+                volume: 100,
                 index: None,
                 fullscreen: true,
-                stop: stop.cancelled_owned(),
+                stop: stop.clone().cancelled_owned(),
                 jellyfin,
                 playlist,
                 playlist_id_gen: PlaylistItemIdGen::default(),
                 minimized,
                 seeked: false,
+                send_events,
             }
             .instrument(),
         );
 
         Ok(Self {
-            closed: Arc::new(AtomicBool::new(false)),
-            send: c_send,
-            state: s_recv,
+            inner: PlayerHandle {
+                closed: Arc::new(AtomicBool::new(false)),
+                send: c_send,
+            },
+            _stop: stop.drop_guard(),
         })
     }
 }

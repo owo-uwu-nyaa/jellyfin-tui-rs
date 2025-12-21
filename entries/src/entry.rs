@@ -2,6 +2,7 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 use jellyfin::{
     JellyfinClient,
+    image::select_images,
     items::{ItemType, MediaItem},
     user_views::UserView,
 };
@@ -133,23 +134,20 @@ impl Entry {
             ItemType::Series => (item.name.clone(), None),
             ItemType::Playlist | ItemType::Folder => (item.name.clone(), None),
         };
-        let image = item
-            .image_tags
-            .iter()
-            .flat_map(|map| map.iter())
-            .next()
+        let image = select_images(&item)
             .map(|(image_type, tag)| {
                 JellyfinImage::new(
                     item.id.clone(),
-                    tag.clone(),
-                    *image_type,
+                    tag.to_string(),
+                    image_type,
                     jellyfin.clone(),
                     db.clone(),
                     availabe.clone(),
                     cache.clone(),
                     picker.clone(),
                 )
-            });
+            })
+            .next();
         let watch_status = if let Some(user_data) = item.user_data.as_ref() {
             if let Some(num @ 1..) = user_data.unplayed_item_count {
                 Some(format!("{num}").into())

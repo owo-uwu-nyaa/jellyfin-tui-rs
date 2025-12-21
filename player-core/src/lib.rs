@@ -10,13 +10,16 @@ use std::{
 };
 
 use jellyfin::items::MediaItem;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::DropGuard;
+
+use crate::state::EventReceiver;
 
 mod create;
-pub mod diff;
 mod log;
 mod mpv_stream;
 mod poll;
+pub mod state;
 
 #[derive(Debug, Default)]
 pub struct PlaylistItemIdGen {
@@ -33,7 +36,7 @@ impl PlaylistItemIdGen {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlaylistItemId {
-    pub(crate) id: u64,
+    pub id: u64,
 }
 
 impl Display for PlaylistItemId {
@@ -52,14 +55,18 @@ impl FromStr for PlaylistItemId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Command {
     Pause(bool),
+    TogglePause,
     Fullscreen(bool),
     Minimized(bool),
     Next,
     Previous,
     Seek(f64),
+    SeekRelative(f64),
+    Speed(f64),
+    Volume(i64),
     Play(PlaylistItemId),
     AddTrack {
         item: Box<MediaItem>,
@@ -72,6 +79,35 @@ pub enum Command {
         first: usize,
     },
     Stop,
+    GetEventReceiver(oneshot::Sender<EventReceiver>),
+}
+
+type Playlist = Arc<Vec<Arc<PlaylistItem>>>;
+
+#[derive(Debug, Clone)]
+pub enum Events {
+    ReplacePlaylist {
+        current: Option<PlaylistItemId>,
+        current_index: Option<usize>,
+        new_playlist: Playlist,
+    },
+    AddPlaylistItem {
+        after: Option<PlaylistItemId>,
+        index: usize,
+        new_playlist: Playlist,
+    },
+    RemovePlaylistItem {
+        removed: PlaylistItemId,
+        new_playlist: Playlist,
+    },
+    Current(Option<usize>),
+    Paused(bool),
+    Stopped(bool),
+    Position(f64),
+    Seek(f64),
+    Speed(f64),
+    Fullscreen(bool),
+    Volume(i64),
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +115,11 @@ pub struct PlayerState {
     pub playlist: Arc<Vec<Arc<PlaylistItem>>>,
     pub current: Option<usize>,
     pub pause: bool,
-    pub idle: bool,
+    pub stopped: bool,
     pub position: f64,
+    pub speed: f64,
     pub fullscreen: bool,
-    pub minimized: bool,
+    pub volume: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -95,7 +132,19 @@ pub struct PlaylistItem {
 pub struct PlayerHandle {
     closed: Arc<AtomicBool>,
     send: mpsc::UnboundedSender<Command>,
-    state: watch::Receiver<PlayerState>,
+}
+
+pub struct OwnedPlayerHandle {
+    inner: PlayerHandle,
+    _stop: DropGuard,
+}
+
+impl Deref for OwnedPlayerHandle {
+    type Target = PlayerHandle;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl PlayerHandle {
@@ -104,11 +153,10 @@ impl PlayerHandle {
             self.closed.store(true, Ordering::Relaxed);
         };
     }
-    pub fn state(&self) -> &watch::Receiver<PlayerState> {
-        &self.state
-    }
-    pub fn state_mut(&mut self) -> &mut watch::Receiver<PlayerState> {
-        &mut self.state
+    pub async fn get_state(&self) -> Result<EventReceiver, oneshot::error::RecvError> {
+        let (send, receive) = oneshot::channel();
+        self.send(Command::GetEventReceiver(send));
+        receive.await
     }
 }
 
@@ -116,7 +164,6 @@ impl Debug for PlayerHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PlayerRef")
             .field("closed", &self.closed.load(Ordering::Relaxed))
-            .field("state", &self.state.borrow().deref())
             .finish()
     }
 }

@@ -10,18 +10,22 @@ use jellyfin::{JellyfinClient, items::ItemType};
 use libmpv::Mpv;
 use libmpv::events::EventContextAsync;
 use libmpv::node::{BorrowingCPtr, MpvNode, MpvNodeMapRef, ToNode};
-use tokio::{sync::mpsc, time::Interval};
+use tokio::{
+    sync::{broadcast, mpsc},
+    time::Interval,
+};
 use tokio_util::sync::WaitForCancellationFutureOwned;
-use tracing::info;
 use tracing::{Instrument, debug, error_span, instrument, instrument::Instrumented, warn};
+use tracing::{info, trace};
 
 use crate::create::set_playlist;
 use crate::mpv_stream::ClientCommand;
+use crate::state::EventReceiver;
 use crate::{
     Command, PlayerState, PlaylistItem,
     mpv_stream::{MpvEvent, MpvStream, ObservedProperty},
 };
-use crate::{PlaylistItemId, PlaylistItemIdGen};
+use crate::{Events, PlaylistItemId, PlaylistItemIdGen};
 use color_eyre::{
     Result,
     eyre::{Context, OptionExt},
@@ -36,10 +40,11 @@ pin_project_lite::pin_project! {
         #[pin]
         pub(crate) stop: WaitForCancellationFutureOwned,
         pub(crate) commands: mpsc::UnboundedReceiver<Command>,
-        pub(crate) send: tokio::sync::watch::Sender<PlayerState>,
-        pub(crate) send_timer: Interval,
+        pub(crate) position_send_timer: Interval,
         pub(crate) paused: bool,
         pub(crate) position: f64,
+        pub(crate) speed: f64,
+        pub(crate) volume: i64,
         pub(crate) index: Option<usize>,
         pub(crate) fullscreen: bool,
         pub(crate) minimized: bool,
@@ -47,6 +52,7 @@ pin_project_lite::pin_project! {
         pub(crate) playlist: Arc<Vec<Arc<PlaylistItem>>>,
         pub(crate) playlist_id_gen: PlaylistItemIdGen,
         pub(crate) seeked: bool,
+        pub(crate) send_events: broadcast::Sender<Events>,
     }
 }
 
@@ -114,6 +120,17 @@ fn assert_shadow_playlist_state(
     Ok(())
 }
 
+trait TraceSendError {
+    fn trace_send_error(self);
+}
+impl<E, T> TraceSendError for std::result::Result<T, E> {
+    fn trace_send_error(self) {
+        if self.is_err() {
+            trace!("unable to send message to non-existing peer.")
+        }
+    }
+}
+
 impl Future for PollState {
     type Output = ();
 
@@ -122,7 +139,6 @@ impl Future for PollState {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let mut this = self.project();
-        let mut send = false;
         let span = error_span!("commands").entered();
         if !*this.closed {
             if this.stop.poll(cx).is_ready() {
@@ -168,6 +184,11 @@ impl Future for PollState {
                             .seek_absolute(seek)
                             .context("seeking")
                             .trace_error(),
+                        Some(Command::SeekRelative(seek)) => this
+                            .mpv
+                            .seek(seek, c"relative")
+                            .context("seeking relative")
+                            .trace_error(),
                         Some(Command::Play(id)) => {
                             if let Some(index) = index_of(this.playlist, id) {
                                 match i64::try_from(index).context("Index is an invalid index") {
@@ -176,6 +197,11 @@ impl Future for PollState {
                                 }
                             }
                         }
+                        Some(Command::Speed(speed)) => this
+                            .mpv
+                            .set_property(c"speed", speed)
+                            .context("setting playback speed")
+                            .trace_error(),
                         Some(Command::AddTrack { item, after, play }) => {
                             insert_at(
                                 this.playlist,
@@ -185,13 +211,13 @@ impl Future for PollState {
                                 after,
                                 this.playlist_id_gen,
                                 play,
-                                &mut send,
+                                this.send_events,
                             )
                             .context("adding item to playlist")
                             .trace_error();
                         }
                         Some(Command::Stop) => {
-                            stop(&this.mpv, this.playlist, this.index, &mut send)
+                            stop(&this.mpv, this.playlist, this.index, this.send_events)
                                 .context("stopping player")
                                 .trace_error();
                         }
@@ -203,7 +229,7 @@ impl Future for PollState {
                                 this.playlist,
                                 items,
                                 first,
-                                &mut send,
+                                this.send_events,
                                 this.index,
                             )
                             .trace_error();
@@ -213,10 +239,38 @@ impl Future for PollState {
                                 this.playlist,
                                 &this.mpv,
                                 id,
-                                &mut send,
+                                this.send_events,
                                 this.index,
                             )
                             .trace_error();
+                        }
+                        Some(Command::TogglePause) => {
+                            this.mpv
+                                .set_pause(!*this.paused)
+                                .context("toggle pause on player")
+                                .trace_error();
+                        }
+                        Some(Command::Volume(volume)) => this
+                            .mpv
+                            .set_property(c"volume", volume)
+                            .context("setting volume")
+                            .trace_error(),
+                        Some(Command::GetEventReceiver(sender)) => {
+                            sender
+                                .send(EventReceiver {
+                                    state: PlayerState {
+                                        playlist: this.playlist.clone(),
+                                        current: *this.index,
+                                        pause: *this.paused,
+                                        stopped: *this.idle,
+                                        position: *this.position,
+                                        speed: *this.speed,
+                                        fullscreen: *this.fullscreen,
+                                        volume: *this.volume,
+                                    },
+                                    receive: this.send_events.subscribe(),
+                                })
+                                .trace_send_error();
                         }
                     }
                 }
@@ -246,38 +300,62 @@ impl Future for PollState {
                             }
                         }
                     };
-                    send = true;
+                    this.send_events
+                        .send(Events::Current(*this.index))
+                        .trace_send_error();
+                    *this.position = 0.0;
                 }
                 Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Idle(idle)))) => {
                     *this.idle = idle;
                     if idle {
                         *this.index = None;
+                        this.send_events
+                            .send(Events::Current(None))
+                            .trace_send_error();
                     }
-                    send = true;
+                    this.send_events
+                        .send(Events::Stopped(idle))
+                        .trace_send_error();
                 }
                 Some(Ok(MpvEvent::Seek)) => {
                     *this.seeked = true;
                 }
-                Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Position(p)))) => {
-                    *this.position = p;
-                    if mem::replace(this.seeked, false) {
-                        send = true
+                Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Position(pos)))) => {
+                    let old = mem::replace(this.position, pos);
+                    //seek if seek event or jump greater than 5 seconds
+                    if mem::replace(this.seeked, false) || (old - pos).abs() > 5.0 {
+                        this.send_events.send(Events::Seek(pos)).trace_send_error();
                     }
                 }
                 Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Pause(paused)))) => {
                     *this.paused = paused;
-                    send = true;
+                    this.send_events
+                        .send(Events::Paused(paused))
+                        .trace_send_error();
                 }
                 Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Fullscreen(fullscreen)))) => {
                     *this.fullscreen = fullscreen;
-                    send = true;
+                    this.send_events
+                        .send(Events::Fullscreen(fullscreen))
+                        .trace_send_error();
                 }
                 Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Minimized(minimized)))) => {
                     *this.minimized = minimized;
-                    send = true;
+                }
+                Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Speed(speed)))) => {
+                    *this.speed = speed;
+                    this.send_events
+                        .send(Events::Speed(speed))
+                        .trace_send_error();
+                }
+                Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Volume(volume)))) => {
+                    *this.volume = volume;
+                    this.send_events
+                        .send(Events::Volume(volume))
+                        .trace_send_error();
                 }
                 Some(Ok(MpvEvent::Command(ClientCommand::Stop))) => {
-                    stop(&this.mpv, this.playlist, this.index, &mut send)
+                    stop(&this.mpv, this.playlist, this.index, this.send_events)
                         .context("stopping player")
                         .trace_error();
                 }
@@ -285,19 +363,10 @@ impl Future for PollState {
         }
         span.exit();
         let span = error_span!("push-events").entered();
-        if this.send_timer.poll_tick(cx).is_ready() || send {
-            this.send
-                .send(PlayerState {
-                    playlist: this.playlist.clone(),
-                    current: *this.index,
-                    pause: *this.paused,
-                    position: *this.position,
-                    fullscreen: *this.fullscreen,
-                    minimized: *this.minimized,
-                    idle: *this.idle,
-                })
-                .context("sending player state update")
-                .trace_error();
+        if this.position_send_timer.poll_tick(cx).is_ready() {
+            this.send_events
+                .send(Events::Position(*this.position))
+                .trace_send_error();
         }
         span.exit();
         Poll::Pending
@@ -314,12 +383,19 @@ fn stop(
     mpv: &MpvStream,
     playlist: &mut Arc<Vec<Arc<PlaylistItem>>>,
     index: &mut Option<usize>,
-    send: &mut bool,
+    send_events: &broadcast::Sender<Events>,
 ) -> Result<()> {
     mpv.stop()?;
-    *playlist = Arc::new(Vec::new());
     *index = None;
-    *send = true;
+    send_events.send(Events::Current(None)).trace_send_error();
+    *playlist = Arc::new(Vec::new());
+    send_events
+        .send(Events::ReplacePlaylist {
+            current: None,
+            current_index: None,
+            new_playlist: playlist.clone(),
+        })
+        .trace_send_error();
     assert_shadow_playlist_state(mpv, playlist)
 }
 
@@ -327,17 +403,25 @@ fn remove_playlist_item(
     playlist: &mut Arc<Vec<Arc<PlaylistItem>>>,
     mpv: &MpvStream,
     id: PlaylistItemId,
-    send: &mut bool,
+    send_events: &broadcast::Sender<Events>,
     cur_index: &mut Option<usize>,
 ) -> Result<()> {
     let index = index_of(playlist, id).ok_or_eyre("no such playlist item")?;
     mpv.playlist_remove_index(index.try_into().context("converting index to i64")?)
         .context("removing item from mpv playlist")?;
-    Arc::make_mut(playlist).remove(index);
-    *send = true;
+    let mut playlist_vec = Vec::clone(playlist);
+    playlist_vec.remove(index);
+    *playlist = Arc::new(playlist_vec);
     if *cur_index == Some(index) {
-        *cur_index = None
+        *cur_index = None;
+        send_events.send(Events::Current(None)).trace_send_error();
     }
+    send_events
+        .send(Events::RemovePlaylistItem {
+            removed: id,
+            new_playlist: playlist.clone(),
+        })
+        .trace_send_error();
     assert_shadow_playlist_state(mpv, playlist)
 }
 
@@ -348,7 +432,7 @@ fn replace_playlist(
     playlist: &mut Arc<Vec<Arc<PlaylistItem>>>,
     items: Vec<MediaItem>,
     first: usize,
-    send: &mut bool,
+    send_events: &broadcast::Sender<Events>,
     index: &mut Option<usize>,
 ) -> Result<()> {
     if first >= items.len() {
@@ -356,19 +440,24 @@ fn replace_playlist(
     }
     info!("replacing playlist with new list of length {}", items.len());
     mpv.playlist_clear()?;
-    let playlist = if let Some(playlist) = Arc::get_mut(playlist) {
-        playlist.clear();
-        playlist
-    } else {
-        *playlist = Arc::new(Vec::new());
-        Arc::get_mut(playlist).expect("just created new playlist")
-    };
     *index = None;
-    *send = true;
-    *playlist =
-        set_playlist(mpv, jellyfin, playlist_id_gen, items, first).context("replacing playlist")?;
+    send_events.send(Events::Current(None)).trace_send_error();
+    *playlist = Arc::new(
+        set_playlist(mpv, jellyfin, playlist_id_gen, items, first).context("replacing playlist")?,
+    );
     mpv.playlist_play_index(first.try_into()?)?;
     assert_shadow_playlist_state(mpv, playlist)?;
+    send_events
+        .send(Events::ReplacePlaylist {
+            current: playlist
+                .get(first)
+                .expect("current is missing from playlist")
+                .id
+                .into(),
+            current_index: Some(first),
+            new_playlist: playlist.clone(),
+        })
+        .trace_send_error();
     mpv.unpause()?;
     Ok(())
 }
@@ -381,7 +470,7 @@ fn insert_at(
     after: Option<PlaylistItemId>,
     mk_id: &mut PlaylistItemIdGen,
     play: bool,
-    send: &mut bool,
+    send_events: &broadcast::Sender<Events>,
 ) -> Result<()> {
     let uri = jellyfin.get_video_uri(&item)?.to_string();
 
@@ -420,13 +509,23 @@ fn insert_at(
         )
         .to_node(),
     ])?;
+
     let id = mk_id.next();
-    Arc::make_mut(playlist).insert(index, Arc::new(PlaylistItem { item: *item, id }));
-    *send = true;
+    let mut playlist_vec = Vec::clone(playlist);
+    playlist_vec.insert(index, Arc::new(PlaylistItem { item: *item, id }));
+    *playlist = Arc::new(playlist_vec);
+    assert_shadow_playlist_state(mpv, playlist)?;
+    send_events
+        .send(Events::AddPlaylistItem {
+            after,
+            index,
+            new_playlist: playlist.clone(),
+        })
+        .trace_send_error();
     if play {
         mpv.playlist_play_index(at).context("playing new item")?
     }
-    assert_shadow_playlist_state(mpv, playlist)
+    Ok(())
 }
 
 #[instrument(skip_all)]

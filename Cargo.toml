@@ -17,6 +17,7 @@ spawn = {path = "spawn"}
 ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
 player-core = {path="player-core"}
 player-jellyfin = {path="player-jellyfin"}
+player-mpris.path = "player-mpris"
 
 login = { path = "login"}
 home-screen = {path = "home-screen"}
@@ -53,7 +54,7 @@ dirs = {workspace = true}
 libc = "0.2.170"
 
 [workspace]
-members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view"]
+members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view"]
 
 [workspace.dependencies]
 log = "0.4.26"

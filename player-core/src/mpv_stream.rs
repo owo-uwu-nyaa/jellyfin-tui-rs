@@ -26,6 +26,8 @@ pub enum ObservedProperty {
     Fullscreen(bool),
     Minimized(bool),
     PlaylistPos(i64),
+    Volume(i64),
+    Speed(f64),
 }
 
 #[derive(Debug)]
@@ -112,6 +114,16 @@ impl Stream for MpvStream {
                             ObservedProperty::PlaylistPos(pos),
                         )));
                     }
+                    ("speed", PropertyData::Double(speed), 7) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Speed(
+                            speed,
+                        ))));
+                    }
+                    ("volume", PropertyData::Int64(volume), 8) => {
+                        break Some(Ok(MpvEvent::PropertyChanged(ObservedProperty::Volume(
+                            volume,
+                        ))));
+                    }
                     (name, val, id) => {
                         warn!(name, ?val, id, "received unrequested property change event");
                     }
@@ -183,6 +195,8 @@ impl MpvStream {
         mpv.observe_property("fullscreen", Format::Flag, 4)?;
         mpv.observe_property("window-minimized", Format::Flag, 5)?;
         mpv.observe_property("playlist-pos", Format::Int64, 6)?;
+        mpv.observe_property("speed", Format::Double, 7)?;
+        mpv.observe_property("volume", Format::Int64, 8)?;
         mpv.command(&[
             c"keybind".to_node(),
             c"q".to_node(),

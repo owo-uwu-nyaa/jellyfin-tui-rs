@@ -14,10 +14,11 @@ use jellyfin_tui_core::{
     state::{Navigation, NextScreen, State},
 };
 use keybinds::KeybindEvents;
-use player_core::PlayerHandle;
+use player_core::OwnedPlayerHandle;
 use player_jellyfin::player_jellyfin;
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
+use spawn::Spawner;
 use sqlx::SqliteConnection;
 use tokio_util::sync::CancellationToken;
 use tracing::{error_span, instrument};
@@ -122,28 +123,30 @@ async fn run_state(mut cx: Pin<&mut TuiContext>) {
 async fn run_app_inner(
     mut term: DefaultTerminal,
     mut events: KeybindEvents,
+    spawner: Spawner,
     config: Config,
     cache: Arc<tokio::sync::Mutex<SqliteConnection>>,
     image_picker: Picker,
 ) {
-    let stop_mpv = CancellationToken::new();
-    let stop_mpv_guard = stop_mpv.clone().drop_guard();
-
     if let Some((jellyfin, jellyfin_socket)) = login(&mut term, &mut events, &config, &cache).await
-        && let Some(mpv_handle) = PlayerHandle::new(
+        && let Some(mpv_handle) = OwnedPlayerHandle::new(
             jellyfin.clone(),
             &config.hwdec,
             config.mpv_profile,
             &config.mpv_log_level,
-            stop_mpv,
             true,
+            &spawner,
         )
         .display_error(&mut term, &mut events, &config.keybinds)
         .await
     {
-        spawn::spawn(
-            player_jellyfin(mpv_handle.clone(), jellyfin.clone()),
+        spawner.spawn(
+            player_jellyfin(mpv_handle.clone(), jellyfin.clone(), spawner.clone()),
             error_span!("player_jellyfin"),
+        );
+        spawner.spawn_res(
+            player_mpris::run_mpris_service(mpv_handle.clone(), jellyfin.clone()),
+            error_span!("player_mpris"),
         );
         let cx = pin!(TuiContext {
             jellyfin,
@@ -158,7 +161,6 @@ async fn run_app_inner(
         });
         run_state(cx).await
     }
-    drop(stop_mpv_guard);
 }
 
 #[instrument(skip_all, level = "debug")]
@@ -174,7 +176,7 @@ pub async fn run_app(
         Picker::from_query_stdio().context("getting information for image display")?;
     let events = KeybindEvents::new()?;
     spawn::run_with_spawner(
-        run_app_inner(term, events, config, cache.clone(), image_picker),
+        |spawner| run_app_inner(term, events, spawner, config, cache.clone(), image_picker),
         cancel,
         error_span!("jellyfin-tui"),
     )

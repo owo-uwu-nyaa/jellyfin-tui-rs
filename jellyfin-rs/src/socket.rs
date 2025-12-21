@@ -420,7 +420,7 @@ impl JellyfinClient<Auth> {
         let uri = http::uri::Builder::new()
             .scheme(if self.tls() { "wss" } else { "ws" })
             .authority(self.inner.connection.authority().clone())
-            .path_and_query(self.build_path(
+            .path_and_query(self.build_uri(
                 "/socket",
                 SocketQuery {
                     api_key: &self.inner.auth.access_token,

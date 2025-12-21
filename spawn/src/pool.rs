@@ -5,9 +5,11 @@ use tokio::{sync::mpsc::UnboundedReceiver, task::JoinSet};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 use tracing::{Instrument, Span};
 
+use crate::{Spawner, spawner::JoinSetCallback};
+
 pin_project! {
     pub struct Pool {
-        recv: UnboundedReceiver<Box<dyn FnOnce(&mut JoinSet<()>)>>,
+        recv: UnboundedReceiver<JoinSetCallback>,
         pool: JoinSet<()>,
         closed: bool,
         cancellation: CancellationToken,
@@ -29,7 +31,6 @@ impl Future for Pool {
                 match this.pool.poll_join_next(cx) {
                     Poll::Pending => break Poll::Pending,
                     Poll::Ready(None) => {
-                        crate::spawner::remove_current_sender();
                         break Poll::Ready(true);
                     }
                     Poll::Ready(Some(_)) => {}
@@ -60,7 +61,6 @@ impl Future for Pool {
                 job(this.pool)
             }
             if empty && this.pool.is_empty() {
-                crate::spawner::remove_current_sender();
                 Poll::Ready(false)
             } else {
                 Poll::Pending
@@ -69,15 +69,15 @@ impl Future for Pool {
     }
 }
 
-pub fn run_with_spawner(
-    f: impl Future<Output = ()> + Send + 'static,
+pub fn run_with_spawner<F: Future<Output = ()> + Send + 'static>(
+    f: impl FnOnce(Spawner) -> F,
     cancel: CancellationToken,
     span: Span,
 ) -> Pool {
     let (send, recv) = tokio::sync::mpsc::unbounded_channel();
-    crate::spawner::set_sender(send);
     let mut pool = JoinSet::new();
-    pool.spawn(f.instrument(span));
+    let spawn = Spawner { sender: send };
+    pool.spawn(f(spawn).instrument(span));
     let fut = cancel.clone().cancelled_owned();
     Pool {
         recv,

@@ -1,7 +1,13 @@
 use bytes::Bytes;
+use color_eyre::eyre::Context;
+use http::Uri;
 use serde::Serialize;
 
-use crate::{AuthStatus, JellyfinClient, Result, items::ImageType, request::RequestBuilderExt};
+use crate::{
+    items::{ImageType, MediaItem},
+    request::RequestBuilderExt,
+    AuthStatus, JellyfinClient, Result,
+};
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +37,13 @@ fn image_req(
         .empty_body()
 }
 
+pub fn select_images(item: &MediaItem) -> impl Iterator<Item = (ImageType, &str)> {
+    item.image_tags
+        .iter()
+        .flat_map(|map| map.iter())
+        .map(|(image_type, tag)| (*image_type, tag.as_str()))
+}
+
 impl<Auth: AuthStatus> JellyfinClient<Auth> {
     pub async fn get_image(
         &self,
@@ -43,5 +56,26 @@ impl<Auth: AuthStatus> JellyfinClient<Auth> {
             .await?
             .0
             .into())
+    }
+    pub fn get_image_uri(
+        &self,
+        item_id: &str,
+        image_type: ImageType,
+        query: &GetImageQuery<'_>,
+    ) -> Result<Uri> {
+        Uri::builder()
+            .scheme(if self.tls() { "https" } else { "http" })
+            .authority(self.authority().to_owned())
+            .path_and_query(self.build_uri(
+                |prefix: &mut String| {
+                    prefix.push_str("/Items/");
+                    prefix.push_str(item_id);
+                    prefix.push_str("/Images/");
+                    prefix.push_str(image_type.name());
+                },
+                query,
+            )?)
+            .build()
+            .context("assembling image uri")
     }
 }

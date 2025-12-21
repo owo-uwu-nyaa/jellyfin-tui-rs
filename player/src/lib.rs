@@ -11,21 +11,21 @@ use jellyfin_tui_core::{
     state::{Navigation, NextScreen},
 };
 use keybinds::{KeybindEvent, KeybindEventStream};
-use player_core::{Command, PlayerHandle, PlayerState};
+use player_core::{
+    Command, PlayerHandle,
+    state::{EventReceiver, SharedPlayerState},
+};
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Padding, Paragraph, Widget},
 };
 use ratatui_fallible_widget::{FallibleWidget, TermExt};
-use tokio::{select, sync::watch};
-use tracing::{info, instrument};
+use tokio::{select, sync::broadcast::error::RecvError};
+use tracing::{info, instrument, warn};
 
 struct MinimizeGuard {
     handle: PlayerHandle,
 }
-
-//TODO: overwrite q keybinding
-//TODO: fix out of bounds index access
 
 impl Drop for MinimizeGuard {
     fn drop(&mut self) {
@@ -45,6 +45,12 @@ pub async fn play(
         ))));
     }
     let cx = cx.project();
+    let mut state = cx
+        .mpv_handle
+        .get_state()
+        .await
+        .map_err(|_| eyre!("player is already closed"))?
+        .with_shared_state();
     cx.mpv_handle.send(Command::Minimized(false));
     cx.mpv_handle.send(Command::Fullscreen(true));
     cx.mpv_handle.send(Command::ReplacePlaylist {
@@ -56,20 +62,21 @@ pub async fn play(
         handle: cx.mpv_handle.clone(),
     };
     let mut widget = PlayerWidget {
-        state: cx.mpv_handle.state().clone(),
+        state: state.clone(),
     };
     let mut events =
         KeybindEventStream::new(cx.events, &mut widget, cx.config.keybinds.play_mpv.clone());
-    let mut idle = cx.mpv_handle.state().borrow().idle;
+    let mut idle = state.lock().stopped;
     loop {
         cx.term.clear()?;
         cx.term.draw_fallible(&mut events)?;
+
         select! {
-            res = cx.mpv_handle.state_mut().changed()=> {
-                if res.is_err(){
+            cont = watch_state(&mut state) => {
+                if ! cont{
                     info!("mpv sender is closed, exiting");
                     break;
-                }else if idle != cx.mpv_handle.state().borrow().idle {
+                }else if idle != state.lock().stopped {
                     if !idle {
                         info!("mpv is idle, exiting");
                         break;
@@ -97,7 +104,45 @@ pub async fn play(
 }
 
 struct PlayerWidget {
-    state: watch::Receiver<PlayerState>,
+    state: SharedPlayerState,
+}
+async fn watch_state(events: &mut EventReceiver<SharedPlayerState>) -> bool {
+    loop {
+        match events
+            .receive_inspect(async |events, _| match events {
+                player_core::Events::ReplacePlaylist {
+                    current: _,
+                    current_index: _,
+                    new_playlist: _,
+                } => true,
+                player_core::Events::AddPlaylistItem {
+                    after: _,
+                    index: _,
+                    new_playlist: _,
+                } => false,
+                player_core::Events::RemovePlaylistItem {
+                    removed: _,
+                    new_playlist: _,
+                } => false,
+                player_core::Events::Current(_) => true,
+                player_core::Events::Paused(_) => true,
+                player_core::Events::Stopped(_) => true,
+                player_core::Events::Position(_) => false,
+                player_core::Events::Seek(_) => false,
+                player_core::Events::Speed(_) => false,
+                player_core::Events::Fullscreen(_) => false,
+                player_core::Events::Volume(_) => false,
+            })
+            .await
+        {
+            Ok(true) => break true,
+            Ok(false) => (),
+            Err(RecvError::Closed) => break false,
+            Err(RecvError::Lagged(n)) => {
+                warn!("player ui missed {n} events, display might be unreliable")
+            }
+        }
+    }
 }
 
 impl FallibleWidget for PlayerWidget {
@@ -106,12 +151,12 @@ impl FallibleWidget for PlayerWidget {
         area: ratatui::prelude::Rect,
         buf: &mut ratatui::prelude::Buffer,
     ) -> Result<()> {
-        let state = self.state.borrow();
         let block_area = area;
         let block = Block::bordered()
             .title("Now playing")
             .padding(Padding::uniform(1));
         let area = block.inner(block_area);
+        let state = self.state.lock();
         if let Some(index) = state.current {
             let media_item = &state.playlist[index].item;
             match &media_item.item_type {

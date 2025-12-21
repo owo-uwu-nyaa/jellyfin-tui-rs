@@ -63,6 +63,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => LoadPlay::Movie(v.clone()),
         MediaItem {
             id,
@@ -75,6 +76,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => LoadPlay::Playlist { id: id.clone() },
         MediaItem {
             id,
@@ -87,6 +89,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => LoadPlay::Series { id: id.clone() },
         MediaItem {
             id,
@@ -103,6 +106,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => LoadPlay::Season {
             series_id: series_id.clone(),
             id: id.clone(),
@@ -124,6 +128,7 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => LoadPlay::Episode {
             series_id: series_id.clone(),
             id: id.clone(),
@@ -151,6 +156,7 @@ fn open(item: &MediaItem) -> NextScreen {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => NextScreen::ItemDetails(v.clone()),
         v @ MediaItem {
             id: _,
@@ -170,6 +176,7 @@ fn open(item: &MediaItem) -> NextScreen {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => NextScreen::FetchItemListDetails(v.clone()),
     }
 }
@@ -193,6 +200,7 @@ fn episode(item: &MediaItem) -> NextScreen {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => NextScreen::ItemDetails(v.clone()),
         i @ MediaItem {
             id: _,
@@ -212,6 +220,7 @@ fn episode(item: &MediaItem) -> NextScreen {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => NextScreen::ItemDetails(i.clone()),
     }
 }
@@ -235,6 +244,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetailsRef(id.clone())),
         i @ MediaItem {
             id: _,
@@ -251,6 +261,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetails(i.clone())),
         i @ MediaItem {
             id: _,
@@ -263,6 +274,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetails(i.clone())),
         _ => None,
     }
@@ -291,6 +303,7 @@ fn series(item: &MediaItem) -> Option<NextScreen> {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetailsRef(series_id.clone())),
         i @ MediaItem {
             id: _,
@@ -303,6 +316,7 @@ fn series(item: &MediaItem) -> Option<NextScreen> {
             user_data: _,
             episode_index: _,
             season_index: _,
+            run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetails(i.clone())),
         _ => None,
     }
