@@ -18,6 +18,7 @@ struct ParseConfig {
     pub hwdec: String,
     pub mpv_profile: Option<String>,
     pub mpv_log_level: String,
+    pub mpv_config_file: Option<PathBuf>,
 }
 
 #[instrument]
@@ -92,6 +93,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
         mpv_log_level: config.mpv_log_level,
         mpv_profile,
         help_prefixes,
+        mpv_config_file: config.mpv_config_file,
     })
 }
 

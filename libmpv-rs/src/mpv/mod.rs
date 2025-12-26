@@ -44,6 +44,7 @@ use std::{
     mem::MaybeUninit,
     ops::Deref,
     os::raw as ctype,
+    path::Path,
     ptr::{self, NonNull, null_mut},
     result::Result as StdResult,
     str::FromStr,
@@ -368,8 +369,8 @@ impl<Event: EventContextType, Protocol: ProtocolContextType> Mpv<Event, Protocol
     }
 
     /// Load a configuration file. The path has to be absolute, and a file.
-    pub fn load_config(&self, path: &str) -> Result<()> {
-        let file = CString::new(path)?.into_raw();
+    pub fn load_config(&self, path: &Path) -> Result<()> {
+        let file = CString::new(path.as_os_str().as_encoded_bytes())?.into_raw();
         mpv_err((), unsafe {
             libmpv_sys::mpv_load_config_file(self.ctx.as_ptr(), file)
         })

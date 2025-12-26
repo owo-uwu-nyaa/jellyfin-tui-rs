@@ -1,5 +1,6 @@
 use std::{
     ffi::CString,
+    path::Path,
     sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
@@ -36,10 +37,15 @@ impl OwnedPlayerHandle {
         hwdec: &str,
         profile: MpvProfile,
         log_level: &str,
+        mpv_config_file: Option<&Path>,
         minimized: bool,
         spawn: &Spawner,
     ) -> Result<Self> {
         let mpv = MpvStream::new(&jellyfin, hwdec, profile, log_level, minimized)?;
+        if let Some(mpv_config_file) = mpv_config_file {
+            mpv.load_config(mpv_config_file)
+                .context("loading extra mpv config file")?
+        }
         let mut position_send_timer = interval(Duration::from_secs(1));
         position_send_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let playlist = Arc::new(Vec::new());

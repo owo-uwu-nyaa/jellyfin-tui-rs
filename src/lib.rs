@@ -147,6 +147,7 @@ async fn run_app_inner(
             &config.hwdec,
             config.mpv_profile,
             &config.mpv_log_level,
+            config.mpv_config_file.as_deref(),
             true,
             &spawner,
         )

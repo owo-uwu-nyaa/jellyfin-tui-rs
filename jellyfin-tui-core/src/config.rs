@@ -12,4 +12,5 @@ pub struct Config {
     pub mpv_log_level: String,
     pub mpv_profile: MpvProfile,
     pub help_prefixes: Vec<String>,
+    pub mpv_config_file: Option<PathBuf>,
 }

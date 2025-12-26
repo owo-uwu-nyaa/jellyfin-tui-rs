@@ -131,7 +131,7 @@ impl<T: Command, W: FallibleWidget> FallibleWidget for KeybindEventStream<'_, T,
             let len = self.help_prefixes.len();
             if len != 0 {
                 let mut area = area;
-                area.y += area.height-1;
+                area.y += area.height - 1;
                 area.x += 2;
                 area.width = area.width.saturating_sub(2);
                 area.height = 1;
