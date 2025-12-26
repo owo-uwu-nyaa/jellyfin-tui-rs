@@ -64,20 +64,7 @@ pub async fn cache() -> Result<Arc<Mutex<SqliteConnection>>> {
     let maintainance = info_span!("cache_maintainance");
     let db = Arc::new(Mutex::new(db));
     tokio::spawn(cache_maintainance(clean_images, db.clone()).instrument(maintainance.clone()));
-    tokio::spawn(cache_maintainance(clean_creds, db.clone()).instrument(maintainance));
     Ok(db)
-}
-
-#[instrument]
-pub async fn clean_creds(db: Arc<Mutex<SqliteConnection>>) -> Result<()> {
-    let res = query!("delete from creds where (added+30*24*60*60)<unixepoch()")
-        .execute(db.lock().await.deref_mut())
-        .await
-        .context("deleting old creds")?;
-    if res.rows_affected() > 0 {
-        info!("removed {} access tokens from cache", res.rows_affected());
-    }
-    Ok(())
 }
 
 #[instrument]

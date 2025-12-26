@@ -106,6 +106,7 @@ pub fn handle_item_list_details_data(
                         &cx.image_cache,
                         &images_available,
                         &cx.image_picker,
+                        &cx.stats
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,

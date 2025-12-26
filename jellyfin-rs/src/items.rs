@@ -17,7 +17,7 @@ pub struct UserIdQuery<'a> {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct RefreshItemQuery {
     pub recursive: bool,
     pub metadata_refresh_mode: RefreshMode,

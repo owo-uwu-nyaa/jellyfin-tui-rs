@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     fs::{OpenOptions, create_dir_all},
     io::Write,
-    ops::DerefMut,
     os::unix::fs::OpenOptionsExt,
     pin::pin,
 };
@@ -24,7 +23,6 @@ use ratatui::{
 };
 use ratatui_fallible_widget::{FallibleWidget, TermExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{SqliteConnection, query, query_scalar};
 use tracing::{error, info, instrument};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -211,7 +209,6 @@ pub async fn login(
     term: &mut DefaultTerminal,
     config: &Config,
     events: &mut KeybindEvents,
-    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Result<Option<JellyfinClient<Auth>>> {
     let mut login_info: LoginInfo;
     let mut error: Option<Report>;
@@ -279,7 +276,6 @@ pub async fn login(
         };
         let mut auth_request = pin!(jellyfin_login(
             client,
-            cache,
             &login_info.username,
             &login_info.password,
             login_info.password_cmd.as_deref()
@@ -363,52 +359,11 @@ async fn get_password_from_cmd(cmd: &[String]) -> Result<String> {
 }
 
 async fn jellyfin_login(
-    mut client: JellyfinClient<NoAuth>,
-    cache: &tokio::sync::Mutex<SqliteConnection>,
+    client: JellyfinClient<NoAuth>,
     username: &str,
     password: &str,
     password_cmd: Option<&[String]>,
 ) -> std::result::Result<JellyfinClient<Auth>, (JellyfinClient<NoAuth>, Report)> {
-    let device_name = client.get_device_name();
-    let client_name = client.get_client_info().name.as_ref();
-    let client_version = client.get_client_info().version.as_ref();
-    let mut cache = cache.lock().await;
-    match query_scalar!("select access_token from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
-                        device_name,
-                        client_name,
-                        client_version,
-                        username
-    ).fetch_optional(cache.deref_mut()).await{
-        Ok(None) => {}
-        Err(e) => return Err((client,e.into())),
-        Ok(Some(access_token)) => {
-            info!("testing cached credentials");
-            match client.auth_key(access_token, username).get_self().await{
-                Ok(client) => {
-                    info!("credentials valid");
-                    return Ok(client)
-                },
-                Err((c,e)) => {
-                    error!("Error getting self from server: {e:?}");
-                    client=c.without_auth();
-                    let device_name = client.get_device_name();
-                    let client_name = client.get_client_info().name.as_ref();
-                    let client_version = client.get_client_info().version.as_ref();
-                    match query!("delete from creds where device_name = ? and client_name = ? and client_version = ? and user_name = ?",
-                                 device_name,
-                                 client_name,
-                                 client_version,
-                                 username
-                    ).execute(cache.deref_mut()).await{
-                        Ok(_)=>{},
-                        Err(e) => {
-                            return Err((client,e.into()))
-                        }
-                    }
-                }
-            }
-        }
-    }
     info!("connecting to server");
     let password = if let Some(cmd) = password_cmd {
         match get_password_from_cmd(cmd).await {
@@ -422,19 +377,5 @@ async fn jellyfin_login(
         Ok(v) => v,
         Err((client, e)) => return Err((client, e)),
     };
-    let device_name = client.get_device_name();
-    let client_name = client.get_client_info().name.as_ref();
-    let client_version = client.get_client_info().version.as_ref();
-    let access_token = client.get_auth().access_token.as_str();
-    match query!("insert into creds (device_name, client_name, client_version, user_name, access_token) values (?, ?, ?, ?, ?)",
-                 device_name,
-                 client_name,
-                 client_version,
-                 username,
-                 access_token,
-    ).execute(cache.deref_mut()).await{
-        Ok(_)=> {},
-        Err(e)=> return Err((client.without_auth(), e.into())),
-    }
     Ok(client)
 }

@@ -89,6 +89,9 @@ pub async fn play(
                 match event {
                     Some(Ok(KeybindEvent::Command(MpvCommand::Quit)))
                      => {break;}
+                    Some(Ok(KeybindEvent::Command(MpvCommand::Pause))) => {
+                        cx.mpv_handle.send(Command::TogglePause);
+                    }
                     Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
                     Some(Ok(KeybindEvent::Render)) => {},
                     Some(Err(e)) => return Err(e).context("getting key events from terminal"),

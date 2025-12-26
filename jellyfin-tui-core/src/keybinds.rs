@@ -11,6 +11,7 @@ pub struct Keybinds {
     pub error: BindingMap<ErrorCommand>,
     pub item_details: BindingMap<ItemDetailsCommand>,
     pub item_list_details: BindingMap<ItemListDetailsCommand>,
+    pub refresh_item: BindingMap<RefreshItemCommand>,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -21,6 +22,15 @@ pub enum LoadingCommand {
 #[derive(Debug, Clone, Copy, Command)]
 pub enum MpvCommand {
     Quit,
+    Pause,
+}
+
+#[derive(Debug, Clone, Copy, Command)]
+pub enum RefreshItemCommand {
+    Quit,
+    Up,
+    Down,
+    Select,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -36,6 +46,7 @@ pub enum UserViewCommand {
     OpenEpisode,
     OpenSeason,
     OpenSeries,
+    RefreshItem,
 }
 
 #[derive(Debug, Clone, Copy, Command)]

@@ -4,6 +4,7 @@ use jellyfin::items::{ItemType, MediaItem};
 use crate::state::{LoadPlay, NextScreen};
 
 pub trait EntryExt {
+    fn item_id(&self) -> Option<&str>;
     fn play(&self) -> Option<NextScreen>;
     fn open(&self) -> NextScreen;
     fn play_open(&self) -> NextScreen;
@@ -13,6 +14,12 @@ pub trait EntryExt {
 }
 
 impl EntryExt for Entry {
+    fn item_id(&self) -> Option<&str> {
+        match self.inner() {
+            EntryInner::Item(media_item) => Some(media_item.id.as_str()),
+            EntryInner::View(_) => None,
+        }
+    }
     fn play(&self) -> Option<NextScreen> {
         match self.inner() {
             EntryInner::View(_) => None,

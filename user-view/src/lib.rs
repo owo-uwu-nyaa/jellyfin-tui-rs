@@ -87,6 +87,7 @@ pub async fn display_user_view(
                     &cx.image_cache,
                     &images_available,
                     &cx.image_picker,
+                    &cx.stats,
                 )
             })
             .collect::<Result<Vec<_>>>()?,
@@ -129,6 +130,16 @@ pub async fn display_user_view(
             }
             UserViewCommand::Down => {
                 events.get_inner().down();
+            }
+            UserViewCommand::RefreshItem => {
+                if let Some(entry) = events.get_inner().get()
+                    && let Some(id) = entry.item_id()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadUserView(view),
+                        next: NextScreen::RefreshItem(id.to_string()),
+                    });
+                }
             }
             UserViewCommand::Play => {
                 if let Some(entry) = events.get_inner().get()

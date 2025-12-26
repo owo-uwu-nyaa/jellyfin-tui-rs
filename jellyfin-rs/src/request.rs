@@ -1,9 +1,9 @@
-use crate::{AuthStatus, JellyfinClient, Result, request::sealed::QuerySealed};
+use crate::{request::sealed::QuerySealed, AuthStatus, JellyfinClient, Result};
 use http::{
-    Method,
-    header::{CONTENT_TYPE, HOST},
+    Method, header::{CONTENT_LENGTH, CONTENT_TYPE, HOST}
 };
 use serde::Serialize;
+use tracing::debug;
 
 impl<Auth: AuthStatus> JellyfinClient<Auth> {
     pub fn build_uri(&self, uri: impl PathBuilder, query: impl Query) -> Result<String> {
@@ -17,8 +17,10 @@ impl<Auth: AuthStatus> JellyfinClient<Auth> {
         uri: impl PathBuilder,
         query: impl Query,
     ) -> Result<http::request::Builder> {
+        let uri = self.build_uri(uri, query)?;
+        debug!("sending request to {uri}");
         let builder = http::request::Builder::new()
-            .uri(self.build_uri(uri, query)?)
+            .uri(uri)
             .header(HOST, self.inner.host_header.clone());
         Ok(self.inner.auth.add_auth_header(builder))
     }
@@ -45,13 +47,15 @@ pub trait RequestBuilderExt {
 
 impl RequestBuilderExt for http::request::Builder {
     fn json_body(self, val: &impl Serialize) -> Result<http::Request<String>> {
-        Ok(self
+        let body = serde_json::to_string(val)?;
+        let len = body.len().to_string();
+        Ok(self.header(CONTENT_LENGTH, len)
             .header(CONTENT_TYPE, "application/json")
-            .body(serde_json::to_string(val)?)?)
+            .body(body)?)
     }
 
     fn empty_body(self) -> Result<http::Request<String>> {
-        Ok(self.body(String::new())?)
+        Ok(self.header(CONTENT_LENGTH, "0").body(String::new())?)
     }
 }
 

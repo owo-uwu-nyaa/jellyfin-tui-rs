@@ -138,6 +138,7 @@ fn parse_key_code(mut name: &str) -> Option<Key> {
 
     let key = match name {
         "backspace" => KeyCode::Backspace,
+        "space" => KeyCode::Char(' '),
         "enter" => KeyCode::Enter,
         "left" => KeyCode::Left,
         "right" => KeyCode::Right,

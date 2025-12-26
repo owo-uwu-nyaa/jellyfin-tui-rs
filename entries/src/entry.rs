@@ -15,6 +15,7 @@ use ratatui::{
 use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::{FontSize, picker::Picker};
 use sqlx::SqliteConnection;
+use stats_data::Stats;
 use tracing::instrument;
 
 use crate::image::{JellyfinImage, available::ImagesAvailable, cache::ImageProtocolCache};
@@ -118,6 +119,7 @@ impl Entry {
         cache: &ImageProtocolCache,
         availabe: &ImagesAvailable,
         picker: &Arc<Picker>,
+        stats: &Stats,
     ) -> Result<Self> {
         let (title, subtitle) = match &item.item_type {
             ItemType::Movie => (item.name.clone(), None),
@@ -145,6 +147,7 @@ impl Entry {
                     availabe.clone(),
                     cache.clone(),
                     picker.clone(),
+                    stats.clone(),
                 )
             })
             .next();
@@ -175,6 +178,7 @@ impl Entry {
         cache: &ImageProtocolCache,
         availabe: &ImagesAvailable,
         picker: &Arc<Picker>,
+        stats: &Stats,
     ) -> Result<Self> {
         let title = item.name.clone();
         let image = item
@@ -192,6 +196,7 @@ impl Entry {
                     availabe.clone(),
                     cache.clone(),
                     picker.clone(),
+                    stats.clone(),
                 )
             });
         Ok(Self::new(image, title, None, EntryInner::View(item), None))

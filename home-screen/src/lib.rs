@@ -39,6 +39,7 @@ fn create_from_media_item_vec(
                         &context.image_cache,
                         images_available,
                         &context.image_picker,
+                        &context.stats,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -68,6 +69,7 @@ fn create_from_user_views_vec(
                         &context.image_cache,
                         images_available,
                         &context.image_picker,
+                        &context.stats,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,

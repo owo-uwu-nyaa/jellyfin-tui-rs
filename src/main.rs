@@ -108,7 +108,9 @@ fn main() -> Result<()> {
             let handler_cancel = cancel.clone();
             std::panic::set_hook(Box::new(move |panic| {
                 handler_cancel.cancel();
-                error!("{}", panic_hook.panic_report(panic))
+                let report = panic_hook.panic_report(panic);
+                error!("{}", report);
+                eprintln!("{}", report)
             }));
             ThreadPoolBuilder::new()
                 .thread_name(|n| format!("tui-worker-{n}"))
@@ -124,7 +126,7 @@ fn main() -> Result<()> {
                 .context("enabling bracket paste")
                 .expect("failed to enable bracket paste");
 
-            let res = run_app(term, cancel, args.config_file);
+            let res = run_app(term, cancel, args.config, args.use_builtin_config);
             execute!(stdout(), DisableBracketedPaste).expect("resetting bracket paste failed");
             ratatui::restore();
             res
@@ -138,7 +140,10 @@ struct Args {
     #[command(subcommand)]
     action: Option<Action>,
     /// alternative config file
-    config_file: Option<PathBuf>,
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+    #[arg(short='b', long)]
+    use_builtin_config: bool,
 }
 
 #[derive(Debug, Subcommand)]

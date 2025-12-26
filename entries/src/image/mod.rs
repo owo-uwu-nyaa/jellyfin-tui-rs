@@ -15,6 +15,7 @@ use ratatui::widgets::Widget;
 use ratatui_fallible_widget::FallibleWidget;
 use ratatui_image::{Image, Resize, picker::Picker, protocol::Protocol};
 use sqlx::SqliteConnection;
+use stats_data::Stats;
 use tracing::{debug, instrument, trace};
 
 use crate::image::{
@@ -48,6 +49,7 @@ pub struct JellyfinImage {
     available: ImagesAvailable,
     ready_image: Arc<ReadyImage>,
     cache: ImageProtocolCache,
+    stats: Stats,
     picker: Arc<Picker>,
     loading: bool,
 }
@@ -89,6 +91,7 @@ impl JellyfinImage {
         available: ImagesAvailable,
         cache: ImageProtocolCache,
         picker: Arc<Picker>,
+        stats: Stats,
     ) -> Self {
         Self {
             item_id,
@@ -106,6 +109,7 @@ impl JellyfinImage {
             cache,
             picker,
             loading: false,
+            stats
         }
     }
 
@@ -172,6 +176,7 @@ impl JellyfinImage {
                     ImageSize { p_width, p_height },
                 ));
                 if let Some((image, size)) = cached {
+                    self.stats.memory_image_cache_hits.fetch_add(1, Ordering::Relaxed);
                     let (image, _, _) = self.image.insert((
                         image,
                         ImageProtocolKey {
@@ -196,6 +201,7 @@ impl JellyfinImage {
                         self.db.clone(),
                         self.jellyfin.clone(),
                         size,
+                        self.stats.clone(),
                     ));
                     self.loading = true;
                     Ok(None)

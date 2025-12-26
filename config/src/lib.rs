@@ -21,7 +21,7 @@ struct ParseConfig {
 }
 
 #[instrument]
-pub fn init_config(config_file: Option<PathBuf>) -> Result<Config> {
+pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Config> {
     let (config_dir, config_file) = if let Some(config_file) = config_file {
         (
             config_file
@@ -37,9 +37,13 @@ pub fn init_config(config_file: Option<PathBuf>) -> Result<Config> {
         config_file.push("config.toml");
         (config_dir, config_file)
     };
-    info!("loading config from {}", config_file.display());
+    if !use_builtin {
+        info!("loading config from {}.", config_file.display());
+    }else{
+        info!("loading built in config.")
+    }
 
-    let config: ParseConfig = if config_file.exists() {
+    let config: ParseConfig = if !use_builtin && config_file.exists() {
         toml::from_str(&std::fs::read_to_string(config_file).context("reading config file")?)
     } else {
         toml::from_str(include_str!("../config.toml"))
@@ -96,7 +100,7 @@ mod tests {
     use color_eyre::Result;
     #[test]
     fn check_default_config() -> Result<()> {
-        init_config(None)?;
+        init_config(None, true)?;
         Ok(())
     }
 }

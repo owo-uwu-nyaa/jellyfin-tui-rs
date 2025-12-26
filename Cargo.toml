@@ -49,12 +49,13 @@ either = {workspace=true}
 pin-project-lite = {workspace=true}
 toml = {workspace = true}
 dirs = {workspace = true}
+refresh-item = { version = "0.1.0", path = "refresh-item" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.170"
 
 [workspace]
-members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view"]
+members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox"]
 
 [workspace.dependencies]
 log = "0.4.26"

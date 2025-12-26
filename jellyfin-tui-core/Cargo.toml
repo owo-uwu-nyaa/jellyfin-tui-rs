@@ -19,4 +19,5 @@ either = {workspace=true}
 parking_lot = {workspace=true}
 tracing = {workspace=true}
 tokio = {workspace=true}
+stats-data = { version = "0.1.0", path = "../stats-data" }
 

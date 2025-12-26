@@ -106,6 +106,7 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
         &cx.image_cache,
         &images_available,
         &cx.image_picker,
+        &cx.stats
     )?;
     let mut widget = ItemDisplay {
         entry: &mut entry,

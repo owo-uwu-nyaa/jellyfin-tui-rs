@@ -72,6 +72,10 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
         NextScreen::FetchItemDetails(id) => {
             item_view::item_details::display_fetch_item(cx, &id).await
         }
+        NextScreen::RefreshItem(item) => refresh_item::show_refresh_item(cx, item).await,
+        NextScreen::SendRefreshItem(item, refresh_item_query) => {
+            refresh_item::refresh_screen(cx, item, refresh_item_query).await
+        }
     }
 }
 
@@ -79,10 +83,9 @@ async fn login_jellyfin(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
     config: &Config,
-    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Result<Option<(JellyfinClient, JellyfinWebSocket)>> {
     Ok(
-        if let Some(client) = login::login(term, config, events, cache).await? {
+        if let Some(client) = login::login(term, config, events).await? {
             let socket = client.get_socket()?;
             Some((client, socket))
         } else {
@@ -96,10 +99,9 @@ async fn login(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
     config: &Config,
-    cache: &tokio::sync::Mutex<SqliteConnection>,
 ) -> Option<(JellyfinClient, JellyfinWebSocket)> {
     loop {
-        match login_jellyfin(term, events, config, cache).await {
+        match login_jellyfin(term, events, config).await {
             Ok(v) => break v,
             Err(e) => match error::display_error(term, events, &config.keybinds, e).await {
                 Err(_) | Ok(Navigation::Exit) => break None,
@@ -128,7 +130,7 @@ async fn run_app_inner(
     cache: Arc<tokio::sync::Mutex<SqliteConnection>>,
     image_picker: Picker,
 ) {
-    if let Some((jellyfin, jellyfin_socket)) = login(&mut term, &mut events, &config, &cache).await
+    if let Some((jellyfin, jellyfin_socket)) = login(&mut term, &mut events, &config).await
         && let Some(mpv_handle) = OwnedPlayerHandle::new(
             jellyfin.clone(),
             &config.hwdec,
@@ -157,7 +159,8 @@ async fn run_app_inner(
             image_picker: Arc::new(image_picker),
             cache,
             image_cache: ImageProtocolCache::new(),
-            mpv_handle
+            mpv_handle,
+            stats: Default::default()
         });
         run_state(cx).await
     }
@@ -169,9 +172,10 @@ pub async fn run_app(
     term: DefaultTerminal,
     cancel: CancellationToken,
     config_file: Option<PathBuf>,
+use_builtin_config: bool,
 ) -> Result<()> {
     let cache = config::cache().await?;
-    let config = init_config(config_file)?;
+    let config = init_config(config_file, use_builtin_config)?;
     let image_picker =
         Picker::from_query_stdio().context("getting information for image display")?;
     let events = KeybindEvents::new()?;

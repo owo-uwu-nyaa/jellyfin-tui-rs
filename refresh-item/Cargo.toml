@@ -1,0 +1,15 @@
+[package]
+name = "refresh-item"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+checkbox = { version = "0.1.0", path = "../checkbox" }
+color-eyre.workspace = true
+fetch = { version = "0.1.0", path = "../fetch" }
+futures-util.workspace = true
+jellyfin = { version = "0.1.4", path = "../jellyfin-rs" }
+jellyfin-tui-core = { version = "0.1.0", path = "../jellyfin-tui-core" }
+keybinds = { version = "0.1.0", path = "../keybinds" }
+ratatui.workspace = true
+ratatui_fallible_widget = { version = "0.1.0", path = "../ratatui_fallible_widget" }

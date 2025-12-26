@@ -7,6 +7,8 @@ q = "quit"
 
 [play_mpv]
 q = "quit"
+space = "pause"
+enter = "pause"
 
 [user_view]
 template = ["ud", "q", "o"]
@@ -16,6 +18,7 @@ back-tab = "prev"
 right = "next"
 tab = "next"
 enter = "play"
+R = "refresh-item"
 
 [home_screen]
 template = ["m", "o"]
@@ -45,6 +48,15 @@ template = ["ud", "q"]
 p = "play"
 enter = "play"
 r = "reload"
+
+[refresh_item]
+up = "up"
+down = "down"
+tab = "down"
+enter = "select"
+space = "select"
+q = "quit"
+esc = "quit"
 
 [template.q]
 q = "quit"

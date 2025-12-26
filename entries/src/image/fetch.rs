@@ -1,6 +1,6 @@
 use std::{
     io::Cursor,
-    sync::{Arc, atomic::Ordering::SeqCst},
+    sync::{Arc, atomic::Ordering::{Relaxed, SeqCst}},
 };
 
 use crate::image::{ReadyImage, available::ImagesAvailable, cache::ImageProtocolKey};
@@ -10,6 +10,7 @@ use image::{DynamicImage, ImageReader};
 use jellyfin::{JellyfinClient, image::GetImageQuery};
 use ratatui::layout::Rect;
 use sqlx::SqliteConnection;
+use stats_data::Stats;
 use std::ops::DerefMut;
 use tracing::{debug, instrument};
 
@@ -21,6 +22,7 @@ pub async fn get_image(
     db: Arc<tokio::sync::Mutex<SqliteConnection>>,
     jellyfin: JellyfinClient,
     size: Rect,
+    stats: Stats,
 ) {
     match {
         let image_type = key.image_type.name();
@@ -46,6 +48,7 @@ pub async fn get_image(
     .transpose()
     {
         Some(Ok(val)) => {
+            stats.db_image_cache_hits.fetch_add(1, Relaxed);
             rayon::spawn(move || parse_image(ready_image, available, &val, size));
         }
         Some(Err(e)) => {
@@ -53,12 +56,15 @@ pub async fn get_image(
             ready_image.available.store(true, SeqCst);
             available.inner.wake();
         }
-        None => match fetch_image(key, jellyfin, db).await {
-            Ok(image) => rayon::spawn(move || parse_image(ready_image, available, &image, size)),
-            Err(e) => {
-                *ready_image.image.lock() = Some(Err(e));
-                ready_image.available.store(true, SeqCst);
-                available.inner.wake();
+        None => {
+            stats.image_fetches.fetch_add(1, Relaxed);
+            match fetch_image(key, jellyfin, db).await {
+                Ok(image) => rayon::spawn(move || parse_image(ready_image, available, &image, size)),
+                Err(e) => {
+                    *ready_image.image.lock() = Some(Err(e));
+                    ready_image.available.store(true, SeqCst);
+                    available.inner.wake();
+                }
             }
         },
     }
