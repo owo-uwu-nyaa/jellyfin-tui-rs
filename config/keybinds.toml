@@ -1,3 +1,15 @@
+
+# General Info:
+# This file maps key inputs to commands.
+# You can even define key combinations.
+# Instead of traditional keybinds where you have to press
+# multiple keys simultaneously you combine them by pressing
+# them sequentially (well there are limited modifiers so you
+# might have to press a maximum of 2 keys simultaneously).
+# An example of this can be seen in the template.o table.
+# There are also templates (just add a template key like in
+# user_view), they are defined under [template.<name>]
+
 #injected into every map as key that shows the maps keybinds
 #including Esc is useful as prefix for commands while text input mode is active
 help_prefixes = ["?", "esc"]
@@ -79,4 +91,6 @@ template = ["q", "ud", "lr"]
 [template.o]
 o = "open"
 p = "play"
+# sub maps have a name that is displayed in the keybind help / context view
+# all other key value combinations are normal keybinds (and can even be another sub map or an template)
 O = {name = "open-", e = "open-episode", S = "open-season", s = "open-series"}

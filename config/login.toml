@@ -1,0 +1,8 @@
+server_url = "https://jelly.example.com"
+username = "shonk"
+
+# Optional cmd for potentially more secure password storage.
+# If you use this just write some garbag in password or leave it empty.
+#password_cmd = ["cmd" "that" "echos" "password"]
+
+password = "fdnfjka fgökjaergfjnaefknwaf kwae fawj fwanfejknfkew nFK NAKEFN KAW NFKEAN FKAWN FKÖAEWNFKAWENFJKAENFEJKNWEKFNWEOIFJNWEFNJKFNKdkgnekjrgnkjenrgkenfenfkkenfonwqeoifnokwnfoiwqnfoiwqfoiüqwfnekneflknwelkf"
