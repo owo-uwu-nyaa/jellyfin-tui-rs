@@ -63,6 +63,7 @@ pub enum HomeScreenCommand {
     OpenEpisode,
     OpenSeason,
     OpenSeries,
+    RefreshItem,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -91,6 +92,7 @@ pub enum ItemDetailsCommand {
     Down,
     Play,
     Reload,
+    RefreshItem,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -106,4 +108,6 @@ pub enum ItemListDetailsCommand {
     OpenEpisode,
     OpenSeason,
     OpenSeries,
+    RefreshCurrentItem,
+    RefreshParentItem,
 }

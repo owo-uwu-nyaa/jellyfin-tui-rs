@@ -106,7 +106,7 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
         &cx.image_cache,
         &images_available,
         &cx.image_picker,
-        &cx.stats
+        &cx.stats,
     )?;
     let mut widget = ItemDisplay {
         entry: &mut entry,
@@ -157,6 +157,13 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
                 break Ok(Navigation::Push {
                     current: NextScreen::ItemDetails(item),
                     next,
+                });
+            }
+            ItemDetailsCommand::RefreshItem => {
+                let id = item.id.clone();
+                break Ok(Navigation::Push {
+                    current: NextScreen::ItemDetails(item),
+                    next: NextScreen::RefreshItem(id),
                 });
             }
         }

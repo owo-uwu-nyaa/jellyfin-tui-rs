@@ -24,11 +24,14 @@ R = "refresh-item"
 template = ["m", "o"]
 r = "reload"
 enter = "play-open"
+R = "refresh-item"
 
 [item_list_details]
 template = ["m", "o"]
 enter = "play"
 r = "reload"
+R = "refresh-parent-item"
+"C-R" = "refresh-current-item"
 
 [login_info]
 backspace = "delete"
@@ -48,6 +51,7 @@ template = ["ud", "q"]
 p = "play"
 enter = "play"
 r = "reload"
+R = "refresh-item"
 
 [refresh_item]
 up = "up"

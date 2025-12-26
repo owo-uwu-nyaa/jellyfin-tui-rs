@@ -106,7 +106,7 @@ pub fn handle_item_list_details_data(
                         &cx.image_cache,
                         &images_available,
                         &cx.image_picker,
-                        &cx.stats
+                        &cx.stats,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -275,6 +275,24 @@ pub async fn display_item_list_details(
                         next,
                     });
                 }
+            }
+            ItemListDetailsCommand::RefreshCurrentItem => {
+                if let Some(entry) = events.get_inner().entries.get()
+                    && let Some(id) = entry.item_id()
+                {
+                    let id = id.to_string();
+                    break Ok(Navigation::Push {
+                        current: NextScreen::ItemListDetails(item, entries, images_available),
+                        next: NextScreen::RefreshItem(id),
+                    });
+                }
+            }
+            ItemListDetailsCommand::RefreshParentItem => {
+                let id = item.id.clone();
+                break Ok(Navigation::Push {
+                    current: NextScreen::ItemListDetails(item, entries, images_available),
+                    next: NextScreen::RefreshItem(id),
+                });
             }
         }
     }

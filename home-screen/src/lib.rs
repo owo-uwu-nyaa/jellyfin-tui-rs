@@ -230,6 +230,16 @@ pub async fn display_home_screen(
                     });
                 }
             }
+            HomeScreenCommand::RefreshItem => {
+                if let Some(entry) = events.get_inner().get()
+                    && let Some(id) = entry.item_id()
+                {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::LoadHomeScreen,
+                        next: NextScreen::RefreshItem(id.to_string()),
+                    });
+                }
+            }
         }
     }
 }
