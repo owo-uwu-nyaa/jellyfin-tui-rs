@@ -73,6 +73,7 @@ pub trait ResultDisplayExt<T> {
         term: &mut DefaultTerminal,
         events: &mut KeybindEvents,
         keybinds: &Keybinds,
+        help_prefixes: &[String],
     ) -> impl Future<Output = Option<T>>;
 }
 
@@ -82,10 +83,14 @@ impl<T> ResultDisplayExt<T> for Result<T> {
         term: &mut DefaultTerminal,
         events: &mut KeybindEvents,
         keybinds: &Keybinds,
+        help_prefixes: &[String],
     ) -> Option<T> {
         match self {
             Err(e) => {
-                if let Some(e) = display_error(term, events, keybinds, e).await.err() {
+                if let Some(e) = display_error(term, events, keybinds, help_prefixes, e)
+                    .await
+                    .err()
+                {
                     tracing::error!("Error displaying error: {e:?}");
                 }
                 None
@@ -99,6 +104,7 @@ pub async fn display_error(
     term: &mut DefaultTerminal,
     events: &mut KeybindEvents,
     keybinds: &Keybinds,
+    help_prefixes: &[String],
     e: Report,
 ) -> Result<Navigation> {
     tracing::error!("Error encountered: {e:?}");
@@ -109,7 +115,8 @@ pub async fn display_error(
         scroll_x: 0,
         scroll_y: 0,
     };
-    let mut events = KeybindEventStream::new(events, &mut widget, keybinds.error.clone());
+    let mut events =
+        KeybindEventStream::new(events, &mut widget, keybinds.error.clone(), help_prefixes);
     loop {
         term.draw_fallible(&mut events)?;
         match events.next().await {

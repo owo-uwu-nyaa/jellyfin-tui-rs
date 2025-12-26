@@ -131,6 +131,7 @@ async fn get_login_info(
     error: Report,
     events: &mut KeybindEvents,
     keybinds: &Keybinds,
+    help_prefixes: &[String],
 ) -> Result<bool> {
     let selection = if info.server_url.is_empty() {
         LoginSelection::Server
@@ -143,7 +144,12 @@ async fn get_login_info(
         selection,
         error,
     };
-    let mut events = KeybindEventStream::new(events, &mut widget, keybinds.login_info.clone());
+    let mut events = KeybindEventStream::new(
+        events,
+        &mut widget,
+        keybinds.login_info.clone(),
+        help_prefixes,
+    );
     loop {
         term.draw_fallible(&mut events)?;
         let selection = events.get_inner().selection;
@@ -248,6 +254,7 @@ pub async fn login(
                 e,
                 events,
                 &config.keybinds,
+                &config.help_prefixes,
             )
             .await
             .context("getting login information")?
@@ -281,8 +288,12 @@ pub async fn login(
             login_info.password_cmd.as_deref()
         ));
 
-        let mut events =
-            KeybindEventStream::new(events, &mut connect_msg, config.keybinds.fetch.clone());
+        let mut events = KeybindEventStream::new(
+            events,
+            &mut connect_msg,
+            config.keybinds.fetch.clone(),
+            &config.help_prefixes,
+        );
         loop {
             term.draw_fallible(&mut events)?;
             tokio::select! {

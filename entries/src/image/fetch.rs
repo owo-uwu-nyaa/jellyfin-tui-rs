@@ -1,6 +1,9 @@
 use std::{
     io::Cursor,
-    sync::{Arc, atomic::Ordering::{Relaxed, SeqCst}},
+    sync::{
+        Arc,
+        atomic::Ordering::{Relaxed, SeqCst},
+    },
 };
 
 use crate::image::{ReadyImage, available::ImagesAvailable, cache::ImageProtocolKey};
@@ -59,14 +62,16 @@ pub async fn get_image(
         None => {
             stats.image_fetches.fetch_add(1, Relaxed);
             match fetch_image(key, jellyfin, db).await {
-                Ok(image) => rayon::spawn(move || parse_image(ready_image, available, &image, size)),
+                Ok(image) => {
+                    rayon::spawn(move || parse_image(ready_image, available, &image, size))
+                }
                 Err(e) => {
                     *ready_image.image.lock() = Some(Err(e));
                     ready_image.available.store(true, SeqCst);
                     available.inner.wake();
                 }
             }
-        },
+        }
     }
 }
 

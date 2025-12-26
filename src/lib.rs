@@ -46,7 +46,14 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
         NextScreen::Play { items, index } => player::play(cx, items, index).await,
         NextScreen::Error(report) => {
             let cx = cx.project();
-            error::display_error(cx.term, cx.events, &cx.config.keybinds, report).await
+            error::display_error(
+                cx.term,
+                cx.events,
+                &cx.config.keybinds,
+                &cx.config.help_prefixes,
+                report,
+            )
+            .await
         }
         NextScreen::ItemDetails(media_item) => {
             item_view::item_details::display_item(cx, media_item).await
@@ -103,10 +110,14 @@ async fn login(
     loop {
         match login_jellyfin(term, events, config).await {
             Ok(v) => break v,
-            Err(e) => match error::display_error(term, events, &config.keybinds, e).await {
-                Err(_) | Ok(Navigation::Exit) => break None,
-                _ => {}
-            },
+            Err(e) => {
+                match error::display_error(term, events, &config.keybinds, &config.help_prefixes, e)
+                    .await
+                {
+                    Err(_) | Ok(Navigation::Exit) => break None,
+                    _ => {}
+                }
+            }
         }
     }
 }
@@ -139,7 +150,12 @@ async fn run_app_inner(
             true,
             &spawner,
         )
-        .display_error(&mut term, &mut events, &config.keybinds)
+        .display_error(
+            &mut term,
+            &mut events,
+            &config.keybinds,
+            &config.help_prefixes,
+        )
         .await
     {
         spawner.spawn(
@@ -172,7 +188,7 @@ pub async fn run_app(
     term: DefaultTerminal,
     cancel: CancellationToken,
     config_file: Option<PathBuf>,
-use_builtin_config: bool,
+    use_builtin_config: bool,
 ) -> Result<()> {
     let cache = config::cache().await?;
     let config = init_config(config_file, use_builtin_config)?;

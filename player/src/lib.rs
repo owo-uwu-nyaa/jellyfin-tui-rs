@@ -64,8 +64,12 @@ pub async fn play(
     let mut widget = PlayerWidget {
         state: state.clone(),
     };
-    let mut events =
-        KeybindEventStream::new(cx.events, &mut widget, cx.config.keybinds.play_mpv.clone());
+    let mut events = KeybindEventStream::new(
+        cx.events,
+        &mut widget,
+        cx.config.keybinds.play_mpv.clone(),
+        &cx.config.help_prefixes,
+    );
     let mut idle = state.lock().stopped;
     loop {
         cx.term.clear()?;

@@ -141,6 +141,7 @@ pub async fn fetch_screen(cx: Pin<&mut TuiContext>, item: LoadPlay) -> Result<Na
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }

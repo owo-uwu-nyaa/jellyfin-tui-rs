@@ -4,9 +4,9 @@ use http::Uri;
 use serde::Serialize;
 
 use crate::{
+    AuthStatus, JellyfinClient, Result,
     items::{ImageType, MediaItem},
     request::RequestBuilderExt,
-    AuthStatus, JellyfinClient, Result,
 };
 
 #[derive(Debug, Default, Clone, Serialize)]

@@ -12,7 +12,7 @@ use super::{BindingMap, Command, Key, KeyBinding};
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum ParseKeybinding {
+pub enum ParseKeybinding {
     Command(String),
     Group {
         name: String,
@@ -22,20 +22,20 @@ enum ParseKeybinding {
 }
 
 #[derive(Debug, Deserialize)]
-struct ParseKeybindingsMap {
+pub struct ParseKeybindingsMap {
     #[serde(default)]
-    template: Vec<String>,
+    pub template: Vec<String>,
     #[serde(flatten)]
-    map: HashMap<String, ParseKeybinding>,
+    pub map: HashMap<String, ParseKeybinding>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    help_prefixes: Vec<String>,
-    template: Option<HashMap<String, ParseKeybindingsMap>>,
+    pub help_prefixes: Vec<String>,
+    pub template: Option<HashMap<String, ParseKeybindingsMap>>,
     #[serde(flatten)]
-    maps: HashMap<String, ParseKeybindingsMap>,
+    pub maps: HashMap<String, ParseKeybindingsMap>,
 }
 
 impl Config {

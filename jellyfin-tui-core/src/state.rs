@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use color_eyre::{Result, eyre::Report};
 use entries::{image::available::ImagesAvailable, list::EntryList, screen::EntryScreen};
-use jellyfin::{items::{MediaItem, RefreshItemQuery}, user_views::UserView};
+use jellyfin::{
+    items::{MediaItem, RefreshItemQuery},
+    user_views::UserView,
+};
 use tracing::{debug, instrument};
 
 #[allow(clippy::large_enum_variant)]

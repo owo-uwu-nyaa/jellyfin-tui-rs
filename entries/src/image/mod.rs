@@ -109,7 +109,7 @@ impl JellyfinImage {
             cache,
             picker,
             loading: false,
-            stats
+            stats,
         }
     }
 
@@ -176,7 +176,9 @@ impl JellyfinImage {
                     ImageSize { p_width, p_height },
                 ));
                 if let Some((image, size)) = cached {
-                    self.stats.memory_image_cache_hits.fetch_add(1, Ordering::Relaxed);
+                    self.stats
+                        .memory_image_cache_hits
+                        .fetch_add(1, Ordering::Relaxed);
                     let (image, _, _) = self.image.insert((
                         image,
                         ImageProtocolKey {

@@ -142,7 +142,7 @@ struct Args {
     /// alternative config file
     #[arg(short, long)]
     config: Option<PathBuf>,
-    #[arg(short='b', long)]
+    #[arg(short = 'b', long)]
     use_builtin_config: bool,
 }
 

@@ -135,6 +135,7 @@ pub async fn display_home_screen(
         context.events,
         &mut screen,
         context.config.keybinds.home_screen.clone(),
+        &context.config.help_prefixes,
     );
     loop {
         context.term.draw_fallible(&mut events)?;

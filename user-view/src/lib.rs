@@ -66,6 +66,7 @@ pub async fn fetch_user_view(cx: Pin<&mut TuiContext>, view: UserView) -> Result
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }
@@ -95,8 +96,12 @@ pub async fn display_user_view(
         cx.image_picker.clone(),
     );
     let cx = cx.project();
-    let mut events =
-        KeybindEventStream::new(cx.events, &mut grid, cx.config.keybinds.user_view.clone());
+    let mut events = KeybindEventStream::new(
+        cx.events,
+        &mut grid,
+        cx.config.keybinds.user_view.clone(),
+        &cx.config.help_prefixes,
+    );
     loop {
         cx.term.draw_fallible(&mut events)?;
         let cmd = tokio::select! {

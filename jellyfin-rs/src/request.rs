@@ -1,6 +1,7 @@
-use crate::{request::sealed::QuerySealed, AuthStatus, JellyfinClient, Result};
+use crate::{AuthStatus, JellyfinClient, Result, request::sealed::QuerySealed};
 use http::{
-    Method, header::{CONTENT_LENGTH, CONTENT_TYPE, HOST}
+    Method,
+    header::{CONTENT_LENGTH, CONTENT_TYPE, HOST},
 };
 use serde::Serialize;
 use tracing::debug;
@@ -49,7 +50,8 @@ impl RequestBuilderExt for http::request::Builder {
     fn json_body(self, val: &impl Serialize) -> Result<http::Request<String>> {
         let body = serde_json::to_string(val)?;
         let len = body.len().to_string();
-        Ok(self.header(CONTENT_LENGTH, len)
+        Ok(self
+            .header(CONTENT_LENGTH, len)
             .header(CONTENT_TYPE, "application/json")
             .body(body)?)
     }

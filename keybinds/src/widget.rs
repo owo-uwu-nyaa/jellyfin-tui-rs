@@ -127,6 +127,27 @@ impl<T: Command, W: FallibleWidget> FallibleWidget for KeybindEventStream<'_, T,
                     buf,
                 );
             }
+        } else {
+            let len = self.help_prefixes.len();
+            if len != 0 {
+                let mut area = area;
+                area.y += area.height-1;
+                area.x += 2;
+                area.width = area.width.saturating_sub(2);
+                area.height = 1;
+                let mut message = "For help press ".to_string();
+                for (i, bind) in self.help_prefixes.iter().enumerate() {
+                    if i == 0 {
+                    } else if i == len - 1 {
+                        message.push_str(" or ");
+                    } else {
+                        message.push_str(", ");
+                    }
+                    message.push_str(bind);
+                }
+                message.push('.');
+                message.render(area, buf);
+            }
         }
         Ok(())
     }

@@ -113,6 +113,7 @@ impl KeybindEvents {
 pub struct KeybindEventStream<'e, T: Command, W: FallibleWidget> {
     keybind_events: &'e mut KeybindEvents,
     inner_widget: &'e mut W,
+    help_prefixes: &'e [String],
     top: BindingMap<T>,
     next_maps: Vec<BindingMap<T>>,
     text_input: bool,
@@ -122,7 +123,12 @@ pub struct KeybindEventStream<'e, T: Command, W: FallibleWidget> {
 }
 
 impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
-    pub fn new(events: &'e mut KeybindEvents, inner_widget: &'e mut W, map: BindingMap<T>) -> Self {
+    pub fn new(
+        events: &'e mut KeybindEvents,
+        inner_widget: &'e mut W,
+        map: BindingMap<T>,
+        help_prefixes: &'e [String],
+    ) -> Self {
         let span = info_span!("KeybindEventStream");
         span.in_scope(|| debug!(?map, "new keybind stream with map"));
         Self {
@@ -134,6 +140,7 @@ impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
             current_view: 0,
             minor: Vec::with_capacity(0),
             span,
+            help_prefixes,
         }
     }
 
@@ -142,6 +149,7 @@ impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
         inner_widget: &'e mut W,
         map: BindingMap<T>,
         minor: Vec<BindingMap<T>>,
+        help_prefixes: &'e [String],
     ) -> Self {
         let span = info_span!("KeybindEventStream");
         span.in_scope(|| debug!(?map, ?minor, "new keybind stream with map"));
@@ -154,6 +162,7 @@ impl<'e, T: Command, W: FallibleWidget> KeybindEventStream<'e, T, W> {
             current_view: 0,
             minor,
             span,
+            help_prefixes,
         }
     }
 

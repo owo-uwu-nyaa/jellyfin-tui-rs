@@ -151,6 +151,7 @@ pub async fn load_home_screen(cx: Pin<&mut TuiContext>) -> Result<Navigation> {
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }

@@ -97,6 +97,7 @@ pub async fn show_refresh_item(cx: Pin<&mut TuiContext>, item: String) -> Result
         cx.events,
         &mut widget,
         cx.config.keybinds.refresh_item.clone(),
+        &cx.config.help_prefixes,
     );
     loop {
         cx.term.draw_fallible(&mut events)?;
@@ -298,6 +299,7 @@ pub async fn refresh_screen(
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }

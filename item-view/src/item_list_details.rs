@@ -40,6 +40,7 @@ pub async fn display_fetch_item_list(
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }
@@ -64,6 +65,7 @@ pub async fn display_fetch_item_list_ref(
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }
@@ -82,6 +84,7 @@ pub async fn display_fetch_season(cx: Pin<&mut TuiContext>, series: &str) -> Res
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }
@@ -191,6 +194,7 @@ pub async fn display_item_list_details(
         cx.events,
         &mut details,
         cx.config.keybinds.item_list_details.clone(),
+        &cx.config.help_prefixes,
     );
     loop {
         cx.term.draw_fallible(&mut events)?;

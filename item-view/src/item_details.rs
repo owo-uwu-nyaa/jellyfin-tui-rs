@@ -36,6 +36,7 @@ pub async fn display_fetch_item(cx: Pin<&mut TuiContext>, parent: &str) -> Resul
         cx.events,
         cx.config.keybinds.fetch.clone(),
         cx.term,
+        &cx.config.help_prefixes,
     )
     .await
 }
@@ -122,6 +123,7 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
         cx.events,
         &mut widget,
         cx.config.keybinds.item_details.clone(),
+        &cx.config.help_prefixes,
     );
     loop {
         cx.term.draw_fallible(&mut events)?;

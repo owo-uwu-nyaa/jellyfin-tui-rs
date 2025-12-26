@@ -1,7 +1,4 @@
-use std::{
-    pin::Pin,
-    sync::Arc,
-};
+use std::{pin::Pin, sync::Arc};
 
 use crate::config::Config;
 use ::keybinds::KeybindEvents;
@@ -11,9 +8,8 @@ use player_core::{OwnedPlayerHandle, PlayerHandle};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use sqlx::SqliteConnection;
-use tokio::sync::Mutex;
 use stats_data::Stats;
-
+use tokio::sync::Mutex;
 
 pub struct TuiContext {
     pub jellyfin: JellyfinClient<Auth>,
@@ -56,7 +52,7 @@ impl TuiContext {
                 cache,
                 image_cache,
                 mpv_handle,
-                stats
+                stats,
             } = self.get_unchecked_mut();
             TuiContextProj {
                 jellyfin,

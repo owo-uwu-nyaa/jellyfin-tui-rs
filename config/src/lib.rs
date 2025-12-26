@@ -39,7 +39,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
     };
     if !use_builtin {
         info!("loading config from {}.", config_file.display());
-    }else{
+    } else {
         info!("loading built in config.")
     }
 
@@ -50,7 +50,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
     }
     .context("parsing config")?;
 
-    let keybinds = if let Some(keybinds_file) = config.keybinds_file {
+    let (keybinds, help_prefixes) = if let Some(keybinds_file) = config.keybinds_file {
         let keybinds = if keybinds_file.is_absolute() {
             keybinds_file
         } else {
@@ -91,6 +91,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
         keybinds,
         mpv_log_level: config.mpv_log_level,
         mpv_profile,
+        help_prefixes,
     })
 }
 

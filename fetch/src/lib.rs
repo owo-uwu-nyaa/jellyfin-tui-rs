@@ -24,10 +24,11 @@ pub async fn fetch_screen(
     events: &mut KeybindEvents,
     keybinds: BindingMap<LoadingCommand>,
     term: &mut DefaultTerminal,
+    help_prefixes: &[String],
 ) -> Result<Navigation> {
     let mut msg = Paragraph::new(title).centered().block(Block::bordered());
     let mut fetch = pin!(fetch);
-    let mut events = KeybindEventStream::new(events, &mut msg, keybinds);
+    let mut events = KeybindEventStream::new(events, &mut msg, keybinds, help_prefixes);
     loop {
         term.draw_fallible(&mut events)?;
         tokio::select! {
