@@ -163,6 +163,7 @@ async fn run_app_inner(
             player_jellyfin(mpv_handle.clone(), jellyfin.clone(), spawner.clone()),
             error_span!("player_jellyfin"),
         );
+        #[cfg(feature = "mpris")]
         spawner.spawn_res(
             player_mpris::run_mpris_service(mpv_handle.clone(), jellyfin.clone()),
             error_span!("player_mpris"),

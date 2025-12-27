@@ -17,7 +17,7 @@ spawn = {path = "spawn"}
 ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
 player-core = {path="player-core"}
 player-jellyfin = {path="player-jellyfin"}
-player-mpris.path = "player-mpris"
+player-mpris = {path = "player-mpris", optional = true }
 
 login = { path = "login"}
 home-screen = {path = "home-screen"}
@@ -104,6 +104,7 @@ zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
 [features]
 attach = []
 default = []
+mpris = ["dep:player-mpris"]
 
 
 [profile.dev.package."*"]
