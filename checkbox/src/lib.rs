@@ -1,9 +1,4 @@
-use ratatui::{
-    layout::{Constraint, Layout},
-    prelude::{Buffer, Rect},
-    style::Modifier,
-    widgets::{Widget, WidgetRef},
-};
+use ratatui_core::{buffer::Buffer, layout::Rect, style::Modifier, widgets::Widget};
 use tracing::{instrument, warn};
 
 #[derive(Debug, Default)]
@@ -30,11 +25,12 @@ impl Checkbox {
         if area.width < (Self::WIDTH + 2) || area.height < Self::HEIGHT {
             warn!("Not enough space to render Checkbox and other widget")
         } else {
-            let [check, inner] =
-                Layout::horizontal([Constraint::Length(Self::WIDTH), Constraint::Percentage(100)])
-                    .horizontal_margin(1)
-                    .areas(area);
-            self.render_ref(check, buf);
+            let mut check = area;
+            check.width = 3;
+            let mut inner = area;
+            inner.width -= 3;
+            inner.x += 3;
+            self.render(check, buf);
             other.render(inner, buf);
         }
     }
@@ -43,10 +39,10 @@ impl Checkbox {
     pub const HEIGHT: u16 = 1;
 }
 
-impl WidgetRef for Checkbox {
+impl Widget for &Checkbox {
     #[instrument(skip_all, name = "render_checkbox")]
-    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
-        if area.width < Self::WIDTH || area.height < Self::HEIGHT {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width < Checkbox::WIDTH || area.height < Checkbox::HEIGHT {
             warn!("Not enough space to render Checkbox")
         } else {
             buf[area].set_char('[');

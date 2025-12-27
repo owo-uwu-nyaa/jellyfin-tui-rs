@@ -12,7 +12,7 @@ use jellyfin_tui_core::{
 use keybinds::{KeybindEvent, KeybindEventStream};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Flex, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::Modifier,
     widgets::{Block, BorderType, Clear, Padding, Widget, WidgetRef},
 };
@@ -187,8 +187,8 @@ pub async fn show_refresh_item(cx: Pin<&mut TuiContext>, item: String) -> Result
     }
 }
 
-impl WidgetRef for RefreshItem {
-    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
+impl Widget for &RefreshItem {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let block = Block::bordered()
             .title("Refresh Metadata")
             .padding(Padding::uniform(1));
@@ -213,15 +213,16 @@ impl WidgetRef for RefreshItem {
                 } else {
                     BorderType::Plain
                 });
-        let action_inner = action_block.inner(action_area);
-        self.action.to_str().render_ref(action_inner, buf);
+        let mut action_inner = action_block.inner(action_area);
         let arrow_char = if let Active::ActionSelection(_) = self.active {
             '⮙'
         } else {
             '⮛'
         };
         buf[(action_inner.x + action_inner.width - 1, action_inner.y)].set_char(arrow_char);
-        action_block.render_ref(action_area, buf);
+        action_inner.width -= 2;
+        self.action.to_str().render_ref(action_inner, buf);
+        action_block.render(action_area, buf);
         if self.action != Action::NewUpdated {
             Checkbox::new(self.active == Active::ReplaceImages, self.replace_images).render_with(
                 replace_images_area,
@@ -244,10 +245,11 @@ impl WidgetRef for RefreshItem {
             BorderType::Plain
         });
         let refresh_text = "Refresh Now!";
-        let [refresh_area] =
-            Layout::horizontal([Constraint::Length((refresh_text.len() as u16) + 2)])
-                .flex(Flex::Center)
-                .areas(refresh_area);
+        let refresh_area = refresh_area.centered(
+            Constraint::Length((refresh_text.len() as u16) + 2),
+            Constraint::Length(3),
+        );
+
         refresh_text.render(refresh_block.inner(refresh_area), buf);
         refresh_block.render(refresh_area, buf);
         block.render(area, buf);

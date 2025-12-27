@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 color-eyre = {workspace=true}
-ratatui = {workspace=true}
+ratatui-core = {workspace=true}
