@@ -7,7 +7,9 @@
   rust-build,
   runCommand,
   remarshal,
+  stdenv,
   attach ? false,
+  mpris ? stdenv.isLinux,
 }:
 let
   fileset = lib.fileset.unions [
@@ -66,7 +68,7 @@ let
         inherit src;
         pname = "jellyfin-tui-rs";
         version = "0.1.0";
-        features = lib.optional attach "attach";
+        features = (lib.optional attach "attach") ++ (lib.optional mpris "mpris");
       }
     ).overrideAttrs
       (
@@ -74,7 +76,7 @@ let
           passthru = (prev.passthru or { }) // {
             inherit checkKeybinds;
           };
-          meta = (prev.meta or {}) // {
+          meta = (prev.meta or { }) // {
             mainProgramm = "jellyfin-tui-rs";
           };
         }

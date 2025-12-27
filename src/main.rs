@@ -73,7 +73,11 @@ fn log_file() -> Result<()> {
 
 fn main() -> Result<()> {
     unsafe { std::env::set_var("LC_NUMERIC", "C") };
-    let args = Args::try_parse()?;
+    let args = Args::parse();
+    if args.features{
+        println!("enabled features: {}", env!("JELLYFIN_TUI_FEATURES"));
+        return Ok(());
+    }
     match args.action {
         Some(Action::Print { what }) => {
             color_eyre::install().expect("installing color eyre format handler");
@@ -144,6 +148,8 @@ struct Args {
     config: Option<PathBuf>,
     #[arg(short = 'b', long)]
     use_builtin_config: bool,
+    #[arg(short, long)]
+    features: bool,
 }
 
 #[derive(Debug, Subcommand)]
