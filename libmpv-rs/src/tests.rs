@@ -19,10 +19,11 @@
 use events::EventContextExt;
 
 use crate::events::{Event, PropertyData};
-use crate::node::{MpvNode, MpvNodeValue};
+use crate::node::{MpvNode, MpvNodeRef, MpvNodeValue};
 use crate::*;
 
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::fs::File;
 use std::thread;
 use std::time::Duration;
@@ -180,24 +181,24 @@ fn node_map() -> Result<()> {
 
     thread::sleep(Duration::from_millis(250));
     let audio_params: MpvNode = mpv.get_property("audio-params")?;
-    let params: HashMap<&str, MpvNode> =
-        audio_params.to_map().ok_or_else(|| Error::Null)?.collect();
+    let params: HashMap<&CStr, MpvNodeRef<'_>> =
+        audio_params.as_ref().to_map().ok_or_else(|| Error::Null)?.into_iter().collect();
 
     assert_eq!(params.len(), 5);
 
-    let format = params.get("format").unwrap().value()?;
+    let format = params.get(c"format").unwrap().value()?;
     assert!(matches!(format, MpvNodeValue::String("s16")));
 
-    let samplerate = params.get("samplerate").unwrap().value()?;
+    let samplerate = params.get(c"samplerate").unwrap().value()?;
     assert!(matches!(samplerate, MpvNodeValue::Int64(48_000)));
 
-    let channels = params.get("channels").unwrap().value()?;
+    let channels = params.get(c"channels").unwrap().value()?;
     assert!(matches!(channels, MpvNodeValue::String("mono")));
 
-    let hr_channels = params.get("hr-channels").unwrap().value()?;
+    let hr_channels = params.get(c"hr-channels").unwrap().value()?;
     assert!(matches!(hr_channels, MpvNodeValue::String("mono")));
 
-    let channel_count = params.get("channel-count").unwrap().value()?;
+    let channel_count = params.get(c"channel-count").unwrap().value()?;
     assert!(matches!(channel_count, MpvNodeValue::Int64(1)));
 
     Ok(())
@@ -211,12 +212,12 @@ fn node_array() -> Result<()> {
 
     thread::sleep(Duration::from_millis(250));
     let playlist: MpvNode = mpv.get_property("playlist")?;
-    let items: Vec<MpvNode> = playlist.to_array().ok_or_else(|| Error::Null)?.collect();
+    let items: Vec<MpvNodeRef<'_>> = playlist.as_ref().to_array().ok_or_else(|| Error::Null)?.into_iter().collect();
 
     assert_eq!(items.len(), 1);
-    let track: HashMap<&str, MpvNode> = items[0].to_map().ok_or_else(|| Error::Null)?.collect();
+    let track: HashMap<&CStr, MpvNodeRef<'_>> = items[0].to_map().ok_or_else(|| Error::Null)?.into_iter().collect();
 
-    let filename = track.get("filename").unwrap().value()?;
+    let filename = track.get(c"filename").unwrap().value()?;
 
     assert!(matches!(
         filename,
