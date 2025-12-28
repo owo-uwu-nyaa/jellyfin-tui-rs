@@ -40,7 +40,7 @@ pub use self::errors::*;
 use super::*;
 
 use std::{
-    ffi::{CStr, CString},
+    ffi::{CStr, CString, c_char},
     mem::MaybeUninit,
     ops::Deref,
     os::raw as ctype,
@@ -51,7 +51,7 @@ use std::{
     sync::Arc,
 };
 
-unsafe fn mpv_cstr_to_str(ptr: *const i8) -> Result<&'static str> {
+unsafe fn mpv_cstr_to_str(ptr: *const c_char) -> Result<&'static str> {
     unsafe { CStr::from_ptr(ptr) }.to_str().map_err(Error::from)
 }
 
