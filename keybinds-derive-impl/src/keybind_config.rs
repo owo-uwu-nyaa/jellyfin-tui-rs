@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote_spanned;
-use syn::{Error, Field, ItemStruct, LitStr, Result, parse2, spanned::Spanned};
+use syn::{Error, Field, Ident, ItemStruct, LitStr, Result, parse2, spanned::Spanned};
 
 pub fn keybind_config(args: TokenStream, input: TokenStream) -> Result<TokenStream> {
     let input: ItemStruct = parse2(input)?;
@@ -19,12 +19,33 @@ pub fn keybind_config(args: TokenStream, input: TokenStream) -> Result<TokenStre
                 quote_spanned! {field.span()=> ::std::compile_error!("from config requires a non tuple struct")}
             }
         });
+        let default_ident = Ident::new("default", input.span());
+        let fields_try = input.fields.iter().map(|field|{
+            if let Some(ref ident)=field.ident{
+                let context = "in map ".to_string()+&ident.to_string();
+                let context = LitStr::new(&context, ident.span());
+                quote_spanned! {field.span()=>
+                                #ident: (match ::keybinds::__eyre::WrapErr::context(config.try_parse(::std::stringify!(#ident), strict), #context)?{
+                                    ::std::option::Option::Some(v) => v,
+                                    ::std::option::Option::None => {
+                                        ::tracing::warn!("missing map '{}', substituting default map", ::std::stringify!(#ident));
+                                        #default_ident.#ident
+                                    }
+                                })
+                }
+            }else{
+                quote_spanned! {field.span()=> ::std::compile_error!("from config requires a non tuple struct")}
+            }
+        });
         let uniqueness = input.fields.iter().map(assert_uniqueness);
         Ok(quote_spanned! {input.span()=>
                            #input
                            impl #id {
                                pub fn from_config(config: &::keybinds::parse_config::Config, strict: bool) -> ::keybinds::__eyre::Result<Self> {
                                    ::std::result::Result::Ok(Self{ #(#fields),* })
+                               }
+                               pub fn from_config_with_default(config: &::keybinds::parse_config::Config, strict: bool, #default_ident: Self) -> ::keybinds::__eyre::Result<Self>{
+                                   ::std::result::Result::Ok(Self{ #(#fields_try),* })
                                }
                                #[allow(dead_code)]
                                pub fn assert_uniqueness(){

@@ -39,13 +39,16 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn parse<T: Command>(&self, name: &str, strict: bool) -> Result<BindingMap<T>> {
+    pub fn try_parse<T: Command>(&self, name: &str, strict: bool) -> Result<Option<BindingMap<T>>> {
         let empty_template = HashMap::new();
         let template = self.template.as_ref().unwrap_or(&empty_template);
-        let map = self
+        let map =if let Some(map) = self
             .maps
-            .get(name)
-            .ok_or_else(|| eyre!("missing map '{name}'"))?;
+            .get(name){
+                map
+            }else{
+              return Ok(None);  
+            };
         let mapping = parse_mapping(strict, template, map, &Seen::Empty)?;
         let mut map: BTreeMap<Key, KeyBinding<_>> = mapping.deref().clone();
         for prefix in &self.help_prefixes {
@@ -59,8 +62,12 @@ impl Config {
                 },
             );
         }
-        Ok(Arc::new(map))
+        Ok(Some(Arc::new(map)))
     }
+    pub fn parse<T: Command>(&self, name: &str, strict: bool) -> Result<BindingMap<T>> {
+        self.try_parse(name, strict).transpose().ok_or_else(|| eyre!("missing map '{name}'"))?
+    }
+    
 }
 
 fn parse_mapping<T: Command>(

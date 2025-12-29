@@ -51,6 +51,8 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
     }
     .context("parsing config")?;
 
+    let default_keybinds = keybinds::from_str(include_str!("../keybinds.toml"), false)
+        .context("parsing default keybinds")?;
     let (keybinds, help_prefixes) = if let Some(keybinds_file) = config.keybinds_file {
         let keybinds = if keybinds_file.is_absolute() {
             keybinds_file
@@ -59,11 +61,10 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
             file.push(keybinds_file);
             file
         };
-        keybinds::from_file(keybinds, false)
+        keybinds::from_file(keybinds, false, default_keybinds.0).context("parsing keybindings")?
     } else {
-        keybinds::from_str(include_str!("../keybinds.toml"), false)
-    }
-    .context("parsing keybindings")?;
+        default_keybinds
+    };
 
     let mpv_profile = config
         .mpv_profile
