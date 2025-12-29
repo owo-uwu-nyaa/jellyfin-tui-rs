@@ -80,7 +80,7 @@ pub async fn display_user_view(
     let mut grid = EntryGrid::new(
         items
             .into_iter()
-            .map(|item| {
+            .filter_map(|item| {
                 Entry::from_media_item(
                     item,
                     &cx.jellyfin,
@@ -90,6 +90,7 @@ pub async fn display_user_view(
                     &cx.image_picker,
                     &cx.stats,
                 )
+                .transpose()
             })
             .collect::<Result<Vec<_>>>()?,
         view.name.clone(),

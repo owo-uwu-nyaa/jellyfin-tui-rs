@@ -52,4 +52,7 @@ pub enum CollectionType {
     Playlists,
     Movies,
     TvShows,
+    Music,
+    #[serde(other)]
+    Unknown,
 }

@@ -74,7 +74,7 @@ fn log_file() -> Result<()> {
 fn main() -> Result<()> {
     unsafe { std::env::set_var("LC_NUMERIC", "C") };
     let args = Args::parse();
-    if args.features{
+    if args.features {
         println!("enabled features: {}", env!("JELLYFIN_TUI_FEATURES"));
         return Ok(());
     }

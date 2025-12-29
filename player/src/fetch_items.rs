@@ -2,7 +2,9 @@ use std::pin::Pin;
 
 use color_eyre::{Result, eyre::Context};
 use jellyfin::{
-    Auth, JellyfinClient, JellyfinVec, items::MediaItem, playlist::GetPlaylistItemsQuery,
+    Auth, JellyfinClient, JellyfinVec,
+    items::{GetItemsQuery, MediaItem},
+    playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
 };
 use jellyfin_tui_core::{
@@ -87,6 +89,12 @@ async fn fetch_items(cx: &JellyfinClient<Auth>, item: LoadPlay) -> Result<(Vec<M
             (items, 0)
         }
         LoadPlay::Movie(item) => (vec![item], 0),
+        LoadPlay::Music { id, album_id } => {
+            let items = fetch_childs(cx, &album_id).await?;
+            let pos = item_position(&id, &items).unwrap_or(0);
+            (items, pos)
+        }
+        LoadPlay::MusicAlbum { id } => (fetch_childs(cx, &id).await?, 0),
     })
 }
 
@@ -98,6 +106,32 @@ fn item_position(id: &str, items: &[MediaItem]) -> Option<usize> {
     }
     warn!("no such item found");
     None
+}
+
+async fn fetch_childs(cx: &JellyfinClient<Auth>, parent_id: &str) -> Result<Vec<MediaItem>> {
+    let user_id = cx.get_auth().user.id.as_str();
+    let res = JellyfinVec::collect(async |start| {
+        cx.get_items(&GetItemsQuery {
+            user_id: user_id.into(),
+            start_index: start.into(),
+            limit: 100.into(),
+            parent_id: parent_id.into(),
+            enable_images: Some(true),
+            image_type_limit: 1.into(),
+            enable_image_types: "Primary, Backdrop, Thumb".into(),
+            enable_user_data: true.into(),
+            sort_by: "ParentIndexNumber,IndexNumber,SortName".into(),
+            recursive: true.into(),
+            ..Default::default()
+        })
+        .await
+        .context("fetching media items")?
+        .deserialize()
+        .await
+        .context("deserializing media items")
+    })
+    .await?;
+    Ok(res)
 }
 
 async fn fetch_series(cx: &JellyfinClient<Auth>, series_id: &str) -> Result<Vec<MediaItem>> {

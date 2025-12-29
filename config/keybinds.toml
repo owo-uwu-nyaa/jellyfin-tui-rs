@@ -74,6 +74,9 @@ space = "select"
 q = "quit"
 esc = "quit"
 
+[unsupported_item]
+q = "quit"
+
 [template.q]
 q = "quit"
 

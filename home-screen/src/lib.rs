@@ -31,7 +31,7 @@ fn create_from_media_item_vec(
         EntryList::new(
             items
                 .into_iter()
-                .map(|item| {
+                .filter_map(|item| {
                     Entry::from_media_item(
                         item,
                         &context.jellyfin,
@@ -41,6 +41,7 @@ fn create_from_media_item_vec(
                         &context.image_picker,
                         &context.stats,
                     )
+                    .transpose()
                 })
                 .collect::<Result<Vec<_>>>()?,
             title.to_string(),

@@ -23,7 +23,7 @@ impl EntryExt for Entry {
     fn play(&self) -> Option<NextScreen> {
         match self.inner() {
             EntryInner::View(_) => None,
-            EntryInner::Item(item) => Some(NextScreen::LoadPlayItem(play(item))),
+            EntryInner::Item(item) => Some(play(item)),
         }
     }
     fn open(&self) -> NextScreen {
@@ -35,7 +35,7 @@ impl EntryExt for Entry {
     fn play_open(&self) -> NextScreen {
         match self.inner() {
             EntryInner::View(view) => NextScreen::LoadUserView(view.clone()),
-            EntryInner::Item(item) => NextScreen::LoadPlayItem(play(item)),
+            EntryInner::Item(item) => play(item),
         }
     }
     fn episode(&self) -> Option<NextScreen> {
@@ -57,8 +57,8 @@ impl EntryExt for Entry {
         }
     }
 }
-pub fn play(item: &MediaItem) -> LoadPlay {
-    match item {
+pub fn play(item: &MediaItem) -> NextScreen {
+    NextScreen::LoadPlayItem(match item {
         v @ MediaItem {
             id: _,
             image_tags: _,
@@ -140,7 +140,49 @@ pub fn play(item: &MediaItem) -> LoadPlay {
             series_id: series_id.clone(),
             id: id.clone(),
         },
-    }
+        MediaItem {
+            id,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Music { album_id, album: _ },
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => LoadPlay::Music {
+            id: id.clone(),
+            album_id: album_id.clone(),
+        },
+        MediaItem {
+            id,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::MusicAlbum,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => LoadPlay::MusicAlbum { id: id.clone() },
+        MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Unknown,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => return NextScreen::UnsupportedItem,
+    })
 }
 
 fn open(item: &MediaItem) -> NextScreen {
@@ -154,6 +196,10 @@ fn open(item: &MediaItem) -> NextScreen {
             overview: _,
             item_type:
                 ItemType::Movie
+                | ItemType::Music {
+                    album_id: _,
+                    album: _,
+                }
                 | ItemType::Episode {
                     season_id: _,
                     season_name: _,
@@ -176,6 +222,7 @@ fn open(item: &MediaItem) -> NextScreen {
                 ItemType::Playlist
                 | ItemType::Folder
                 | ItemType::Series
+                | ItemType::MusicAlbum
                 | ItemType::Season {
                     series_id: _,
                     series_name: _,
@@ -185,6 +232,19 @@ fn open(item: &MediaItem) -> NextScreen {
             season_index: _,
             run_time_ticks: _,
         } => NextScreen::FetchItemListDetails(v.clone()),
+        MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Unknown,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => NextScreen::UnsupportedItem,
     }
 }
 fn episode(item: &MediaItem) -> NextScreen {
@@ -198,6 +258,10 @@ fn episode(item: &MediaItem) -> NextScreen {
             overview: _,
             item_type:
                 ItemType::Movie
+                | ItemType::Music {
+                    album_id: _,
+                    album: _,
+                }
                 | ItemType::Episode {
                     season_id: _,
                     season_name: _,
@@ -219,6 +283,7 @@ fn episode(item: &MediaItem) -> NextScreen {
             item_type:
                 ItemType::Playlist
                 | ItemType::Folder
+                | ItemType::MusicAlbum
                 | ItemType::Series
                 | ItemType::Season {
                     series_id: _,
@@ -229,6 +294,19 @@ fn episode(item: &MediaItem) -> NextScreen {
             season_index: _,
             run_time_ticks: _,
         } => NextScreen::ItemDetails(i.clone()),
+        MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Unknown,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => NextScreen::UnsupportedItem,
     }
 }
 
@@ -283,6 +361,45 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             season_index: _,
             run_time_ticks: _,
         } => Some(NextScreen::FetchItemListDetails(i.clone())),
+        MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Music { album_id, album: _ },
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => Some(NextScreen::FetchItemListDetailsRef(album_id.clone())),
+        i @ MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::MusicAlbum,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => Some(NextScreen::FetchItemListDetails(i.clone())),
+        MediaItem {
+            id: _,
+            image_tags: _,
+            media_type: _,
+            name: _,
+            sort_name: _,
+            overview: _,
+            item_type: ItemType::Unknown,
+            user_data: _,
+            episode_index: _,
+            season_index: _,
+            run_time_ticks: _,
+        } => Some(NextScreen::UnsupportedItem),
         _ => None,
     }
 }

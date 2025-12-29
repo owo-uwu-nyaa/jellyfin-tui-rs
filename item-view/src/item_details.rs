@@ -100,7 +100,7 @@ impl FallibleWidget for ItemDisplay<'_> {
 //also works with movies
 pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<Navigation> {
     let images_available = ImagesAvailable::new();
-    let mut entry = Entry::from_media_item(
+    let entry = Entry::from_media_item(
         item.clone(),
         &cx.jellyfin,
         &cx.cache,
@@ -109,6 +109,11 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
         &cx.image_picker,
         &cx.stats,
     )?;
+    let mut entry = if let Some(entry) = entry {
+        entry
+    } else {
+        return Ok(Navigation::Replace(NextScreen::UnsupportedItem));
+    };
     let mut widget = ItemDisplay {
         entry: &mut entry,
         height: entry_height(cx.image_picker.font_size()),
@@ -155,7 +160,7 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
                 break Ok(Navigation::Replace(NextScreen::FetchItemDetails(item.id)));
             }
             ItemDetailsCommand::Play => {
-                let next = NextScreen::LoadPlayItem(jellyfin_tui_core::entries::play(&item));
+                let next = jellyfin_tui_core::entries::play(&item);
                 break Ok(Navigation::Push {
                     current: NextScreen::ItemDetails(item),
                     next,

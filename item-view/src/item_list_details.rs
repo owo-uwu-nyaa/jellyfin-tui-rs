@@ -101,7 +101,7 @@ pub fn handle_item_list_details_data(
         EntryList::new(
             childs
                 .iter()
-                .map(|item| {
+                .flat_map(|item| {
                     Entry::from_media_item(
                         item.clone(),
                         &cx.jellyfin,
@@ -111,6 +111,7 @@ pub fn handle_item_list_details_data(
                         &cx.image_picker,
                         &cx.stats,
                     )
+                    .transpose()
                 })
                 .collect::<Result<Vec<_>>>()?,
             name,
@@ -206,7 +207,7 @@ pub async fn display_item_list_details(
                     Some(Ok(KeybindEvent::Render)) => continue ,
                     Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
                     Some(Err(e)) => break  Err(e).context("getting key events from terminal"),
-                    None => break  Ok(Navigation::PopContext)
+                    None => break  Ok(Navigation::Exit)
                 }
             }
         };

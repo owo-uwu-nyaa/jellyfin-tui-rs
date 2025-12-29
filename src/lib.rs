@@ -7,16 +7,22 @@ use std::{
 use color_eyre::{Result, eyre::Context};
 use config::init_config;
 use entries::image::cache::ImageProtocolCache;
+use futures_util::StreamExt;
 use jellyfin::{JellyfinClient, socket::JellyfinWebSocket};
 use jellyfin_tui_core::{
     config::Config,
     context::TuiContext,
+    keybinds::UnsupportedItemCommand,
     state::{Navigation, NextScreen, State},
 };
-use keybinds::KeybindEvents;
+use keybinds::{KeybindEvent, KeybindEventStream, KeybindEvents};
 use player_core::OwnedPlayerHandle;
 use player_jellyfin::player_jellyfin;
-use ratatui::DefaultTerminal;
+use ratatui::{
+    DefaultTerminal,
+    widgets::{Block, Padding, Widget},
+};
+use ratatui_fallible_widget::TermExt;
 use ratatui_image::picker::Picker;
 use spawn::Spawner;
 use sqlx::SqliteConnection;
@@ -83,6 +89,7 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
         NextScreen::SendRefreshItem(item, refresh_item_query) => {
             refresh_item::refresh_screen(cx, item, refresh_item_query).await
         }
+        NextScreen::UnsupportedItem => unsupported_item(cx).await,
     }
 }
 
@@ -204,4 +211,40 @@ pub async fn run_app(
     )
     .await;
     Ok(())
+}
+
+struct UnsupportedItem;
+impl Widget for &UnsupportedItem {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        let text = "This item type is unsupported!";
+        let block = Block::bordered().padding(Padding::uniform(1));
+        text.render(block.inner(area), buf);
+        block.render(area, buf);
+    }
+}
+
+pub async fn unsupported_item(cx: Pin<&mut TuiContext>) -> Result<Navigation> {
+    let cx = cx.project();
+    let mut widget = UnsupportedItem;
+    let mut events = KeybindEventStream::new(
+        cx.events,
+        &mut widget,
+        cx.config.keybinds.unsupported_item.clone(),
+        &cx.config.help_prefixes,
+    );
+    loop {
+        cx.term.draw_fallible(&mut events)?;
+        match events.next().await {
+            None => break Ok(Navigation::Exit),
+            Some(Err(e)) => break Err(e).context("getting key events from terminal"),
+            Some(Ok(KeybindEvent::Render)) => continue,
+            Some(Ok(KeybindEvent::Text(_))) => unreachable!(),
+            Some(Ok(KeybindEvent::Command(UnsupportedItemCommand::Quit))) => {
+                break Ok(Navigation::PopContext);
+            }
+        }
+    }
 }

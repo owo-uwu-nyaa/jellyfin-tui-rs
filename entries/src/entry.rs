@@ -120,7 +120,7 @@ impl Entry {
         availabe: &ImagesAvailable,
         picker: &Arc<Picker>,
         stats: &Stats,
-    ) -> Result<Self> {
+    ) -> Result<Option<Self>> {
         let (title, subtitle) = match &item.item_type {
             ItemType::Movie => (item.name.clone(), None),
             ItemType::Episode {
@@ -133,8 +133,10 @@ impl Entry {
                 series_id: _,
                 series_name,
             } => (series_name.clone(), item.name.clone().into()),
-            ItemType::Series => (item.name.clone(), None),
+            ItemType::Series | ItemType::MusicAlbum => (item.name.clone(), None),
             ItemType::Playlist | ItemType::Folder => (item.name.clone(), None),
+            ItemType::Music { album_id: _, album } => (album.clone(), item.name.clone().into()),
+            ItemType::Unknown => return Ok(None),
         };
         let image = select_images(&item)
             .map(|(image_type, tag)| {
@@ -162,13 +164,13 @@ impl Entry {
         } else {
             None
         };
-        Ok(Self::new(
+        Ok(Some(Self::new(
             image,
             title,
             subtitle,
             EntryInner::Item(item),
             watch_status,
-        ))
+        )))
     }
 
     pub fn from_user_view(

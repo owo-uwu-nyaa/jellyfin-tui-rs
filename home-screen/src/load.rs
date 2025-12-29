@@ -6,7 +6,7 @@ use jellyfin::{
     JellyfinClient,
     items::{GetNextUpQuery, GetResumeQuery, MediaItem},
     user_library::GetLatestQuery,
-    user_views::{GetUserViewsQuery, UserView, UserViewType},
+    user_views::{CollectionType, GetUserViewsQuery, UserView, UserViewType},
 };
 use tracing::{debug, instrument, trace};
 
@@ -85,7 +85,7 @@ async fn load_data(client: &JellyfinClient, user_id: &str) -> Result<HomeScreenD
     trace!("next up: {next_up:#?}");
     let latest: HashMap<_, _> = stream::iter(user_views.items.iter())
         .filter_map(async |view| {
-            if view.view_type == UserViewType::CollectionFolder {
+            if view.view_type == UserViewType::CollectionFolder  && view.collection_type != CollectionType::Unknown {
                 match client
                     .get_user_library_latest_media(&GetLatestQuery {
                         user_id: Some(user_id),

@@ -12,6 +12,12 @@ pub struct Keybinds {
     pub item_details: BindingMap<ItemDetailsCommand>,
     pub item_list_details: BindingMap<ItemListDetailsCommand>,
     pub refresh_item: BindingMap<RefreshItemCommand>,
+    pub unsupported_item: BindingMap<UnsupportedItemCommand>,
+}
+
+#[derive(Debug, Clone, Copy, Command)]
+pub enum UnsupportedItemCommand {
+    Quit,
 }
 
 #[derive(Debug, Clone, Copy, Command)]

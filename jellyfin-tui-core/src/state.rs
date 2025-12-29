@@ -16,6 +16,8 @@ pub enum LoadPlay {
     Season { series_id: String, id: String },
     Episode { series_id: String, id: String },
     Playlist { id: String },
+    Music { id: String, album_id: String },
+    MusicAlbum { id: String },
 }
 
 #[derive(Debug)]
@@ -45,6 +47,7 @@ pub enum NextScreen {
     FetchItemListDetails(MediaItem),
     FetchItemListDetailsRef(String),
     FetchItemDetails(String),
+    UnsupportedItem,
     RefreshItem(String),
     SendRefreshItem(String, RefreshItemQuery),
 }
