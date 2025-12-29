@@ -67,7 +67,7 @@ let
       {
         inherit src;
         pname = "jellyfin-tui-rs";
-        version = "0.1.2";
+        version = "0.1.3";
         features = (lib.optional attach "attach") ++ (lib.optional mpris "mpris");
       }
     ).overrideAttrs
