@@ -65,6 +65,7 @@
                   nativeBuildInputs = [
                     p.rustc
                     p.cargo
+                    p.clippy
                     p.rustPlatform.bindgenHook
                     p.pkg-config
                   ];
