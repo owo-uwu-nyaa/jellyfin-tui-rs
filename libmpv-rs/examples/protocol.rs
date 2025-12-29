@@ -18,7 +18,7 @@
 
 use std::{
     env,
-    ffi::CString,
+    ffi::{CString, c_char},
     fs::File,
     io::{Read, Seek, SeekFrom},
     mem, thread,
@@ -74,9 +74,9 @@ fn close(_: Box<File>) {
     println!("Closing file, bye bye~~");
 }
 
-fn read(cookie: &mut File, buf: &mut [i8]) -> i64 {
+fn read(cookie: &mut File, buf: &mut [c_char]) -> i64 {
     unsafe {
-        let forbidden_magic = mem::transmute::<&mut [i8], &mut [u8]>(buf);
+        let forbidden_magic = mem::transmute::<&mut [c_char], &mut [u8]>(buf);
 
         cookie.read(forbidden_magic).unwrap() as _
     }

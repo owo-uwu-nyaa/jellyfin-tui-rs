@@ -181,8 +181,12 @@ fn node_map() -> Result<()> {
 
     thread::sleep(Duration::from_millis(250));
     let audio_params: MpvNode = mpv.get_property("audio-params")?;
-    let params: HashMap<&CStr, MpvNodeRef<'_>> =
-        audio_params.as_ref().to_map().ok_or_else(|| Error::Null)?.into_iter().collect();
+    let params: HashMap<&CStr, MpvNodeRef<'_>> = audio_params
+        .as_ref()
+        .to_map()
+        .ok_or_else(|| Error::Null)?
+        .into_iter()
+        .collect();
 
     assert_eq!(params.len(), 5);
 
@@ -212,10 +216,19 @@ fn node_array() -> Result<()> {
 
     thread::sleep(Duration::from_millis(250));
     let playlist: MpvNode = mpv.get_property("playlist")?;
-    let items: Vec<MpvNodeRef<'_>> = playlist.as_ref().to_array().ok_or_else(|| Error::Null)?.into_iter().collect();
+    let items: Vec<MpvNodeRef<'_>> = playlist
+        .as_ref()
+        .to_array()
+        .ok_or_else(|| Error::Null)?
+        .into_iter()
+        .collect();
 
     assert_eq!(items.len(), 1);
-    let track: HashMap<&CStr, MpvNodeRef<'_>> = items[0].to_map().ok_or_else(|| Error::Null)?.into_iter().collect();
+    let track: HashMap<&CStr, MpvNodeRef<'_>> = items[0]
+        .to_map()
+        .ok_or_else(|| Error::Null)?
+        .into_iter()
+        .collect();
 
     let filename = track.get(c"filename").unwrap().value()?;
 

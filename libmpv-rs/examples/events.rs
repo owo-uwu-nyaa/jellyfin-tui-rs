@@ -16,9 +16,19 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-use libmpv::{events::*, node::{MpvNodeRef, MpvNode}, *};
+use libmpv::{
+    events::*,
+    node::{MpvNode, MpvNodeRef},
+    *,
+};
 
-use std::{collections::HashMap, env, ffi::{CStr, CString}, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    env,
+    ffi::{CStr, CString},
+    thread,
+    time::Duration,
+};
 
 const VIDEO_URL: &str = "https://www.youtube.com/watch?v=DLzxrzFCyOs";
 
@@ -83,7 +93,8 @@ fn main() -> Result<()> {
 
 fn seekable_ranges(demuxer_cache_state: &MpvNode) -> Option<Vec<(f64, f64)>> {
     let mut res = Vec::new();
-    let props: HashMap<&CStr, MpvNodeRef<'_>> = demuxer_cache_state.as_ref().to_map()?.into_iter().collect();
+    let props: HashMap<&CStr, MpvNodeRef<'_>> =
+        demuxer_cache_state.as_ref().to_map()?.into_iter().collect();
     let ranges = props.get(c"seekable-ranges")?.to_array()?;
 
     for node in ranges {
