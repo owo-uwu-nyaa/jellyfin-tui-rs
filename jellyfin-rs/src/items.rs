@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::Authed;
 use crate::request::{NoQuery, RequestBuilderExt};
-use crate::{JellyfinClient, JellyfinVec, Result, connect::JsonResponse};
+use crate::Authed;
+use crate::{connect::JsonResponse, JellyfinClient, JellyfinVec, Result};
 use color_eyre::eyre::Context;
 use http::Uri;
 use serde::Deserialize;
@@ -311,4 +311,33 @@ impl<Auth: Authed> JellyfinClient<Auth> {
             .build()
             .context("assembling video uri")
     }
+    
+}
+
+impl JellyfinClient{
+    pub async fn set_unplayed(&self, item: &str) -> Result<()> {
+        self.send_request(self.delete(
+            |prefix: &mut String| {
+                prefix.push_str("/Users/");
+                prefix.push_str(&self.get_auth().user.id);
+                prefix.push_str("/PlayedItems/");
+                prefix.push_str(item);
+            },
+            NoQuery,
+        )?.empty_body()?).await?;
+        Ok(())
+    }
+pub async fn set_played(&self, item: &str) -> Result<()> {
+        self.send_request(self.post(
+            |prefix: &mut String| {
+                prefix.push_str("/Users/");
+                prefix.push_str(&self.get_auth().user.id);
+                prefix.push_str("/PlayedItems/");
+                prefix.push_str(item);
+            },
+            NoQuery,
+        )?.empty_body()?).await?;
+        Ok(())
+    }
+
 }
