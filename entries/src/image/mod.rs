@@ -54,6 +54,14 @@ pub struct JellyfinImage {
     loading: bool,
 }
 
+impl Drop for JellyfinImage {
+    fn drop(&mut self) {
+        if let Some((protocol,key,area)) = self.image.take(){
+            self.cache.store(protocol, area, key);
+        }
+    }
+}
+
 impl FallibleWidget for JellyfinImage {
     #[instrument(skip_all, name = "render_image")]
     fn render_fallible(

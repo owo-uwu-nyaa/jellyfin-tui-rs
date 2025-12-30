@@ -39,8 +39,8 @@ pub async fn get_image(
              size_x = ? and
              size_y = ?",
             item_id,
-            tag,
             image_type,
+            tag,
             key.size.p_width,
             key.size.p_height
         )
