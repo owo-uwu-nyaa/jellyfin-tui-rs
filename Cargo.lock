@@ -508,7 +508,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "dirs",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "libmpv",
  "log",
@@ -1010,7 +1010,7 @@ dependencies = [
  "color-eyre",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -1329,7 +1329,7 @@ dependencies = [
  "fetch",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -1617,7 +1617,7 @@ dependencies = [
  "fetch",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -1685,8 +1685,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "jellyfin-tui"
-version = "0.1.3"
+name = "jellyhaj"
+version = "0.2.0"
 dependencies = [
  "ansi-to-tui",
  "bytes",
@@ -1702,7 +1702,7 @@ dependencies = [
  "image",
  "item-view",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "libc",
  "log-screen",
@@ -1734,7 +1734,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "jellyfin-tui-core"
+name = "jellyhaj-core"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
@@ -1955,7 +1955,7 @@ name = "log-screen"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -1970,7 +1970,7 @@ dependencies = [
  "color-eyre",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -2462,7 +2462,7 @@ dependencies = [
  "fetch",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "player-core",
  "ratatui",
@@ -2823,7 +2823,7 @@ dependencies = [
  "fetch",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -3497,7 +3497,7 @@ name = "stats-view"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",
@@ -4097,7 +4097,7 @@ dependencies = [
  "fetch",
  "futures-util",
  "jellyfin",
- "jellyfin-tui-core",
+ "jellyhaj-core",
  "keybinds",
  "ratatui",
  "ratatui_fallible_widget",

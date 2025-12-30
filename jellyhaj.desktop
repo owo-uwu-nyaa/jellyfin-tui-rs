@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=JellyHaj
+GenericName=Jellyfin Client
+Exec=jellyhaj
+Terminal=true
+Categories=Video;AudioVideo;TV;Player;ConsoleOnly

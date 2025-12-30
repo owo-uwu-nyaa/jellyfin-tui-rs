@@ -9,7 +9,7 @@ use std::{
 use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     config::Config,
     keybinds::{Keybinds, LoadingCommand, LoginInfoCommand},
 };
@@ -270,7 +270,7 @@ pub async fn login(
         let client = match JellyfinClient::<NoAuth>::new(
             &login_info.server_url,
             ClientInfo {
-                name: "jellyfin-tui-rs".into(),
+                name: "jellyhaj".into(),
                 version: "0.1".into(),
             },
             device_name.clone(),

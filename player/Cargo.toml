@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 player-core = {path="../player-core"}
 jellyfin = {path="../jellyfin-rs"}
-jellyfin-tui-core = {path="../jellyfin-tui-core"}
+jellyhaj-core = {path="../jellyhaj-core"}
 keybinds = {path = "../keybinds"}
 spawn = {path = "../spawn"}
 fetch = {path = "../fetch"}

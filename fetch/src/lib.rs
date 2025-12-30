@@ -9,7 +9,7 @@ use jellyfin::{
     JellyfinClient, JellyfinVec,
     items::{GetItemsQuery, MediaItem},
 };
-use jellyfin_tui_core::{keybinds::LoadingCommand, state::Navigation};
+use jellyhaj_core::{keybinds::LoadingCommand, state::Navigation};
 use keybinds::{BindingMap, KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
     DefaultTerminal,

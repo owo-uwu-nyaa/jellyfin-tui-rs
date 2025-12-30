@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-jellyfin-tui-core = {path = "../jellyfin-tui-core"}
+jellyhaj-core = {path = "../jellyhaj-core"}
 jellyfin = { path = "../jellyfin-rs"}
 keybinds = {path = "../keybinds"}
 ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}

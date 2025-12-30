@@ -1,15 +1,15 @@
 [package]
-name = "jellyfin-tui"
-version = "0.1.3"
+name = "jellyhaj"
+version = "0.2.0"
 edition = "2024"
 description = "kind of fancy jellyfin tui based on ratatui and libmpv"
 
 [[bin]]
-name = "jellyfin-tui-rs"
+name = "jellyhaj"
 path = "src/main.rs"
 
 [dependencies]
-jellyfin-tui-core = {path = "jellyfin-tui-core"}
+jellyhaj-core = {path = "jellyhaj-core"}
 keybinds = {path = "keybinds"}
 jellyfin = { path = "jellyfin-rs"}
 entries = { path = "entries"}
@@ -59,7 +59,7 @@ stats-view = { version = "0.1.0", path = "stats-view" }
 libc = "0.2.170"
 
 [workspace]
-members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox", "stats-view", "log-screen"]
+members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyhaj-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox", "stats-view", "log-screen"]
 
 [workspace.dependencies]
 log = "0.4.26"

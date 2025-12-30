@@ -5,7 +5,7 @@ use std::{borrow::Cow, pin::Pin};
 use color_eyre::eyre::{Context, Result, eyre};
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     keybinds::MpvCommand,
     state::{Navigation, NextScreen},

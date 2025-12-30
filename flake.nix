@@ -39,18 +39,18 @@
           pkgs = import nixpkgs {
             inherit system overlays;
           };
-          jellyfin-tui-rs = pkgs.callPackage ./jellyfin-tui.nix { };
+          jellyhaj = pkgs.callPackage ./jellyhaj.nix { };
         in
         {
           formatter = pkgs.nixfmt-tree;
           packages = {
-            default = jellyfin-tui-rs;
-            inherit jellyfin-tui-rs;
+            default = jellyhaj;
+            inherit jellyhaj;
           };
           apps = {
             default = {
               type = "app";
-              program = "${jellyfin-tui-rs}/bin/jellyfin-tui-rs";
+              program = "${jellyhaj}/bin/jellyhaj";
             };
           };
           devShells =
@@ -96,14 +96,14 @@
       )
       // (
         let
-          jellyfin-tui-rs = final: prev: {
-            jellyfin-tui-rs = final.callPackage ./jellyfin-tui.nix { };
+          jellyhaj = final: prev: {
+            jellyhaj = final.callPackage ./jellyhaj.nix { };
           };
         in
         {
           overlays = {
-            inherit jellyfin-tui-rs;
-            default = jellyfin-tui-rs;
+            inherit jellyhaj;
+            default = jellyhaj;
           };
           hmModules = {
             default = import ./hm-module.nix nix-rust-build;

@@ -3,7 +3,7 @@ use std::cmp::min;
 use ansi_to_tui::IntoText;
 use color_eyre::eyre::{Context, Report, Result};
 use futures_util::StreamExt;
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     keybinds::{ErrorCommand, Keybinds},
     state::{Navigation, NextScreen},
 };

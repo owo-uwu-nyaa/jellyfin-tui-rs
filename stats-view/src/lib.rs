@@ -1,6 +1,6 @@
 use std::{cmp::max, pin::Pin, sync::atomic::Ordering::Relaxed, time::Duration};
 
-use jellyfin_tui_core::{context::TuiContext, keybinds::StatsCommand, state::Navigation};
+use jellyhaj_core::{context::TuiContext, keybinds::StatsCommand, state::Navigation};
 use keybinds::{KeybindEvent, KeybindEventStream, StreamExt};
 use ratatui::{
     layout::Constraint,

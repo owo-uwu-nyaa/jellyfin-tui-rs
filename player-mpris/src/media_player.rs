@@ -48,7 +48,7 @@ impl MediaPlayer2 {
     }
     #[zbus(property(emits_changed_signal = "const"))]
     fn desktop_entry(&self) -> &'static str {
-        "jellyfin-tui-rs"
+        "jellyhaj"
     }
     #[zbus(property(emits_changed_signal = "const"))]
     fn supported_uri_schemes(&self) -> &'static [&'static str] {

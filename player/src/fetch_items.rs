@@ -7,7 +7,7 @@ use jellyfin::{
     playlist::GetPlaylistItemsQuery,
     shows::GetEpisodesQuery,
 };
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     state::{LoadPlay, Navigation, NextScreen},
 };

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use color_eyre::{Result, eyre::Context};
-use jellyfin_tui_core::keybinds::Keybinds;
+use jellyhaj_core::keybinds::Keybinds;
 
 pub fn check_keybinds_file(file: impl AsRef<Path>) -> Result<()> {
     from_file(file, true, from_str(include_str!("../keybinds.toml"), true)?.0)?;

@@ -7,7 +7,7 @@ use jellyfin::{
     items::{GetItemsQuery, MediaItem},
     user_views::UserView,
 };
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     entries::EntryExt,
     keybinds::UserViewCommand,

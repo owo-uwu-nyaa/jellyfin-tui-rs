@@ -74,7 +74,7 @@ pub async fn run_mpris_service(
     let t = TrackList::new(handle.clone(), jellyfin.clone(), state.clone());
     let conn = zbus::connection::Builder::session()?
         .name(format!(
-            "org.mpris.MediaPlayer2.jellyfin_tui_rs.i{}",
+            "org.mpris.MediaPlayer2.jellyhaj.i{}",
             std::process::id()
         ))?
         .serve_at(MPRIS, mp2)?

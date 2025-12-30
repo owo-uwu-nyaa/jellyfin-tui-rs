@@ -1,7 +1,7 @@
 use std::{pin::Pin, time::Duration};
 
 use color_eyre::{Result};
-use jellyfin_tui_core::{context::TuiContext, keybinds::LoggerCommand, state::Navigation};
+use jellyhaj_core::{context::TuiContext, keybinds::LoggerCommand, state::Navigation};
 use keybinds::{KeybindEvent, KeybindEventStream, StreamExt};
 use ratatui::{style::{Color, Style}, widgets::{Block, Padding, Widget}};
 use ratatui_fallible_widget::TermExt;

@@ -9,7 +9,7 @@ use config::init_config;
 use entries::image::cache::ImageProtocolCache;
 use futures_util::StreamExt;
 use jellyfin::{JellyfinClient, socket::JellyfinWebSocket};
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     config::Config,
     context::TuiContext,
     keybinds::UnsupportedItemCommand,
@@ -209,7 +209,7 @@ pub async fn run_app(
     spawn::run_with_spawner(
         |spawner| run_app_inner(term, events, spawner, config, cache.clone(), image_picker),
         cancel,
-        error_span!("jellyfin-tui"),
+        error_span!("jellyhaj"),
     )
     .await;
     Ok(())

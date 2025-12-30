@@ -14,16 +14,16 @@ let
     types
     filterAttrs
     ;
-  cfg = config.programs.jellyfin-tui;
-  jellyfin-tui = (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyfin-tui.nix { };
+  cfg = config.programs.jellyhaj;
+  jellyhaj = (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyhaj.nix { };
 in
 {
-  options.programs.jellyfin-tui = {
+  options.programs.jellyhaj = {
     enable = mkEnableOption "enable jellyfin tui";
     package = mkOption {
       type = types.package;
-      default = jellyfin-tui;
-      description = "package with jellyfin-tui";
+      default = jellyhaj;
+      description = "package with jellyhaj";
     };
     config = {
       mpv_profile = mkOption {
@@ -56,7 +56,7 @@ in
       };
       login_file = mkOption {
         type = types.path;
-        default = "${config.xdg.configHome}/jellyfin-tui-rs/login.toml";
+        default = "${config.xdg.configHome}/jellyhaj/login.toml";
         description = "login file";
       };
       keybinds_file = mkOption {
@@ -96,19 +96,19 @@ in
       );
       default = null;
     };
-    default = "${config.xdg.configHome}/jellyfin-tui-rs/keybinds.toml";
+    default = "${config.xdg.configHome}/jellyhaj/keybinds.toml";
   };
   config = mkMerge [
     (mkIf cfg.enable {
       home.packages = [ cfg.package ];
       xdg.configFile = {
-        "jellyfin-tui-rs/config.toml".source = pkgs.writers.writeTOML "config.toml" (
+        "jellyhaj/config.toml".source = pkgs.writers.writeTOML "config.toml" (
           filterAttrs (_: v: !isNull v) cfg.config
         );
       };
     })
     (mkIf (! isNull cfg.keybinds) {
-      programs.jellyfin-tui.config.keybinds_file = jellyfin-tui.checkKeybinds cfg.keybinds;
+      programs.jellyhaj.config.keybinds_file = jellyhaj.checkKeybinds cfg.keybinds;
     }) 
   ];
 }

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 keybinds = {path = "../keybinds"}
-jellyfin-tui-core = {path = "../jellyfin-tui-core"}
+jellyhaj-core = {path = "../jellyhaj-core"}
 libmpv = {path = "../libmpv-rs"}
 
 log = {workspace=true}

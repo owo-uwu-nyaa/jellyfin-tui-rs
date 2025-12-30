@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use color_eyre::eyre::{Context, OptionExt, Result};
-use jellyfin_tui_core::config::Config;
+use jellyhaj_core::config::Config;
 use libmpv::MpvProfile;
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -33,7 +33,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
         )
     } else {
         let mut config_dir = dirs::config_dir().ok_or_eyre("Couldn't determine user config dir")?;
-        config_dir.push("jellyfin-tui-rs");
+        config_dir.push("jellyhaj");
         let mut config_file = config_dir.clone();
         config_file.push("config.toml");
         (config_dir, config_file)

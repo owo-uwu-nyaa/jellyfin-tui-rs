@@ -11,7 +11,7 @@ use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
 };
-use jellyfin_tui::run_app;
+use jellyhaj::run_app;
 use rayon::ThreadPoolBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, level_filters::LevelFilter};
@@ -49,7 +49,7 @@ fn log_file() -> Result<()> {
     let mut logfile = dirs::runtime_dir()
         .or_else(dirs::cache_dir)
         .ok_or_eyre("unable to determine runtime or cache dir")?;
-    logfile.push("jellyfin-tui-rs.log");
+    logfile.push("jellyhaj.log");
     let format = tracing_subscriber::fmt::format();
     let filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())

@@ -6,7 +6,7 @@ use entries::{
 };
 use futures_util::StreamExt;
 use jellyfin::{items::MediaItem, user_views::UserView};
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     entries::EntryExt,
     keybinds::HomeScreenCommand,

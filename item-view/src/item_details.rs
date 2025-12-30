@@ -8,7 +8,7 @@ use entries::{
 use fetch::{fetch_child_of_type, fetch_screen};
 use futures_util::StreamExt;
 use jellyfin::items::MediaItem;
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     keybinds::ItemDetailsCommand,
     state::{Navigation, NextScreen, ToNavigation},
@@ -160,7 +160,7 @@ pub async fn display_item(cx: Pin<&mut TuiContext>, item: MediaItem) -> Result<N
                 break Ok(Navigation::Replace(NextScreen::FetchItemDetails(item.id)));
             }
             ItemDetailsCommand::Play => {
-                let next = jellyfin_tui_core::entries::play(&item);
+                let next = jellyhaj_core::entries::play(&item);
                 break Ok(Navigation::Push {
                     current: NextScreen::ItemDetails(item),
                     next,

@@ -15,7 +15,7 @@ use tracing::{Instrument, error, info, info_span, instrument};
 #[instrument]
 async fn open_db() -> Result<SqliteConnection> {
     let mut db_path = dirs::cache_dir().ok_or_eyre("unable to detect cache dir")?;
-    db_path.push("jellyfin-tui.sqlite");
+    db_path.push("jellyhaj.sqlite");
     let create = async || {
         info!("opening sqlite db at {}", db_path.display());
         SqliteConnectOptions::new()

@@ -155,7 +155,7 @@ impl MpvStream {
         minimized: bool,
     ) -> Result<Self> {
         let mpv = Mpv::with_initializer(|mpv| -> Result<()> {
-            mpv.set_option(c"title", c"jellyfin-tui-player")?;
+            mpv.set_option(c"title", c"jellyhaj-player")?;
             mpv.set_option(c"fullscreen", true)?;
             mpv.set_option(c"window-minimized", minimized)?;
             mpv.set_option(c"drag-and-drop", false)?;

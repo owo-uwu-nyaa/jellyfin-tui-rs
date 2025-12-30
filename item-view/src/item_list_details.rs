@@ -9,7 +9,7 @@ use entries::{
 use fetch::{fetch_all_children, fetch_child_of_type, fetch_item, fetch_screen};
 use futures_util::{StreamExt, future::try_join};
 use jellyfin::items::MediaItem;
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     entries::EntryExt,
     keybinds::ItemListDetailsCommand,

@@ -10,7 +10,7 @@ use jellyfin::{
 };
 use tracing::{debug, instrument, trace};
 
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     state::{Navigation, NextScreen},
 };

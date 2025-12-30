@@ -4,7 +4,7 @@ use checkbox::Checkbox;
 use color_eyre::{Result, eyre::Context};
 use futures_util::StreamExt;
 use jellyfin::items::{RefreshItemQuery, RefreshMode};
-use jellyfin_tui_core::{
+use jellyhaj_core::{
     context::TuiContext,
     keybinds::RefreshItemCommand,
     state::{Navigation, NextScreen},

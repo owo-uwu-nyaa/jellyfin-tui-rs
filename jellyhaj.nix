@@ -9,7 +9,7 @@
   remarshal,
   stdenv,
   attach ? false,
-  mpris ? stdenv.isLinux,
+  mpris ? stdenv.hostPlatform.isLinux,
 }:
 let
   fileset = lib.fileset.unions [
@@ -20,6 +20,7 @@ let
     ./config/config.toml
     ./config/keybinds.toml
     ./migrations
+    ./jellyhaj.desktop
     ./libmpv-rs/test-data
   ];
 
@@ -27,7 +28,7 @@ let
     root = ./.;
     inherit fileset;
   };
-  jellyfin-tui =
+  jellyhaj =
     let
       checkKeybinds =
         keybinds:
@@ -35,14 +36,14 @@ let
           {
             nativeBuildInputs = [
               remarshal
-              jellyfin-tui
+              jellyhaj
             ];
             value = builtins.toJSON keybinds;
             passAsFile = [ "value" ];
           }
           ''
             json2toml "$valuePath" "$out"
-            jellyfin-tui-rs check-keybinds "$out"
+            jellyhaj check-keybinds "$out"
           '';
     in
     (
@@ -55,7 +56,6 @@ let
           ];
         };
         libsqlite3-sys =
-
           {
             buildInputs = [ sqlite ];
             nativeBuildInputs = [
@@ -66,8 +66,8 @@ let
       }).build
       {
         inherit src;
-        pname = "jellyfin-tui-rs";
-        version = "0.1.3";
+        pname = "jellyhaj";
+        version = "0.2.0";
         features = (lib.optional attach "attach") ++ (lib.optional mpris "mpris");
       }
     ).overrideAttrs
@@ -76,10 +76,13 @@ let
           passthru = (prev.passthru or { }) // {
             inherit checkKeybinds;
           };
+          postBuild = lib.optionalString stdenv.hostPlatform.isLinux ''
+          install -Dm644 $src/jellyhaj.desktop $out/share/applications/jellyhaj.desktop       
+'';
           meta = (prev.meta or { }) // {
-            mainProgramm = "jellyfin-tui-rs";
+            mainProgramm = "jellyhaj";
           };
         }
       );
 in
-jellyfin-tui
+jellyhaj
