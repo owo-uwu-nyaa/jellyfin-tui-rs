@@ -1,0 +1,13 @@
+[package]
+name = "stats-view"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre.workspace = true
+jellyfin-tui-core = { version = "0.1.0", path = "../jellyfin-tui-core" }
+keybinds = { version = "0.1.0", path = "../keybinds" }
+ratatui.workspace = true
+ratatui_fallible_widget = { version = "0.1.0", path = "../ratatui_fallible_widget" }
+stats-data = { version = "0.1.0", path = "../stats-data" }
+tokio = { workspace = true, features = ["time"] }

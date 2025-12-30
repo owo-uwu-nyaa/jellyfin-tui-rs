@@ -50,13 +50,16 @@ either = {workspace=true}
 pin-project-lite = {workspace=true}
 toml = {workspace = true}
 dirs = {workspace = true}
+tui-logger.workspace=true
 refresh-item = { version = "0.1.0", path = "refresh-item" }
+log-screen = { version = "0.1.0", path = "log-screen" }
+stats-view = { version = "0.1.0", path = "stats-view" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.170"
 
 [workspace]
-members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox"]
+members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyfin-tui-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox", "stats-view", "log-screen"]
 
 [workspace.dependencies]
 log = "0.4.26"
@@ -101,6 +104,7 @@ image = { version = "0.25.5", default-features = false, features = ["webp", "png
 toml = { version = "0.9.5", default-features = false, features = ["serde", "display", "parse"] }
 whoami = { version = "1.5.2", default-features = false }
 zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
+tui-logger = { version = "0.18.0", features = ["tracing-support"] }
 
 [features]
 attach = []

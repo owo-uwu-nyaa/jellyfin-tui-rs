@@ -37,6 +37,7 @@ template = ["m", "o"]
 r = "reload"
 enter = "play-open"
 R = "refresh-item"
+s = {name="show-", s="show-stats", l="show-logs"}
 
 [item_list_details]
 template = ["m", "o"]
@@ -57,6 +58,7 @@ q = "quit"
 [error]
 template = ["m"]
 k = "kill"
+l = "show-logs"
 
 [item_details]
 template = ["ud", "q"]
@@ -76,6 +78,24 @@ esc = "quit"
 
 [unsupported_item]
 q = "quit"
+
+[stats]
+q="quit"
+
+[logger]
+space="space"
+up="messages-up"
+down="messages-down"
+left="left"
+right="right"
+"+"="plus"
+"-"="minus"
+h="hide"
+f="focus"
+C-up="target-up"
+C-down="target-down"
+esc = "escape"
+q="quit"
 
 [template.q]
 q = "quit"

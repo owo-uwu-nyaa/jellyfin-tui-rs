@@ -3,6 +3,8 @@ use keybinds::{BindingMap, Command, keybind_config};
 #[derive(Debug)]
 #[keybind_config]
 pub struct Keybinds {
+    pub stats: BindingMap<StatsCommand>,
+    pub logger: BindingMap<LoggerCommand>,
     pub fetch: BindingMap<LoadingCommand>,
     pub play_mpv: BindingMap<MpvCommand>,
     pub user_view: BindingMap<UserViewCommand>,
@@ -13,6 +15,28 @@ pub struct Keybinds {
     pub item_list_details: BindingMap<ItemListDetailsCommand>,
     pub refresh_item: BindingMap<RefreshItemCommand>,
     pub unsupported_item: BindingMap<UnsupportedItemCommand>,
+}
+
+#[derive(Debug, Clone, Copy, Command)]
+pub enum LoggerCommand{
+    Space,
+    TargetUp,
+    TargetDown,
+    Left,
+    Right,
+    Plus,
+    Minus,
+    Hide,
+    Focus,
+    MessagesUp,
+    MessagesDown,
+    Escape,
+    Quit
+}
+
+#[derive(Debug, Clone, Copy, Command)]
+pub enum StatsCommand {
+    Quit
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -70,6 +94,8 @@ pub enum HomeScreenCommand {
     OpenSeason,
     OpenSeries,
     RefreshItem,
+    ShowStats,
+    ShowLogs,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
@@ -89,6 +115,7 @@ pub enum ErrorCommand {
     Down,
     Left,
     Right,
+    ShowLogs,
 }
 
 #[derive(Debug, Clone, Copy, Command)]

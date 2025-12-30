@@ -61,11 +61,11 @@ fn log_file() -> Result<()> {
         ))
         .event_format(format)
         .with_filter(filter);
-
     let error_layer = ErrorLayer::default();
     tracing_subscriber::registry()
         .with(fmt_layer)
         .with(error_layer)
+        .with(tui_logger::TuiTracingSubscriberLayer)
         .init();
     println!("logging to {}", logfile.display());
     Ok(())
@@ -104,6 +104,9 @@ fn main() -> Result<()> {
         }
         None => {
             log_file()?;
+            tui_logger::init_logger(tui_logger::LevelFilter::Debug).context("setting up tui logger")?;
+            tui_logger::set_default_level(tui_logger::LevelFilter::Info);
+            tui_logger::set_env_filter_from_env(None);
             #[cfg(feature = "attach")]
             debug();
             let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::new().into_hooks();

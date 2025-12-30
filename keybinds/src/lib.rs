@@ -12,6 +12,8 @@ use std::{
 };
 use tracing::{Span, debug, info_span};
 
+pub use futures_util::StreamExt;
+
 ///reexport for proc macro
 #[doc(hidden)]
 pub use color_eyre::eyre as __eyre;

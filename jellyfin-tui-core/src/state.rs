@@ -50,6 +50,8 @@ pub enum NextScreen {
     UnsupportedItem,
     RefreshItem(String),
     SendRefreshItem(String, RefreshItemQuery),
+    Stats,
+    Logs,
 }
 
 #[allow(clippy::large_enum_variant)]

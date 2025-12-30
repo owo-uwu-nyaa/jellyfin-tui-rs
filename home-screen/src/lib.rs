@@ -242,6 +242,18 @@ pub async fn display_home_screen(
                     });
                 }
             }
+            HomeScreenCommand::ShowStats => {
+                break Ok(Navigation::Push {
+                    current: NextScreen::LoadHomeScreen,
+                    next: NextScreen::Stats,
+                });
+            }
+            HomeScreenCommand::ShowLogs => {
+                break Ok(Navigation::Push {
+                    current: NextScreen::LoadHomeScreen,
+                    next: NextScreen::Logs,
+                });
+            }
         }
     }
 }

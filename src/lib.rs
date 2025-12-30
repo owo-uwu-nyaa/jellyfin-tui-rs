@@ -90,6 +90,8 @@ async fn show_screen(screen: NextScreen, cx: Pin<&mut TuiContext>) -> Result<Nav
             refresh_item::refresh_screen(cx, item, refresh_item_query).await
         }
         NextScreen::UnsupportedItem => unsupported_item(cx).await,
+        NextScreen::Stats => stats_view::show_stats(cx).await,
+        NextScreen::Logs => log_screen::show_tui(cx).await,
     }
 }
 
@@ -185,7 +187,7 @@ async fn run_app_inner(
             cache,
             image_cache: ImageProtocolCache::new(),
             mpv_handle,
-            stats: Default::default()
+            stats: Default::default(),
         });
         run_state(cx).await
     }

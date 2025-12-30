@@ -5,7 +5,7 @@ use color_eyre::eyre::{Context, Report, Result};
 use futures_util::StreamExt;
 use jellyfin_tui_core::{
     keybinds::{ErrorCommand, Keybinds},
-    state::Navigation,
+    state::{Navigation, NextScreen},
 };
 use keybinds::{KeybindEvent, KeybindEventStream, KeybindEvents};
 use ratatui::{
@@ -142,6 +142,12 @@ pub async fn display_error(
                         events.get_inner().scroll_x.saturating_sub(1),
                         events.get_inner().pos_x + 1,
                     )
+                }
+                ErrorCommand::ShowLogs => {
+                    break Ok(Navigation::Push {
+                        current: NextScreen::Error(e),
+                        next: NextScreen::Logs,
+                    });
                 }
             },
             Some(Err(e)) => break Err(e).context("Error getting key events from terminal"),
