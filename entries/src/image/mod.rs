@@ -56,7 +56,7 @@ pub struct JellyfinImage {
 
 impl Drop for JellyfinImage {
     fn drop(&mut self) {
-        if let Some((protocol,key,area)) = self.image.take(){
+        if let Some((protocol, key, area)) = self.image.take() {
             self.cache.store(protocol, area, key);
         }
     }

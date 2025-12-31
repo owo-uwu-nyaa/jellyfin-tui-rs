@@ -49,7 +49,19 @@
             inherit jellyhaj jellyhaj-incremental;
           };
           checks = {
-            inherit jellyhaj jellyhaj-incremental;
+            format =
+              pkgs.runCommand "nixfmt-check-jellyhaj"
+                {
+                  nativeBuildInputs = [
+                    pkgs.cargo
+                    pkgs.rustfmt
+                  ];
+                }
+                ''
+                  cd ${./.}
+                  cargo fmt --check
+                  touch $out
+                '';
           };
           apps = {
             default = {

@@ -104,7 +104,8 @@ fn main() -> Result<()> {
         }
         None => {
             log_file()?;
-            tui_logger::init_logger(tui_logger::LevelFilter::Debug).context("setting up tui logger")?;
+            tui_logger::init_logger(tui_logger::LevelFilter::Debug)
+                .context("setting up tui logger")?;
             tui_logger::set_default_level(tui_logger::LevelFilter::Info);
             tui_logger::set_env_filter_from_env(None);
             #[cfg(feature = "attach")]

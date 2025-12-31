@@ -1,9 +1,12 @@
 use std::{pin::Pin, time::Duration};
 
-use color_eyre::{Result};
+use color_eyre::Result;
 use jellyhaj_core::{context::TuiContext, keybinds::LoggerCommand, state::Navigation};
 use keybinds::{KeybindEvent, KeybindEventStream, StreamExt};
-use ratatui::{style::{Color, Style}, widgets::{Block, Padding, Widget}};
+use ratatui::{
+    style::{Color, Style},
+    widgets::{Block, Padding, Widget},
+};
 use ratatui_fallible_widget::TermExt;
 use tokio::select;
 use tui_logger::{TuiLoggerLevelOutput, TuiWidgetEvent};
@@ -17,7 +20,9 @@ impl Widget for &LogView {
     where
         Self: Sized,
     {
-        let block = Block::bordered().title("Log Messages").padding(Padding::uniform(1));
+        let block = Block::bordered()
+            .title("Log Messages")
+            .padding(Padding::uniform(1));
         tui_logger::TuiLoggerSmartWidget::default()
             .style_error(Style::default().fg(Color::Red))
             .style_debug(Style::default().fg(Color::Green))

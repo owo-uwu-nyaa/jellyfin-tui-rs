@@ -18,7 +18,7 @@ pub struct Keybinds {
 }
 
 #[derive(Debug, Clone, Copy, Command)]
-pub enum LoggerCommand{
+pub enum LoggerCommand {
     Space,
     TargetUp,
     TargetDown,
@@ -31,12 +31,12 @@ pub enum LoggerCommand{
     MessagesUp,
     MessagesDown,
     Escape,
-    Quit
+    Quit,
 }
 
 #[derive(Debug, Clone, Copy, Command)]
 pub enum StatsCommand {
-    Quit
+    Quit,
 }
 
 #[derive(Debug, Clone, Copy, Command)]

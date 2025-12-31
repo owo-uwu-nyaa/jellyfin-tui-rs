@@ -4,7 +4,11 @@ use color_eyre::{Result, eyre::Context};
 use jellyhaj_core::keybinds::Keybinds;
 
 pub fn check_keybinds_file(file: impl AsRef<Path>) -> Result<()> {
-    from_file(file, true, from_str(include_str!("../keybinds.toml"), true)?.0)?;
+    from_file(
+        file,
+        true,
+        from_str(include_str!("../keybinds.toml"), true)?.0,
+    )?;
     Ok(())
 }
 
@@ -14,10 +18,15 @@ pub fn from_str(config: impl AsRef<str>, strict: bool) -> Result<(Keybinds, Vec<
     Ok((binds, config.help_prefixes))
 }
 
-pub fn from_file(config: impl AsRef<Path>, strict: bool, default: Keybinds) -> Result<(Keybinds, Vec<String>)> {
+pub fn from_file(
+    config: impl AsRef<Path>,
+    strict: bool,
+    default: Keybinds,
+) -> Result<(Keybinds, Vec<String>)> {
     let config = std::fs::read_to_string(config).context("reading keybinds file")?;
     let config = toml::from_str(config.as_ref()).context("de-serializing keybinds")?;
-    let binds = Keybinds::from_config_with_default(&config, strict, default).context("checking keybinds")?;
+    let binds = Keybinds::from_config_with_default(&config, strict, default)
+        .context("checking keybinds")?;
     Ok((binds, config.help_prefixes))
 }
 
