@@ -40,7 +40,7 @@
             inherit system overlays;
           };
           jellyhaj = pkgs.callPackage ./jellyhaj.nix { };
-          jellyhaj-incremental = pkgs.callPackage ./jellyhaj.nix { };
+          jellyhaj-incremental = pkgs.callPackage ./jellyhaj-incremental.nix { };
         in
         {
           formatter = pkgs.nixfmt-tree;
