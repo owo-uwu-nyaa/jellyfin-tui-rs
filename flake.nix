@@ -69,45 +69,26 @@
               program = "${jellyhaj}/bin/jellyhaj";
             };
           };
-          devShells =
-            let
-              mk =
-                p:
-                p.mkShell {
-                  buildInputs = [
-                    p.mpv-unwrapped
-                    p.sqlite
-                  ];
-                  nativeBuildInputs = [
-                    p.rustc
-                    p.cargo
-                    p.clippy
-                    p.rustPlatform.bindgenHook
-                    p.pkg-config
-                  ];
-                };
-            in
-            {
-              default = pkgs.mkShell {
-                nativeBuildInputs = [
-                  pkgs.cargo-nextest
-                  pkgs.cargo-audit
-                  pkgs.cargo-expand
-                  pkgs.rust-bin.nightly.latest.rust-analyzer
-                  (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
-                  pkgs.sqlx-cli
-                  pkgs.pkg-config
-                  pkgs.sqlite-interactive
-                  pkgs.rustPlatform.bindgenHook
-                ];
-                buildInputs = [
-                  pkgs.mpv-unwrapped
-                  pkgs.sqlite
-                ];
-                DATABASE_URL = "sqlite://db.sqlite";
-              };
-              aarch64 = mk pkgs.pkgsCross.aarch64-multiplatform;
+          devShells = {
+            default = pkgs.mkShell {
+              nativeBuildInputs = [
+                pkgs.cargo-nextest
+                pkgs.cargo-audit
+                pkgs.cargo-expand
+                pkgs.rust-bin.nightly.latest.rust-analyzer
+                (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
+                pkgs.sqlx-cli
+                pkgs.pkg-config
+                pkgs.sqlite-interactive
+                pkgs.rustPlatform.bindgenHook
+              ];
+              buildInputs = [
+                pkgs.mpv-unwrapped
+                pkgs.sqlite
+              ];
+              DATABASE_URL = "sqlite://db.sqlite";
             };
+          };
         }
       )
       // (
