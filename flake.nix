@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    systems.url = "github:nix-systems/default-linux";
+    systems.url = "github:nix-systems/default";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -40,12 +40,16 @@
             inherit system overlays;
           };
           jellyhaj = pkgs.callPackage ./jellyhaj.nix { };
+          jellyhaj-incremental = pkgs.callPackage ./jellyhaj.nix { };
         in
         {
           formatter = pkgs.nixfmt-tree;
           packages = {
             default = jellyhaj;
-            inherit jellyhaj;
+            inherit jellyhaj jellyhaj-incremental;
+          };
+          checks = {
+            inherit jellyhaj jellyhaj-incremental;
           };
           apps = {
             default = {

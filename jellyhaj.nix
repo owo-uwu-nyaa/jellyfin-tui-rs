@@ -1,15 +1,13 @@
 {
   lib,
+  stdenv,
+  fetchFromGitHub,
+  rustPlatform,
   pkg-config,
   mpv-unwrapped,
-  rustPlatform,
   sqlite,
-  rust-build,
-  runCommand,
-  remarshal,
-  stdenv,
-  attach ? false,
-  mpris ? stdenv.hostPlatform.isLinux,
+  versionCheckHook,
+  mpris ? stdenv.isLinux,
 }:
 let
   fileset = lib.fileset.unions [
@@ -23,66 +21,47 @@ let
     ./jellyhaj.desktop
     ./libmpv-rs/test-data
   ];
-
   src = lib.fileset.toSource {
     root = ./.;
     inherit fileset;
   };
-  jellyhaj =
-    let
-      checkKeybinds =
-        keybinds:
-        runCommand "keybinds.toml"
-          {
-            nativeBuildInputs = [
-              remarshal
-              jellyhaj
-            ];
-            value = builtins.toJSON keybinds;
-            passAsFile = [ "value" ];
-          }
-          ''
-            json2toml "$valuePath" "$out"
-            jellyhaj check-keybinds "$out"
-          '';
-    in
-    (
-      (rust-build.withCrateOverrides {
-        libmpv-sys = {
-          buildInputs = [ mpv-unwrapped ];
-          nativeBuildInputs = [
-            pkg-config
-            rustPlatform.bindgenHook
-          ];
-        };
-        libsqlite3-sys =
-          {
-            buildInputs = [ sqlite ];
-            nativeBuildInputs = [
-              pkg-config
-              rustPlatform.bindgenHook
-            ];
-          };
-      }).build
-      {
-        inherit src;
-        pname = "jellyhaj";
-        version = "0.2.0";
-        features = (lib.optional attach "attach") ++ (lib.optional mpris "mpris");
-      }
-    ).overrideAttrs
-      (
-        _: prev: {
-          passthru = (prev.passthru or { }) // {
-            inherit checkKeybinds;
-          };
-          postBuild = lib.optionalString stdenv.hostPlatform.isLinux ''
-          install -Dm644 $src/jellyhaj.desktop $out/share/applications/jellyhaj.desktop       
-'';
-          meta = (prev.meta or { }) // {
-            mainProgramm = "jellyhaj";
-          };
-        }
-      );
 in
-jellyhaj
+rustPlatform.buildRustPackage {
+  pname = "jellyhaj";
+  version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+  inherit src;
+  cargoLock = {
+    lockFile = ./Cargo.lock;
+  };
+  nativeBuildInputs = [
+    rustPlatform.bindgenHook
+    pkg-config
+  ];
+  buildInputs = [
+    sqlite
+    mpv-unwrapped
+  ];
+  postBuild = lib.optionalString stdenv.hostPlatform.isLinux ''
+    install -Dm644 $src/jellyhaj.desktop $out/share/applications/jellyhaj.desktop       
+  '';
+  nativeInstallCheckInputs = [ versionCheckHook ];
+  versionCheckProgramArg = "--version";
+  doInstallCheck = true;
+  checkFlags = [
+    #some tests need internet access
+    "--skip=tests::properties"
+    "--skip=tests::node_map"
+    "--skip=tests::events"
+  ];
+  cargoTestFlags = [ "--workspace" ];
+  buildFeatures = lib.optional mpris "mpris";
+
+  meta = {
+    description = "Terminal client for Jellyfin trying to reimplement parts of the web ui";
+    license = lib.licenses.mit;
+    sourceProvenance = [ lib.sourceTypes.fromSource ];
+    mainProgram = "jellyhaj";
+    homepage = "https://github.com/owo-uwu-nyaa/jellyhaj";
+    maintainers = with lib.maintainers; [ RobinMarchart ];
+  };
+}

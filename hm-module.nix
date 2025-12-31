@@ -15,16 +15,20 @@ let
     filterAttrs
     ;
   cfg = config.programs.jellyhaj;
-  jellyhaj = (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyhaj.nix { };
+  jellyhaj = pkgs.callPackage ./jellyhaj.nix { };
+  jellyhaj-incremental =
+    (pkgs.extend nix-rust-build.overlays.default).callPackage ./jellyhaj-incremental.nix
+      { };
 in
 {
   options.programs.jellyhaj = {
-    enable = mkEnableOption "enable jellyfin tui";
+    enable = mkEnableOption "enable jellyhaj tui";
     package = mkOption {
       type = types.package;
-      default = jellyhaj;
+      default = if cfg.useIncremental then  jellyhaj-incremental else jellyhaj;
       description = "package with jellyhaj";
     };
+    useIncremental = mkEnableOption "use the incrementaly build of the jellyhaj package";
     config = {
       mpv_profile = mkOption {
         type = types.enum [
@@ -107,8 +111,8 @@ in
         );
       };
     })
-    (mkIf (! isNull cfg.keybinds) {
+    (mkIf (!isNull cfg.keybinds) {
       programs.jellyhaj.config.keybinds_file = jellyhaj.checkKeybinds cfg.keybinds;
-    }) 
+    })
   ];
 }
