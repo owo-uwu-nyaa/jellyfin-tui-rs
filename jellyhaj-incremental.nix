@@ -9,7 +9,7 @@
   remarshal,
   stdenv,
   attach ? false,
-  mpris ? stdenv.hostPlatform.isLinux,
+  withMpris ? stdenv.isLinux, # enable media player dbus interface
 }:
 let
   fileset = lib.fileset.unions [
@@ -68,7 +68,7 @@ let
         inherit src;
         pname = "jellyhaj";
         version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
-        features = (lib.optional attach "attach") ++ (lib.optional mpris "mpris");
+        features = (lib.optional attach "attach") ++ (lib.optional withMpris "mpris");
       }
     ).overrideAttrs
       (

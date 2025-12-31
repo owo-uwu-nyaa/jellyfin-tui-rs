@@ -7,7 +7,7 @@
   mpv-unwrapped,
   sqlite,
   versionCheckHook,
-  mpris ? stdenv.isLinux,
+  withMpris ? stdenv.isLinux, # enable media player dbus interface
 }:
 let
   fileset = lib.fileset.unions [
@@ -54,7 +54,7 @@ rustPlatform.buildRustPackage {
     "--skip=tests::events"
   ];
   cargoTestFlags = [ "--workspace" ];
-  buildFeatures = lib.optional mpris "mpris";
+  buildFeatures = lib.optional withMpris "mpris";
 
   meta = {
     description = "Terminal client for Jellyfin trying to reimplement parts of the web ui";
