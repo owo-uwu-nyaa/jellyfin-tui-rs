@@ -17,3 +17,9 @@ jobs:
             owo-uwu-nyaa
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - run: nix flake check
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      if: ${{ failure() }}
+      with:
+        name: nix-logs
+        path: /nix/var/log/nix/drvs
+        compression-level: 0
