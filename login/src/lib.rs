@@ -240,7 +240,7 @@ pub async fn login(
         }
     }
     let mut info_changed = false;
-    let device_name: Cow<'static, str> = whoami::fallible::hostname()
+    let device_name: Cow<'static, str> = whoami::hostname()
         .ok()
         .map(|v| v.into())
         .unwrap_or_else(|| "unknown".into());

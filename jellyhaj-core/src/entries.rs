@@ -176,7 +176,7 @@ pub fn play(item: &MediaItem) -> NextScreen {
             name: _,
             sort_name: _,
             overview: _,
-            item_type: ItemType::Unknown,
+            item_type: ItemType::Unknown | ItemType::CollectionFolder,
             user_data: _,
             episode_index: _,
             season_index: _,
@@ -223,6 +223,7 @@ fn open(item: &MediaItem) -> NextScreen {
                 | ItemType::Folder
                 | ItemType::Series
                 | ItemType::MusicAlbum
+                | ItemType::CollectionFolder
                 | ItemType::Season {
                     series_id: _,
                     series_name: _,
@@ -282,7 +283,6 @@ fn episode(item: &MediaItem) -> NextScreen {
             overview: _,
             item_type:
                 ItemType::Playlist
-                | ItemType::Folder
                 | ItemType::MusicAlbum
                 | ItemType::Series
                 | ItemType::Season {
@@ -301,7 +301,7 @@ fn episode(item: &MediaItem) -> NextScreen {
             name: _,
             sort_name: _,
             overview: _,
-            item_type: ItemType::Unknown,
+            item_type: ItemType::Unknown | ItemType::Folder | ItemType::CollectionFolder,
             user_data: _,
             episode_index: _,
             season_index: _,
@@ -394,7 +394,7 @@ pub fn season(item: &MediaItem) -> Option<NextScreen> {
             name: _,
             sort_name: _,
             overview: _,
-            item_type: ItemType::Unknown,
+            item_type: ItemType::Unknown | ItemType::CollectionFolder,
             user_data: _,
             episode_index: _,
             season_index: _,

@@ -24,6 +24,8 @@ pub mod socket;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
+pub mod scheduled_tasks;
+pub mod library;
 
 #[derive(Debug)]
 struct ClientInner<AuthS: AuthStatus = Auth> {

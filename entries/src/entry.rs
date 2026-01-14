@@ -137,6 +137,7 @@ impl Entry {
             ItemType::Playlist | ItemType::Folder => (item.name.clone(), None),
             ItemType::Music { album_id: _, album } => (album.clone(), item.name.clone().into()),
             ItemType::Unknown => return Ok(None),
+            ItemType::CollectionFolder => return Ok(None),
         };
         let image = select_images(&item)
             .map(|(image_type, tag)| {

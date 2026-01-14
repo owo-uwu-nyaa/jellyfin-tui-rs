@@ -8,8 +8,11 @@ use player_core::{OwnedPlayerHandle, PlayerHandle};
 use ratatui::DefaultTerminal;
 use ratatui_image::picker::Picker;
 use sqlx::SqliteConnection;
-use stats_data::Stats;
 use tokio::sync::Mutex;
+
+pub use stats_data::Stats;
+pub type DB = Arc<Mutex<SqliteConnection>>;
+pub type ImagePicker = Arc<Picker>;
 
 pub struct TuiContext {
     pub jellyfin: JellyfinClient<Auth>,
@@ -17,8 +20,8 @@ pub struct TuiContext {
     pub term: DefaultTerminal,
     pub config: Config,
     pub events: KeybindEvents,
-    pub image_picker: Arc<Picker>,
-    pub cache: Arc<Mutex<SqliteConnection>>,
+    pub image_picker: ImagePicker,
+    pub cache: DB,
     pub image_cache: ImageProtocolCache,
     pub mpv_handle: OwnedPlayerHandle,
     pub stats: Stats,
@@ -31,7 +34,7 @@ pub struct TuiContextProj<'p> {
     pub config: &'p Config,
     pub events: &'p mut KeybindEvents,
     pub image_picker: &'p Arc<Picker>,
-    pub cache: &'p Arc<Mutex<SqliteConnection>>,
+    pub cache: &'p DB,
     pub image_cache: &'p mut ImageProtocolCache,
     pub mpv_handle: &'p PlayerHandle,
     pub stats: &'p Stats,

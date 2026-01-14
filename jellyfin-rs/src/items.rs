@@ -179,6 +179,7 @@ pub enum ItemType {
     Series,
     Playlist,
     Folder,
+    CollectionFolder,
     Music {
         album_id: String,
         album: String,

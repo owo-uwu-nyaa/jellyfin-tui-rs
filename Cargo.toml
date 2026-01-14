@@ -1,116 +1,138 @@
-[package]
-name = "jellyhaj"
-version = "0.2.0"
-edition = "2024"
-description = "kind of fancy jellyfin tui based on ratatui and libmpv"
-
 [[bin]]
 name = "jellyhaj"
 path = "src/main.rs"
 
 [dependencies]
+ansi-to-tui = "8.0.0"
+bytes = {workspace = true}
+clap = {features = ["derive"], version = "4.5.23"}
+color-eyre = {workspace = true}
+config = {path = "config"}
+crossterm = {workspace = true}
+dirs = {workspace = true}
+either = {workspace = true}
+entries = {path = "entries"}
+futures-util = {workspace = true}
+home-screen = {path = "home-screen"}
+image = {workspace = true}
+item-view = {path = "item-view"}
+jellyfin = {path = "jellyfin-rs"}
 jellyhaj-core = {path = "jellyhaj-core"}
 keybinds = {path = "keybinds"}
-jellyfin = { path = "jellyfin-rs"}
-entries = { path = "entries"}
-config = { path = "config" }
-spawn = {path = "spawn"}
-ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
-player-core = {path="player-core"}
-player-jellyfin = {path="player-jellyfin"}
-player-mpris = {path = "player-mpris", optional = true }
-
-login = { path = "login"}
-home-screen = {path = "home-screen"}
-user-view = {path = "user-view"}
+log-screen = {path = "log-screen", version = "0.1.0"}
+login = {path = "login"}
+parking_lot = {workspace = true}
+pin-project-lite = {workspace = true}
 player = {path = "player"}
-item-view = {path = "item-view"}
-
-clap = { version = "4.5.23", features = ["derive"] }
-tracing-error = "0.2.0"
-tracing-subscriber = { version = "=0.3.19", features = ["env-filter"] }
-ansi-to-tui = "8.0.0"
-
-rayon = {workspace=true}
-color-eyre = {workspace=true}
-crossterm = {workspace=true}
-futures-util = {workspace=true}
-ratatui = {workspace=true}
-ratatui-image = {workspace=true}
-image = {workspace=true}
-serde = {workspace=true}
-tokio = { workspace=true, features = ["macros", "parking_lot", "rt", "signal", "time"] }
-tokio-util = {workspace=true}
-tracing = {workspace=true}
-bytes = {workspace=true}
-parking_lot = {workspace=true}
-sqlx = {workspace=true}
-serde_json = {workspace=true}
-either = {workspace=true}
-pin-project-lite = {workspace=true}
+player-core = {path = "player-core"}
+player-jellyfin = {path = "player-jellyfin"}
+player-mpris = {optional = true, path = "player-mpris"}
+ratatui = {workspace = true}
+ratatui-image = {workspace = true}
+ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
+rayon = {workspace = true}
+refresh-item = {path = "refresh-item", version = "0.1.0"}
+serde = {workspace = true}
+serde_json = {workspace = true}
+spawn = {path = "spawn"}
+sqlx = {workspace = true}
+stats-view = {path = "stats-view", version = "0.1.0"}
+tokio = {features = ["macros", "parking_lot", "rt", "signal", "time"], workspace = true}
+tokio-util = {workspace = true}
 toml = {workspace = true}
-dirs = {workspace = true}
-tui-logger.workspace=true
-refresh-item = { version = "0.1.0", path = "refresh-item" }
-log-screen = { version = "0.1.0", path = "log-screen" }
-stats-view = { version = "0.1.0", path = "stats-view" }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2.170"
-
-[workspace]
-members = [ "config", "entries", "fetch", "home-screen", "item-view","jellyfin-rs", "jellyhaj-core", "keybinds", "keybinds-derive", "keybinds-derive-impl", "libmpv-rs", "libmpv-rs/libmpv-sys", "login", "player",  "player-core","player-mpris", "player-jellyfin", "ratatui_fallible_widget", "spawn", "user-view", "stats-data", "refresh-item", "checkbox", "stats-view", "log-screen"]
-
-[workspace.dependencies]
-log = "0.4.26"
-dirs = "6.0.0"
-textwrap = { version = "0.16.2", features = [] }
-parking_lot = "0.12.3"
-rayon = "1.10.0"
-base64 = "0.22.1"
-bytes = "1.9.0"
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = "1.0.97"
-serde_urlencoded = "0.7.1"
-tracing = "0.1.41"
-tracing-core = { version = "0.1.33", default-features = false }
-tokio = { version = "1.28.2" }
-tokio-util = "0.7.13"
-tokio-websockets = { version = "0.13.0", features = ["client", "getrandom", "aws_lc_rs"] }
-futures-core = "0.3.31"
-futures-sink = "0.3.31"
-futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
-pin-project-lite = "0.2.16"
-hyper = { version = "1.7.0", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1.16", features = ["tokio"] }
-tokio-rustls = { version = "0.26.2", default-features = false, features = ["aws_lc_rs", "logging"] }
-rustls-native-certs = "0.8.1"
-aws-lc-rs = { version = "1.13.3", default-features = false }
-http = "1.3.1"
-color-eyre = "0.6.5"
-crossterm = { version = "0.29.0", features = ["event-stream"] }
-ratatui = {version = "0.30.0", features = ["unstable-widget-ref"]}
-ratatui-core = "0.1.0"
-ratatui-image = { version = "10.0.0", features = ["crossterm"], default-features = false }
-either = "1.15.0"
-itertools = "0.14.0"
-proc-macro2 = "1.0.94"
-quote = "1.0.40"
-syn = {version = "2.0.100", default-features = false}
-pkg-config = "0.3.31"
-bindgen = "0.69"
-sqlx = { version = "0.8.3", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite-unbundled"] }
-image = { version = "0.25.5", default-features = false, features = ["webp", "png"] }
-toml = { version = "0.9.5", default-features = false, features = ["serde", "display", "parse"] }
-whoami = { version = "1.5.2", default-features = false }
-zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
-tui-logger = { version = "0.18.0", features = ["tracing-support"] }
+tracing = {workspace = true}
+tracing-error = "0.2.0"
+tracing-subscriber = {features = ["env-filter"], version = "=0.3.19"}
+user-view = {path = "user-view"}
+tui-logger.workspace = true
 
 [features]
 attach = []
 default = []
 mpris = ["dep:player-mpris"]
 
+[package]
+description = "kind of fancy jellyfin tui based on ratatui and libmpv"
+edition = "2024"
+name = "jellyhaj"
+version = "0.2.0"
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.170"
+
+[workspace]
+members = [
+  "checkbox",
+  "config",
+  "entries",
+  "fetch",
+  "home-screen",
+  "item-view",
+  "jellyfin-rs",
+  "jellyhaj-core",
+  "keybinds",
+  "keybinds-derive",
+  "keybinds-derive-impl",
+  "libmpv-rs",
+  "libmpv-rs/libmpv-sys",
+  "log-screen",
+  "login",
+  "player",
+  "player-core",
+  "player-jellyfin",
+  "player-mpris",
+  "ratatui_fallible_widget",
+  "refresh-item",
+  "spawn",
+  "stats-data",
+  "stats-view",
+  "user-view"
+]
+
+[workspace.dependencies]
+aws-lc-rs = {default-features = false, version = "1.13.3"}
+base64 = "0.22.1"
+bindgen = "0.69"
+bytes = "1.9.0"
+color-eyre = "0.6.5"
+crossterm = {features = ["event-stream"], version = "0.29.0"}
+dirs = "6.0.0"
+either = "1.15.0"
+futures-core = "0.3.31"
+futures-sink = "0.3.31"
+futures-util = {default-features = false, features = ["std"], version = "0.3.31"}
+http = "1.3.1"
+hyper = {features = ["client", "http1", "http2"], version = "1.7.0"}
+hyper-util = {features = ["tokio"], version = "0.1.16"}
+image = {default-features = false, features = ["png", "webp"], version = "0.25.5"}
+itertools = "0.14.0"
+log = "0.4.26"
+parking_lot = "0.12.3"
+pin-project-lite = "0.2.16"
+pkg-config = "0.3.31"
+proc-macro2 = "1.0.94"
+quote = "1.0.40"
+ratatui = {features = ["unstable-widget-ref"], version = "0.30.0"}
+ratatui-core = "0.1.0"
+ratatui-image = {default-features = false, features = ["crossterm"], version = "10.0.0"}
+rayon = "1.10.0"
+rustls-native-certs = "0.8.1"
+serde = {features = ["derive"], version = "1.0.164"}
+serde_json = "1.0.97"
+serde_urlencoded = "0.7.1"
+sqlx = {default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite-unbundled"], version = "0.8.3"}
+syn = {default-features = false, version = "2.0.100"}
+textwrap = {features = [], version = "0.16.2"}
+tokio = {version = "1.28.2"}
+tokio-rustls = {default-features = false, features = ["aws_lc_rs", "logging"], version = "0.26.2"}
+tokio-util = "0.7.13"
+tokio-websockets = {features = ["aws_lc_rs", "client", "getrandom"], version = "0.13.0"}
+toml = {default-features = false, features = ["display", "parse", "serde"], version = "0.9.5"}
+tracing = "0.1.41"
+tracing-core = {default-features = false, version = "0.1.33"}
+tui-logger = {features = ["tracing-support"], version = "0.18.0"}
+whoami = {default-features = false, version = "2.0.2"}
+zbus = {default-features = false, features = ["tokio"], version = "5.11.0"}
