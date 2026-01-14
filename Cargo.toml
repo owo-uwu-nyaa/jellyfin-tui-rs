@@ -86,6 +86,7 @@ members = [
   "player-mpris",
   "ratatui_fallible_widget",
   "refresh-item",
+  "serde-json-ratatui",
   "spawn",
   "stats-data",
   "stats-view",
