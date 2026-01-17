@@ -1,0 +1,15 @@
+[package]
+name = "library-view"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre.workspace = true
+entries = { version = "0.1.0", path = "../entries" }
+futures-util.workspace = true
+jellyfin = { version = "0.1.4", path = "../jellyfin-rs" }
+jellyhaj-core = { version = "0.1.0", path = "../jellyhaj-core" }
+keybinds = { version = "0.1.0", path = "../keybinds" }
+ratatui.workspace = true
+ratatui_fallible_widget = { version = "0.1.0", path = "../ratatui_fallible_widget" }
+tokio = { workspace = true, features = ["sync"] }

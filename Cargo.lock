@@ -1928,6 +1928,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "library-view"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "entries",
+ "jellyfin",
+ "jellyhaj-core",
+ "keybinds",
+ "ratatui",
+ "ratatui_fallible_widget",
+ "tokio",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

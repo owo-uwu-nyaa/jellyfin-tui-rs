@@ -78,6 +78,7 @@ members = [
   "keybinds-derive-impl",
   "libmpv-rs",
   "libmpv-rs/libmpv-sys",
+  "library-view",
   "log-screen",
   "login",
   "player",
