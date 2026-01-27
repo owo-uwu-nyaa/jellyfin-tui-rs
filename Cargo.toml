@@ -77,7 +77,6 @@ members = [
   "keybinds",
   "keybinds-derive",
   "keybinds-derive-impl",
-  "layout-widget",
   "libmpv-rs",
   "libmpv-rs/libmpv-sys",
   "library-view",
@@ -93,9 +92,14 @@ members = [
   "spawn",
   "stats-data",
   "stats-view",
-  "user-view", "widgets/entry", "widgets/image",
-  "widgets/core"
-, "widgets/item-list", "widgets/item-grid"]
+  "user-view",
+  "widgets/core",
+  "widgets/entry",
+  "widgets/image",
+  "widgets/item-grid",
+  "widgets/item-list",
+  "widgets/item-screen"
+]
 
 [workspace.dependencies]
 aws-lc-rs = {default-features = false, version = "1.13.3"}

@@ -1,17 +1,17 @@
-[package]
-name = "jellyhaj-widgets-core"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
+config = {path = "../../config", version = "0.1.0"}
+futures-channel = {features = ["sink"], version = "0.3.31"}
+futures-util = {features = ["sink"], workspace = true}
+spawn = {path = "../../spawn", version = "0.1.0"}
 color-eyre.workspace = true
-config = { version = "0.1.0", path = "../../config" }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-util = { workspace = true, features = ["sink"] }
 parking_lot.workspace = true
 pin-project-lite.workspace = true
 ratatui.workspace = true
 ratatui-image.workspace = true
-spawn = { version = "0.1.0", path = "../../spawn" }
 tokio-util.workspace = true
 tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "jellyhaj-widgets-core"
+version = "0.1.0"

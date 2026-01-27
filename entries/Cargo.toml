@@ -1,22 +1,4 @@
 [dependencies]
-bytes = {workspace = true}
-color-eyre = {workspace = true}
-crossterm = {workspace = true}
-either = {workspace = true}
-image = {workspace = true}
-jellyfin = {path = "../jellyfin-rs"}
-keybinds = {path = "../keybinds"}
-parking_lot = {workspace = true}
-ratatui = {workspace = true}
-ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
-ratatui-image = {workspace = true}
-rayon = {workspace = true}
-spawn = {path = "../spawn"}
-sqlx = {workspace = true}
-stats-data = {path = "../stats-data", version = "0.1.0"}
-tokio = {features = ["macros"], workspace = true}
-tokio-util = {workspace = true}
-tracing = {workspace = true}
 
 [package]
 edition = "2024"

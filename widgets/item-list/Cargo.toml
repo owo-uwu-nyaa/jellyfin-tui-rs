@@ -1,10 +1,10 @@
-[package]
-name = "jellyhaj-item-list"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
+jellyhaj-widgets-core = {path = "../core", version = "0.1.0"}
 color-eyre.workspace = true
-jellyhaj-widgets-core = { version = "0.1.0", path = "../core" }
 ratatui.workspace = true
 tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "jellyhaj-item-list"
+version = "0.1.0"

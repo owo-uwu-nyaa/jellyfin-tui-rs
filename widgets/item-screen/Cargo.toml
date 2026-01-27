@@ -1,9 +1,10 @@
 [dependencies]
+jellyhaj-item-list = {path = "../item-list", version = "0.1.0"}
 jellyhaj-widgets-core = {path = "../core", version = "0.1.0"}
 color-eyre.workspace = true
 ratatui.workspace = true
 
 [package]
 edition = "2024"
-name = "jellyhaj-item-grid"
+name = "jellyhaj-item-screen"
 version = "0.1.0"

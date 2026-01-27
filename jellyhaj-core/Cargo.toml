@@ -2,7 +2,6 @@
 color-eyre = {workspace = true}
 config = {path = "../config"}
 either = {workspace = true}
-entries = {path = "../entries"}
 image = {workspace = true}
 jellyfin = {path = "../jellyfin-rs"}
 keybinds = {path = "../keybinds"}

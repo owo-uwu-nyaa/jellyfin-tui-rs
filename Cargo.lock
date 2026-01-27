@@ -889,26 +889,6 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 [[package]]
 name = "entries"
 version = "0.1.0"
-dependencies = [
- "bytes",
- "color-eyre",
- "crossterm",
- "either",
- "image",
- "jellyfin",
- "keybinds",
- "parking_lot",
- "ratatui",
- "ratatui-fallible-widget",
- "ratatui-image",
- "rayon",
- "spawn",
- "sqlx",
- "stats-data",
- "tokio",
- "tokio-util",
- "tracing",
-]
 
 [[package]]
 name = "entry"
@@ -1684,15 +1664,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
-name = "item-grid"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "jellyhaj-widgets-core",
- "ratatui",
-]
-
-[[package]]
 name = "item-view"
 version = "0.1.0"
 dependencies = [
@@ -1824,7 +1795,6 @@ dependencies = [
  "color-eyre",
  "config",
  "either",
- "entries",
  "image",
  "jellyfin",
  "keybinds",
@@ -1859,6 +1829,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jellyhaj-item-grid"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "jellyhaj-widgets-core",
+ "ratatui",
+]
+
+[[package]]
 name = "jellyhaj-item-list"
 version = "0.1.0"
 dependencies = [
@@ -1866,6 +1845,16 @@ dependencies = [
  "jellyhaj-widgets-core",
  "ratatui",
  "tracing",
+]
+
+[[package]]
+name = "jellyhaj-item-screen"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "jellyhaj-item-list",
+ "jellyhaj-widgets-core",
+ "ratatui",
 ]
 
 [[package]]
@@ -1954,18 +1943,6 @@ name = "lab"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
-
-[[package]]
-name = "layout-widget"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "config",
- "ratatui",
- "ratatui-fallible-widget",
- "ratatui-image",
- "tracing",
-]
 
 [[package]]
 name = "lazy_static"

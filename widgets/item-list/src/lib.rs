@@ -5,7 +5,10 @@ use jellyhaj_widgets_core::{
 };
 use ratatui::{
     layout::{Position, Rect, Size},
-    widgets::{Block, Padding, Scrollbar, ScrollbarState, StatefulWidget, Widget},
+    widgets::{
+        Block, Padding, Scrollbar, ScrollbarOrientation::HorizontalBottom, ScrollbarState,
+        StatefulWidget, Widget,
+    },
 };
 use tracing::instrument;
 
@@ -19,7 +22,7 @@ pub struct ItemList<T: ItemWidget> {
     item_size: Size,
 }
 impl<T: ItemWidget> ItemList<T> {
-    pub fn new(items: Vec<T>, current: usize , title: String, dim: DimensionsParameter<'_>) -> Self {
+    pub fn new(items: Vec<T>, current: usize, title: String, dim: DimensionsParameter<'_>) -> Self {
         Self {
             items,
             current,
@@ -66,11 +69,7 @@ impl<T: ItemWidget> JellyhajWidget for ItemList<T> {
 
     fn into_state(self) -> Self::State {
         ItemListData {
-            items: self
-                .items
-                .into_iter()
-                .map(<T as ItemWidget>::into_state)
-                .collect(),
+            items: self.items.into_iter().map(ItemWidget::into_state).collect(),
             title: self.title,
             current: self.current,
         }
@@ -81,8 +80,16 @@ impl<T: ItemWidget> JellyhajWidget for ItemList<T> {
         action: Self::Action,
     ) -> jellyhaj_widgets_core::Result<Option<Self::ActionResult>> {
         match action {
-            ItemListAction::SpecificInner(index, action) => self.items[index].apply_action(action),
-            ItemListAction::CurrentInner(action) => self.items[self.current].apply_action(action),
+            ItemListAction::SpecificInner(index, action) => self
+                .items
+                .get_mut(index)
+                .and_then(|v| v.apply_action(action).transpose())
+                .transpose(),
+            ItemListAction::CurrentInner(action) => self
+                .items
+                .get_mut(self.current)
+                .and_then(|v| v.apply_action(action).transpose())
+                .transpose(),
             ItemListAction::Left => {
                 self.current = min(self.items.len(), self.current + 1);
                 Ok(None)
@@ -150,24 +157,28 @@ impl<T: ItemWidget> JellyhajWidget for ItemList<T> {
             self.items.len(),
             ((main.width + 1) / (self.item_size.width + 1)).into(),
         );
-        let mut items = self.items.as_mut_slice();
-        let mut current = self.current;
-        if visible < items.len()
+        self.offset = if visible < self.items.len()
             && let position_in_visible = visible / 2
-            && current > position_in_visible
+            && self.current > position_in_visible
         {
-            self.offset = min(current - position_in_visible, items.len() - visible);
-            current -= self.offset;
-            items = &mut items[self.offset..];
+            min(
+                self.current - position_in_visible,
+                self.items.len() - visible,
+            )
         } else {
-            self.offset = 0
-        }
+            0
+        };
 
-        for (i, item) in items.iter_mut().enumerate().take(visible) {
-            item.set_active(self.active && i == current);
+        for ((i, item), x) in self
+            .items
+            .iter_mut()
+            .enumerate()
+            .skip(self.offset)
+            .zip((0..visible as u16).map(|i| main.x + i * (self.item_size.width + 1)))
+        {
+            item.set_active(self.active && i == self.current);
             let area = Rect {
-                x: main.x
-                    + u16::try_from(i).expect("index larger than u16") * (self.item_size.width + 1),
+                x,
                 y: main.y,
                 width: self.item_size.width,
                 height: main.height,
@@ -175,13 +186,11 @@ impl<T: ItemWidget> JellyhajWidget for ItemList<T> {
             item.render_item(
                 area,
                 buf,
-                TaskSubmitter::clone(&task).wrap_with(ListWrapper {
-                    index: i + self.offset,
-                }),
+                TaskSubmitter::clone(&task).wrap_with(ListWrapper { index: i }),
             )?
         }
         if visible < self.items.len() {
-            Scrollbar::new(ratatui::widgets::ScrollbarOrientation::HorizontalBottom).render(
+            Scrollbar::new(HorizontalBottom).render(
                 area,
                 buf,
                 &mut ScrollbarState::new(self.items.len())
