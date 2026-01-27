@@ -1,10 +1,10 @@
-[package]
-name = "keybinds-derive"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-keybinds-derive-impl = { version = "0.1.0", path = "../keybinds-derive-impl" }
+keybinds-derive-impl = {path = "../keybinds-derive-impl", version = "0.1.0"}
 
 [lib]
 proc-macro = true
+
+[package]
+edition = "2024"
+name = "keybinds-derive"
+version = "0.1.0"

@@ -1,13 +1,12 @@
+[dependencies]
+color-eyre = {workspace = true}
+parking_lot = {workspace = true}
+pin-project-lite = {workspace = true}
+tokio = {features = ["rt"], workspace = true}
+tokio-util = {workspace = true}
+tracing = {workspace = true}
+
 [package]
+edition = "2024"
 name = "spawn"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-
-tracing = {workspace=true}
-tokio = { workspace=true, features = ["rt"] }
-tokio-util = {workspace = true}
-color-eyre = {workspace=true}
-parking_lot = {workspace=true}
-pin-project-lite = {workspace=true}

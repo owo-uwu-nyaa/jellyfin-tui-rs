@@ -1,22 +1,21 @@
-[package]
-name = "player"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-player-core = {path="../player-core"}
-jellyfin = {path="../jellyfin-rs"}
-jellyhaj-core = {path="../jellyhaj-core"}
-keybinds = {path = "../keybinds"}
-spawn = {path = "../spawn"}
+color-eyre = {workspace = true}
 fetch = {path = "../fetch"}
-ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
-
-color-eyre = {workspace=true}
-futures-util = {workspace=true}
-tokio = { workspace=true, features = ["rt"] }
-ratatui = {workspace=true}
-tracing = {workspace=true}
+futures-util = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
+jellyhaj-core = {path = "../jellyhaj-core"}
+keybinds = {path = "../keybinds"}
+player-core = {path = "../player-core"}
+ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
+spawn = {path = "../spawn"}
+tokio = {features = ["rt"], workspace = true}
+tracing = {workspace = true}
 
 [features]
 use-bindgen = ["player-core/use-bindgen"]
+
+[package]
+edition = "2024"
+name = "player"
+version = "0.1.0"

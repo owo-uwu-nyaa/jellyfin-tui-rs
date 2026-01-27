@@ -1,17 +1,16 @@
-[package]
-name = "keybinds"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
-keybinds-derive = {path = "../keybinds-derive"}
-
-crossterm = {workspace = true}
 color-eyre = {workspace = true}
+crossterm = {workspace = true}
+either = {workspace = true}
 futures-util = {workspace = true}
+itertools = {workspace = true}
+keybinds-derive = {path = "../keybinds-derive"}
 ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
 serde = {workspace = true}
 tracing = {workspace = true}
-either = {workspace = true}
-itertools = {workspace = true}
+
+[package]
+edition = "2024"
+name = "keybinds"
+version = "0.1.0"

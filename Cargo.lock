@@ -540,7 +540,6 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "dirs",
- "jellyhaj-core",
  "keybinds",
  "libmpv",
  "log",
@@ -900,14 +899,27 @@ dependencies = [
  "keybinds",
  "parking_lot",
  "ratatui",
+ "ratatui-fallible-widget",
  "ratatui-image",
- "ratatui_fallible_widget",
  "rayon",
  "spawn",
  "sqlx",
  "stats-data",
  "tokio",
  "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "entry"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "jellyfin",
+ "jellyhaj-image",
+ "jellyhaj-widgets-core",
+ "ratatui",
+ "tokio",
  "tracing",
 ]
 
@@ -1050,7 +1062,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "tokio",
  "tracing",
 ]
@@ -1375,7 +1387,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "tokio",
  "tracing",
 ]
@@ -1612,6 +1624,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "image-widget"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "image",
+ "jellyfin",
+ "parking_lot",
+ "ratatui-core",
+ "ratatui-image",
+ "sqlx",
+ "stats-data",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "indenter"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1656,6 +1684,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
+name = "item-grid"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "jellyhaj-widgets-core",
+ "ratatui",
+]
+
+[[package]]
 name = "item-view"
 version = "0.1.0"
 dependencies = [
@@ -1667,7 +1704,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "textwrap",
  "tokio",
  "tracing",
@@ -1761,8 +1798,8 @@ dependencies = [
  "player-jellyfin",
  "player-mpris",
  "ratatui",
+ "ratatui-fallible-widget",
  "ratatui-image",
- "ratatui_fallible_widget",
  "rayon",
  "refresh-item",
  "serde",
@@ -1785,6 +1822,7 @@ name = "jellyhaj-core"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "config",
  "either",
  "entries",
  "image",
@@ -1798,6 +1836,52 @@ dependencies = [
  "sqlx",
  "stats-data",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jellyhaj-image"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "color-eyre",
+ "image",
+ "jellyfin",
+ "jellyhaj-widgets-core",
+ "parking_lot",
+ "ratatui",
+ "ratatui-image",
+ "rayon",
+ "sqlx",
+ "stats-data",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jellyhaj-item-list"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "jellyhaj-widgets-core",
+ "ratatui",
+ "tracing",
+]
+
+[[package]]
+name = "jellyhaj-widgets-core"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "config",
+ "futures-channel",
+ "futures-util",
+ "parking_lot",
+ "pin-project-lite",
+ "ratatui",
+ "ratatui-image",
+ "spawn",
+ "tokio-util",
  "tracing",
 ]
 
@@ -1843,7 +1927,7 @@ dependencies = [
  "itertools 0.14.0",
  "keybinds-derive",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "serde",
  "tracing",
 ]
@@ -1870,6 +1954,18 @@ name = "lab"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
+
+[[package]]
+name = "layout-widget"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "config",
+ "ratatui",
+ "ratatui-fallible-widget",
+ "ratatui-image",
+ "tracing",
+]
 
 [[package]]
 name = "lazy_static"
@@ -1933,11 +2029,12 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "entries",
+ "futures-util",
  "jellyfin",
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "tokio",
 ]
 
@@ -2019,7 +2116,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "tokio",
  "tui-logger",
 ]
@@ -2034,7 +2131,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "serde",
  "sqlx",
  "tokio",
@@ -2547,7 +2644,7 @@ dependencies = [
  "keybinds",
  "player-core",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "spawn",
  "tokio",
  "tracing",
@@ -2834,6 +2931,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui-fallible-widget"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "ratatui-core",
+]
+
+[[package]]
 name = "ratatui-image"
 version = "10.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2886,14 +2991,6 @@ dependencies = [
  "time",
  "unicode-segmentation",
  "unicode-width",
-]
-
-[[package]]
-name = "ratatui_fallible_widget"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "ratatui-core",
 ]
 
 [[package]]
@@ -2977,7 +3074,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
 ]
 
 [[package]]
@@ -3669,7 +3766,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "stats-data",
  "tokio",
 ]
@@ -4275,7 +4372,7 @@ dependencies = [
  "jellyhaj-core",
  "keybinds",
  "ratatui",
- "ratatui_fallible_widget",
+ "ratatui-fallible-widget",
  "tokio",
  "tracing",
 ]

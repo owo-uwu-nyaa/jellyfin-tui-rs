@@ -1,21 +1,19 @@
-[package]
-name = "login"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-
-jellyfin = { path = "../jellyfin-rs"}
+color-eyre = {workspace = true}
+futures-util = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
 jellyhaj-core = {path = "../jellyhaj-core"}
 keybinds = {path = "../keybinds"}
-ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
-
-color-eyre = {workspace=true}
-futures-util = {workspace=true}
-ratatui = {workspace=true}
-serde = {workspace=true}
-sqlx = {workspace=true}
-tracing = {workspace=true}
+ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
+serde = {workspace = true}
+sqlx = {workspace = true}
+tokio = {features = ["macros", "process"], workspace = true}
 toml = {workspace = true}
-whoami = {workspace=true}
-tokio = { workspace=true, features = ["macros", "process"] }
+tracing = {workspace = true}
+whoami = {workspace = true}
+
+[package]
+edition = "2024"
+name = "login"
+version = "0.1.0"

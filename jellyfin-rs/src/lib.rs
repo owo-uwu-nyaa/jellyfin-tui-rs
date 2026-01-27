@@ -15,17 +15,17 @@ pub mod connect;
 pub mod err;
 pub mod image;
 pub mod items;
+pub mod library;
 pub mod playback_status;
 pub mod playlist;
 pub mod request;
+pub mod scheduled_tasks;
 pub mod session;
 pub mod shows;
 pub mod socket;
 pub mod user;
 pub mod user_library;
 pub mod user_views;
-pub mod scheduled_tasks;
-pub mod library;
 
 #[derive(Debug)]
 struct ClientInner<AuthS: AuthStatus = Auth> {

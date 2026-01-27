@@ -1,6 +1,6 @@
+[dependencies]
+
 [package]
+edition = "2024"
 name = "stats-data"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]

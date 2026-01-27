@@ -1,4 +1,3 @@
-use crate::entry::{ENTRY_WIDTH, Entry, entry_height};
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     widgets::{

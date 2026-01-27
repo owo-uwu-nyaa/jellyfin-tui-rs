@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    Authed, JellyfinClient,
     connect::JsonResponse,
     request::{NoQuery, RequestBuilderExt},
-    Authed, JellyfinClient,
 };
 use color_eyre::Result;
 

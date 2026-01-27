@@ -1,13 +1,13 @@
+[dependencies]
+jellyhaj-core = {path = "../jellyhaj-core", version = "0.1.0"}
+keybinds = {path = "../keybinds", version = "0.1.0"}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget", version = "0.1.0"}
+tokio = {features = ["time"], workspace = true}
+color-eyre.workspace = true
+ratatui.workspace = true
+tui-logger.workspace = true
+
 [package]
+edition = "2024"
 name = "log-screen"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-color-eyre.workspace = true
-jellyhaj-core = { version = "0.1.0", path = "../jellyhaj-core" }
-keybinds = { version = "0.1.0", path = "../keybinds" }
-ratatui.workspace = true
-ratatui_fallible_widget = { version = "0.1.0", path = "../ratatui_fallible_widget" }
-tokio = { workspace = true, features = ["time"] }
-tui-logger.workspace = true

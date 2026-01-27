@@ -1,23 +1,22 @@
+[dependencies]
+color-eyre = {workspace = true}
+config = {path = "../config"}
+either = {workspace = true}
+entries = {path = "../entries"}
+image = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
+keybinds = {path = "../keybinds"}
+libmpv = {default-features = false, path = "../libmpv-rs"}
+parking_lot = {workspace = true}
+player-core = {path = "../player-core"}
+ratatui = {workspace = true}
+ratatui-image = {workspace = true}
+sqlx = {workspace = true}
+stats-data = {path = "../stats-data", version = "0.1.0"}
+tokio = {workspace = true}
+tracing = {workspace = true}
+
 [package]
+edition = "2024"
 name = "jellyhaj-core"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-jellyfin = { path = "../jellyfin-rs"}
-keybinds = {path = "../keybinds"}
-libmpv = { path = "../libmpv-rs", default-features = false }
-entries = { path = "../entries" }
-player-core = {path = "../player-core"}
-
-color-eyre = {workspace=true}
-ratatui = {workspace=true}
-ratatui-image = {workspace=true}
-image = {workspace=true}
-sqlx = {workspace=true}
-either = {workspace=true}
-parking_lot = {workspace=true}
-tracing = {workspace=true}
-tokio = {workspace=true}
-stats-data = { version = "0.1.0", path = "../stats-data" }
-

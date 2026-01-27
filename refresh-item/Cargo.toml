@@ -1,15 +1,15 @@
+[dependencies]
+checkbox = {path = "../checkbox", version = "0.1.0"}
+fetch = {path = "../fetch", version = "0.1.0"}
+jellyfin = {path = "../jellyfin-rs", version = "0.1.4"}
+jellyhaj-core = {path = "../jellyhaj-core", version = "0.1.0"}
+keybinds = {path = "../keybinds", version = "0.1.0"}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget", version = "0.1.0"}
+color-eyre.workspace = true
+futures-util.workspace = true
+ratatui.workspace = true
+
 [package]
+edition = "2024"
 name = "refresh-item"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-checkbox = { version = "0.1.0", path = "../checkbox" }
-color-eyre.workspace = true
-fetch = { version = "0.1.0", path = "../fetch" }
-futures-util.workspace = true
-jellyfin = { version = "0.1.4", path = "../jellyfin-rs" }
-jellyhaj-core = { version = "0.1.0", path = "../jellyhaj-core" }
-keybinds = { version = "0.1.0", path = "../keybinds" }
-ratatui.workspace = true
-ratatui_fallible_widget = { version = "0.1.0", path = "../ratatui_fallible_widget" }

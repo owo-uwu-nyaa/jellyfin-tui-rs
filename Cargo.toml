@@ -28,8 +28,8 @@ player-core = {path = "player-core"}
 player-jellyfin = {path = "player-jellyfin"}
 player-mpris = {optional = true, path = "player-mpris"}
 ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "ratatui-fallible-widget"}
 ratatui-image = {workspace = true}
-ratatui_fallible_widget = {path = "ratatui_fallible_widget"}
 rayon = {workspace = true}
 refresh-item = {path = "refresh-item", version = "0.1.0"}
 serde = {workspace = true}
@@ -70,12 +70,14 @@ members = [
   "entries",
   "fetch",
   "home-screen",
+  "image-widget",
   "item-view",
   "jellyfin-rs",
   "jellyhaj-core",
   "keybinds",
   "keybinds-derive",
   "keybinds-derive-impl",
+  "layout-widget",
   "libmpv-rs",
   "libmpv-rs/libmpv-sys",
   "library-view",
@@ -85,14 +87,15 @@ members = [
   "player-core",
   "player-jellyfin",
   "player-mpris",
-  "ratatui_fallible_widget",
+  "ratatui-fallible-widget",
   "refresh-item",
   "serde-json-ratatui",
   "spawn",
   "stats-data",
   "stats-view",
-  "user-view"
-]
+  "user-view", "widgets/entry", "widgets/image",
+  "widgets/core"
+, "widgets/item-list", "widgets/item-grid"]
 
 [workspace.dependencies]
 aws-lc-rs = {default-features = false, version = "1.13.3"}

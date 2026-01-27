@@ -1,27 +1,25 @@
 use std::{cmp::min, iter::repeat_n, sync::Arc};
 
+use config::Config;
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarState, StatefulWidget, Widget, Wrap},
 };
 use ratatui_fallible_widget::FallibleWidget;
-use ratatui_image::picker::Picker;
+use ratatui_image::{FontSize, picker::Picker};
 use tracing::{instrument, trace};
 
-use crate::{
-    entry::{ENTRY_WIDTH, Entry},
-    list::{EntryList, entry_list_height},
-};
+use crate::{Item, list::List};
 
 #[derive(Debug)]
-pub struct EntryScreen {
-    entries: Vec<EntryList>,
+pub struct Screen<T: Item> {
+    entries: Vec<List<T>>,
     current: usize,
     title: String,
-    picker: Arc<Picker>,
+    inner_height: u16,
 }
 
-impl FallibleWidget for EntryScreen {
+impl<T: Item> FallibleWidget for Screen<T> {
     #[instrument(skip_all, name = "render_screen")]
     fn render_fallible(
         &mut self,
@@ -74,13 +72,13 @@ impl FallibleWidget for EntryScreen {
     }
 }
 
-impl EntryScreen {
-    pub fn new(entries: Vec<EntryList>, title: String, picker: Arc<Picker>) -> Self {
+impl<T: Item> Screen<T> {
+    pub fn new(entries: Vec<List<T>>, title: String, config: &Config, font_size: FontSize) -> Self {
         Self {
             entries,
             current: 0,
             title,
-            picker,
+            inner_height: List::<T>::entry_list_height_static(config, font_size),
         }
     }
 

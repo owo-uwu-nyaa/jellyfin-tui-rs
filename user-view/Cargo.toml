@@ -1,18 +1,17 @@
-[package]
-name = "user-view"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-jellyhaj-core = {path = "../jellyhaj-core"}
-keybinds = {path = "../keybinds"}
-jellyfin = { path = "../jellyfin-rs"}
+color-eyre = {workspace = true}
 entries = {path = "../entries"}
 fetch = {path = "../fetch"}
-ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
+futures-util = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
+jellyhaj-core = {path = "../jellyhaj-core"}
+keybinds = {path = "../keybinds"}
+ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
+tokio = {features = ["macros"], workspace = true}
+tracing = {workspace = true}
 
-color-eyre = {workspace=true}
-tracing = {workspace=true}
-ratatui = {workspace=true}
-tokio = { workspace=true, features = ["macros"] }
-futures-util = {workspace=true}
+[package]
+edition = "2024"
+name = "user-view"
+version = "0.1.0"

@@ -1,7 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
 use color_eyre::eyre::{Context, OptionExt, Result};
-use jellyhaj_core::config::Config;
 use libmpv::MpvProfile;
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -9,8 +8,24 @@ use tracing::{info, instrument};
 pub use cache::cache;
 pub use keybinds::check_keybinds_file;
 
+use crate::keybind_defs::Keybinds;
+
 mod cache;
+pub mod keybind_defs;
 mod keybinds;
+
+#[derive(Debug)]
+pub struct Config {
+    pub hwdec: String,
+    pub keybinds: Keybinds,
+    pub login_file: PathBuf,
+    pub mpv_log_level: String,
+    pub mpv_profile: MpvProfile,
+    pub help_prefixes: Vec<String>,
+    pub mpv_config_file: Option<PathBuf>,
+    pub entry_image_width: u16,
+}
+
 #[derive(Debug, Deserialize)]
 struct ParseConfig {
     pub login_file: Option<PathBuf>,
@@ -19,6 +34,7 @@ struct ParseConfig {
     pub mpv_profile: Option<String>,
     pub mpv_log_level: String,
     pub mpv_config_file: Option<PathBuf>,
+    pub entry_image_width: Option<u16>,
 }
 
 #[instrument]
@@ -95,6 +111,7 @@ pub fn init_config(config_file: Option<PathBuf>, use_builtin: bool) -> Result<Co
         mpv_profile,
         help_prefixes,
         mpv_config_file: config.mpv_config_file,
+        entry_image_width: config.entry_image_width.unwrap_or(32),
     })
 }
 

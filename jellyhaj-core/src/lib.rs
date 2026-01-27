@@ -1,5 +1,6 @@
-pub mod config;
 pub mod context;
 pub mod entries;
-pub mod keybinds;
 pub mod state;
+
+pub use config::Config;
+pub use config::keybind_defs as keybinds;

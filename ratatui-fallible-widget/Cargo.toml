@@ -1,0 +1,8 @@
+[dependencies]
+color-eyre = {workspace = true}
+ratatui-core = {workspace = true}
+
+[package]
+edition = "2024"
+name = "ratatui-fallible-widget"
+version = "0.1.0"

@@ -1,7 +1,7 @@
 use crate::{
+    Authed, JellyfinClient,
     connect::JsonResponse,
     request::{NoQuery, RequestBuilderExt},
-    Authed, JellyfinClient,
 };
 
 use color_eyre::Result;
@@ -14,7 +14,6 @@ pub struct Library {
     pub item_id: String,
     pub refresh_progress: Option<f64>,
 }
-
 
 impl<Auth: Authed> JellyfinClient<Auth> {
     pub async fn get_libraries(&self) -> Result<JsonResponse<Vec<Library>>> {

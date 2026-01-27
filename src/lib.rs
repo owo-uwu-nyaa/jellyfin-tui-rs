@@ -5,12 +5,11 @@ use std::{
 };
 
 use color_eyre::{Result, eyre::Context};
-use config::init_config;
+use config::{Config, init_config};
 use entries::image::cache::ImageProtocolCache;
 use futures_util::StreamExt;
 use jellyfin::{JellyfinClient, socket::JellyfinWebSocket};
 use jellyhaj_core::{
-    config::Config,
     context::TuiContext,
     keybinds::UnsupportedItemCommand,
     state::{Navigation, NextScreen, State},

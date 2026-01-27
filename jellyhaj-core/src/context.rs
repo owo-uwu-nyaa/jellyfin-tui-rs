@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::Arc};
 
-use crate::config::Config;
 use ::keybinds::KeybindEvents;
+use config::Config;
 use entries::image::cache::ImageProtocolCache;
 use jellyfin::{Auth, JellyfinClient, socket::JellyfinWebSocket};
 use player_core::{OwnedPlayerHandle, PlayerHandle};

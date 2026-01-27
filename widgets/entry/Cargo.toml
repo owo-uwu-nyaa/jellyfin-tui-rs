@@ -1,0 +1,13 @@
+[dependencies]
+jellyfin = {path = "../../jellyfin-rs", version = "0.1.4"}
+jellyhaj-image = {path = "../image", version = "0.1.0"}
+jellyhaj-widgets-core = {path = "../core", version = "0.1.0"}
+tokio = {features = ["sync"], workspace = true}
+color-eyre.workspace = true
+ratatui.workspace = true
+tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "entry"
+version = "0.1.0"

@@ -1,12 +1,12 @@
-[package]
-name = "keybinds-derive-impl"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-proc-macro2 = { workspace=true }
-quote = { workspace=true }
-syn = { workspace=true, features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing"] }
+proc-macro2 = {workspace = true}
+quote = {workspace = true}
+syn = {features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing"], workspace = true}
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+
+[package]
+edition = "2024"
+name = "keybinds-derive-impl"
+version = "0.1.0"

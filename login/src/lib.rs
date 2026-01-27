@@ -10,7 +10,7 @@ use color_eyre::eyre::{Context, OptionExt, Report, Result, eyre};
 use futures_util::StreamExt;
 use jellyfin::{Auth, ClientInfo, JellyfinClient, NoAuth};
 use jellyhaj_core::{
-    config::Config,
+    Config,
     keybinds::{Keybinds, LoadingCommand, LoginInfoCommand},
 };
 use keybinds::{KeybindEvent, KeybindEventStream, KeybindEvents};

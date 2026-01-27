@@ -1,16 +1,15 @@
+[dependencies]
+color-eyre = {workspace = true}
+futures-util = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
+jellyhaj-core = {path = "../jellyhaj-core"}
+keybinds = {path = "../keybinds"}
+ratatui = {workspace = true}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget"}
+tokio = {features = ["macros"], workspace = true}
+tracing = {workspace = true}
+
 [package]
+edition = "2024"
 name = "fetch"
 version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-jellyhaj-core = {path = "../jellyhaj-core"}
-jellyfin = { path = "../jellyfin-rs"}
-keybinds = {path = "../keybinds"}
-ratatui_fallible_widget = {path = "../ratatui_fallible_widget"}
-
-color-eyre = {workspace=true}
-ratatui = {workspace=true}
-tracing = {workspace=true}
-futures-util = {workspace=true}
-tokio = { workspace=true, features = ["macros"] }

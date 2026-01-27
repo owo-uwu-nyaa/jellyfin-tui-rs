@@ -1,0 +1,16 @@
+[dependencies]
+jellyfin = {path = "../jellyfin-rs", version = "0.1.4"}
+stats-data = {path = "../stats-data", version = "0.1.0"}
+color-eyre.workspace = true
+image.workspace = true
+parking_lot.workspace = true
+ratatui-core.workspace = true
+ratatui-image.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "image-widget"
+version = "0.1.0"

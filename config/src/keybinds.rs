@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use color_eyre::{Result, eyre::Context};
-use jellyhaj_core::keybinds::Keybinds;
+
+use crate::keybind_defs::Keybinds;
 
 pub fn check_keybinds_file(file: impl AsRef<Path>) -> Result<()> {
     from_file(

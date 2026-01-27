@@ -1,42 +1,42 @@
-[package]
-name = "jellyfin"
-version = "0.1.4"
-edition = "2024"
-license = "MIT"
-keywords = ["media", "jellyfin", "streaming"]
-categories = ["api-bindings"]
-description = "Bindings to the jellyfin web API"
-homepage = "https://github.com/sargon64/jellyfin-rs"
-repository = "https://github.com/sargon64/jellyfin-rs"
-include = [
-    "**/*.rs",
-    "Cargo.toml",
-    "LICENSE"
-]
+[dependencies]
+aws-lc-rs = {workspace = true}
+base64 = {workspace = true}
+bytes = {workspace = true}
+color-eyre = {workspace = true}
+futures-core = {workspace = true}
+futures-sink = {workspace = true}
+futures-util = {workspace = true}
+http = {workspace = true}
+hyper = {workspace = true}
+hyper-util = {workspace = true}
+pin-project-lite = {workspace = true}
+rustls-native-certs = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+serde_urlencoded = {workspace = true}
+tokio = {features = ["time"], workspace = true}
+tokio-rustls = {workspace = true}
+tokio-websockets = {workspace = true}
+tracing = {workspace = true}
+
+[dev-dependencies]
+tokio = {features = ["macros"], version = "1.28.2"}
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 
-[dependencies]
-base64 = {workspace = true}
-bytes = {workspace = true}
-serde = {workspace = true}
-serde_json = {workspace = true}
-tracing = {workspace = true}
-tokio-websockets = {workspace = true}
-futures-core = {workspace = true}
-tokio = { workspace = true, features = ["time"] }
-futures-sink ={workspace = true}
-pin-project-lite = {workspace = true}
-hyper = {workspace = true}
-tokio-rustls = {workspace = true}
-rustls-native-certs = {workspace = true}
-aws-lc-rs = {workspace = true}
-http = {workspace = true}
-hyper-util = {workspace = true}
-futures-util = {workspace = true}
-serde_urlencoded = {workspace = true}
-color-eyre = {workspace = true}
-
-[dev-dependencies]
-tokio = { version = "1.28.2", features = ["macros"] }
+[package]
+categories = ["api-bindings"]
+description = "Bindings to the jellyfin web API"
+edition = "2024"
+homepage = "https://github.com/sargon64/jellyfin-rs"
+include = [
+  "**/*.rs",
+  "Cargo.toml",
+  "LICENSE"
+]
+keywords = ["jellyfin", "media", "streaming"]
+license = "MIT"
+name = "jellyfin"
+repository = "https://github.com/sargon64/jellyfin-rs"
+version = "0.1.4"

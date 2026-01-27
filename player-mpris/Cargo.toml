@@ -1,15 +1,13 @@
-[package]
-name = "player-mpris"
-version = "0.1.0"
-edition = "2024"
-
 [dependencies]
-
-jellyfin = { path = "../jellyfin-rs"}
-player-core = {path="../player-core"}
-
-color-eyre = {workspace=true}
-tracing.workspace = true
-zbus = { workspace = true }
+color-eyre = {workspace = true}
+jellyfin = {path = "../jellyfin-rs"}
+player-core = {path = "../player-core"}
+zbus = {workspace = true}
 serde.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "player-mpris"
+version = "0.1.0"

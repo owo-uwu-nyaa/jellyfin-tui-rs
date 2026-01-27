@@ -1,0 +1,12 @@
+[dependencies]
+config = {path = "../config", version = "0.1.0"}
+ratatui-fallible-widget = {path = "../ratatui-fallible-widget", version = "0.1.0"}
+color-eyre.workspace = true
+ratatui.workspace = true
+ratatui-image.workspace = true
+tracing.workspace = true
+
+[package]
+edition = "2024"
+name = "layout-widget"
+version = "0.1.0"
