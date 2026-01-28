@@ -185,7 +185,8 @@ impl Connection {
                     }
                     ConnectionInner::H2(send_request) => {
                         if let Err(e) = send_request.ready().await {
-                            error!("error sending request: {e:?}");
+                            let uri =req.uri().to_string();
+                            error!(uri,"error sending request: {e:?}");
                             ConnectionInner::Disconnected
                         } else {
                             break send_request.send_request(req.clone()).left_future();
@@ -193,7 +194,8 @@ impl Connection {
                     }
                     ConnectionInner::H1(send_request) => {
                         if let Err(e) = send_request.ready().await {
-                            error!("error sending request: {e:?}");
+                            let uri =req.uri().to_string();
+                            error!(uri,"error sending request: {e:?}");
                             ConnectionInner::Disconnected
                         } else {
                             break send_request.send_request(req.clone()).right_future();
